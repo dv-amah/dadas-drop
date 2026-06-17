@@ -912,6 +912,9 @@ export default function DadasDrop() {
           .dd-grid{grid-template-columns:repeat(2,1fr)!important}
           .dd-hero-title{font-size:28px!important}
           .dd-cats{flex-wrap:wrap}
+          .dd-logo-text{font-size:13px!important;letter-spacing:1px!important}
+          .dd-logo-sub{display:none!important}
+          .dd-lang-btn{display:none!important}
         }
         textarea{resize:vertical}
         ::-webkit-scrollbar{width:4px}
@@ -933,13 +936,13 @@ export default function DadasDrop() {
 
           {/* Centre — Logo */}
           <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", display:"flex", flexDirection:"column", alignItems:"center", cursor:"pointer" }} onClick={()=>setPage("home")}>
-            <span style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:text, letterSpacing:3, lineHeight:1 }}>DADA'S DROP</span>
-            <span style={{ fontSize:8, color:C.gold, letterSpacing:4, marginTop:1 }}>✦ COLLECTION PREMIUM ✦</span>
+            <span className="dd-logo-text" style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:text, letterSpacing:3, lineHeight:1, whiteSpace:"nowrap" }}>DADA'S DROP</span>
+            <span className="dd-logo-sub" style={{ fontSize:8, color:C.gold, letterSpacing:4, marginTop:1, whiteSpace:"nowrap" }}>✦ COLLECTION PREMIUM ✦</span>
           </div>
 
           {/* Droite */}
           <div style={{ display:"flex", alignItems:"center", gap:8, flex:1, justifyContent:"flex-end" }}>
-            <button onClick={()=>setLang(l=>l==="fr"?"en":"fr")} style={{ border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", borderRadius:7, padding:"5px 9px", cursor:"pointer", color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5, flexShrink:0 }}>
+            <button className="dd-lang-btn" onClick={()=>setLang(l=>l==="fr"?"en":"fr")} style={{ border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", borderRadius:7, padding:"5px 9px", cursor:"pointer", color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5, flexShrink:0 }}>
               {t.lang}
             </button>
             <button onClick={()=>setDark(v=>!v)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
