@@ -6,7 +6,7 @@ import {
   Package, MapPin, Star, Copy, CheckCircle, Globe, Menu,
   Home, Grid, User, Lock, BarChart2, Settings, LogOut,
   Edit, Trash, Eye, PlusCircle, Bell, TrendingUp, ShoppingCart,
-  AlertCircle, Filter
+  AlertCircle, Filter, ShieldCheck
 } from "lucide-react";
 
 /* ═══════════════════════════════════════
