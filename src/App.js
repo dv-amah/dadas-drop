@@ -706,7 +706,7 @@ function AdminDashboard({ products, setProducts, orders, t, dark, onClose }) {
 /* ═══════════════════════════════════════
    MENU LATÉRAL (style LV)
    ═══════════════════════════════════════ */
-function SideMenu({ open, onClose, t, dark, setPage, setCat, onAdminOpen }) {
+function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, onAdminOpen }) {
   const text = dark?C.dText:C.ink;
   const navItems = [
     { label:t.home,      page:"home",      cat:null },
@@ -747,7 +747,10 @@ function SideMenu({ open, onClose, t, dark, setPage, setCat, onAdminOpen }) {
             ))}
           </div>
         </div>
-        <div style={{ padding:"16px 24px", borderTop:`1px solid ${dark?C.dBorder:C.border}`, flexShrink:0 }}>
+        <div style={{ padding:"16px 24px", borderTop:`1px solid ${dark?C.dBorder:C.border}`, flexShrink:0, display:"flex", flexDirection:"column", gap:12 }}>
+          <button onClick={()=>{setLang(l=>l==="fr"?"en":"fr");}} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:`1px solid ${dark?C.dBorder:C.border}`, borderRadius:8, padding:"8px 12px", cursor:"pointer", color:dark?C.dText:C.ink, fontSize:13, fontWeight:600, width:"fit-content" }}>
+            <Globe size={14}/> {lang==="fr"?"Passer en anglais":"Switch to French"}
+          </button>
           <button onClick={()=>{onAdminOpen();onClose();}} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", color:dark?C.dMute:C.mute, fontSize:13 }}>
             <Lock size={14}/> Administration
           </button>
@@ -853,6 +856,13 @@ export default function DadasDrop() {
 
   useEffect(()=>{ const id=setTimeout(()=>setMounted(true),80); return ()=>clearTimeout(id); },[]);
 
+  // Bloquer le scroll quand menu ou panier ou modal est ouvert
+  useEffect(()=>{
+    const isOpen = menuOpen || cartOpen || checkout || trackOpen || adminOpen || !!selected;
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  },[menuOpen, cartOpen, checkout, trackOpen, adminOpen, selected]);
+
   const t    = T[lang];
   const CATS = lang==="fr"?CATS_FR:CATS_EN;
 
@@ -912,8 +922,6 @@ export default function DadasDrop() {
           .dd-grid{grid-template-columns:repeat(2,1fr)!important}
           .dd-hero-title{font-size:28px!important}
           .dd-cats{flex-wrap:wrap}
-          .dd-logo-text{font-size:13px!important;letter-spacing:1px!important}
-          .dd-logo-sub{display:none!important}
           .dd-lang-btn{display:none!important}
         }
         textarea{resize:vertical}
@@ -936,8 +944,8 @@ export default function DadasDrop() {
 
           {/* Centre — Logo */}
           <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", display:"flex", flexDirection:"column", alignItems:"center", cursor:"pointer" }} onClick={()=>setPage("home")}>
-            <span className="dd-logo-text" style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:text, letterSpacing:3, lineHeight:1, whiteSpace:"nowrap" }}>DADA'S DROP</span>
-            <span className="dd-logo-sub" style={{ fontSize:8, color:C.gold, letterSpacing:4, marginTop:1, whiteSpace:"nowrap" }}>✦ COLLECTION PREMIUM ✦</span>
+            <span style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:text, letterSpacing:3, lineHeight:1, whiteSpace:"nowrap" }}>DADA'S DROP</span>
+            <span style={{ fontSize:8, color:C.gold, letterSpacing:4, marginTop:1, whiteSpace:"nowrap" }}>✦ COLLECTION PREMIUM ✦</span>
           </div>
 
           {/* Droite */}
@@ -1107,7 +1115,7 @@ export default function DadasDrop() {
       </a>
 
       {/* MODALS */}
-      <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} t={t} dark={dark} setPage={setPage} setCat={setCat} onAdminOpen={()=>setAdminOpen(true)}/>
+      <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} t={t} lang={lang} setLang={setLang} dark={dark} setPage={setPage} setCat={setCat} onAdminOpen={()=>setAdminOpen(true)}/>
       <ProductModal p={selected} t={t} dark={dark} onClose={()=>setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products} t={t} dark={dark} onClose={()=>setCartOpen(false)} onQty={setQty} onRemove={removeItem} onCheckout={()=>{setCartOpen(false);setCheckout(true);}}/>
       <Checkout open={checkout} lines={lines} total={total} t={t} dark={dark} onClose={()=>setCheckout(false)}/>
