@@ -712,7 +712,8 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, onAd
     { label:t.home,      page:"home",      cat:null },
     { label:t.catalogue, page:"catalogue", cat:null },
   ];
-  const catItems = CATS_FR.slice(1).map((c,i)=>({ label:c, page:"catalogue", cat:i+1 }));
+  const CATS_MENU = lang==="fr" ? CATS_FR : CATS_EN;
+  const catItems = CATS_MENU.slice(1).map((c,i)=>({ label:c, page:"catalogue", cat:i+1 }));
   const bottomItems = [
     { label:"À propos", page:"about", cat:null },
   ];
@@ -791,7 +792,7 @@ const stepBtnSmStyle = dark => ({ width:24, height:24, border:"none", background
 const primaryBtn = { display:"inline-flex", alignItems:"center", gap:7, background:C.ink, color:C.gold, border:`1px solid ${C.gold}44`, borderRadius:10, padding:"11px 18px", fontWeight:700, fontSize:13.5, cursor:"pointer" };
 const secondaryBtn = dark => ({ display:"inline-flex", alignItems:"center", gap:7, background:"none", color:dark?C.dText:C.ink, border:`1px solid ${dark?C.dBorder:C.border}`, borderRadius:10, padding:"11px 16px", fontWeight:600, fontSize:13.5, cursor:"pointer" });
 const iconBtn = dark => ({ width:32, height:32, borderRadius:8, border:`1px solid ${dark?C.dBorder:C.border}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:dark?C.dText:C.ink });
-const inpStyle = dark => ({ width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${dark?C.dBorder:C.border}`, background:dark?C.dCard:"#fff", fontSize:13, color:dark?C.dText:C.ink, fontFamily:"inherit" });
+const inpStyle = dark => ({ width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${dark?C.dBorder:C.border}`, background:dark?C.dCard:"#fff", fontSize:"16px", color:dark?C.dText:C.ink, fontFamily:"inherit" });
 
 /* ═══════════════════════════════════════
    PAGE À PROPOS
@@ -843,6 +844,8 @@ export default function DadasDrop() {
   const [cat, setCat]         = useState(0);
   const [sort, setSort]       = useState("new");
   const [inStock, setInStock] = useState(false);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
   const [products, setProducts] = useState(initProducts);
   const [cart, setCart]       = useState([]);
   const [selected, setSelected] = useState(null);
@@ -887,12 +890,14 @@ export default function DadasDrop() {
       }
       if(cat>0){ const cn=lang==="fr"?p.cat:p.catEn; if(cn!==CATS[cat]) return false; }
       if(inStock&&p.stock===0) return false;
+      if(minPrice!=="" && p.price < parseInt(minPrice)) return false;
+      if(maxPrice!=="" && p.price > parseInt(maxPrice)) return false;
       return true;
     });
     if(sort==="asc")  r=[...r].sort((a,b)=>a.price-b.price);
     if(sort==="desc") r=[...r].sort((a,b)=>b.price-a.price);
     return r;
-  },[query,cat,sort,inStock,lang,products]);
+  },[query,cat,sort,inStock,lang,products,minPrice,maxPrice]);
 
   const bestSellers = products.filter(p=>p.isBest&&p.stock>0).slice(0,4);
   const addToCart = useCallback((p,qty=1)=>{
@@ -968,7 +973,7 @@ export default function DadasDrop() {
           <div style={{ borderTop:`1px solid ${bord}`, padding:"10px 16px", background:hdrBg }}>
             <div style={{ maxWidth:600, margin:"0 auto", position:"relative" }}>
               <Search size={15} color={dark?C.dMute:C.mute} style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)" }}/>
-              <input autoFocus value={query} onChange={e=>{setQuery(e.target.value);setPage("catalogue");setCat(0);}} placeholder={t.search} style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius:8, border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", fontSize:13.5, color:text }}/>
+              <input autoFocus value={query} onChange={e=>{setQuery(e.target.value);setPage("catalogue");setCat(0);}} onBlur={e=>{try{e.target.style.fontSize="16px";}catch(err){}}} placeholder={t.search} style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius:8, border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", fontSize:"16px", color:text }}/>
               {query&&<button onClick={()=>{setQuery("");setSearchOpen(false);}} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", border:"none", background:"none", cursor:"pointer", color:dark?C.dMute:C.mute }}><X size={15}/></button>}
             </div>
           </div>
@@ -1049,32 +1054,122 @@ export default function DadasDrop() {
             })}
           </div>
           {/* Tri & stock */}
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10, marginBottom:18 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10, marginBottom:12 }}>
             <span style={{ fontSize:13, color:dark?C.dMute:C.mute }}><strong style={{ color:text }}>{list.length}</strong> {t.itemCount}{list.length>1?"s":""}</span>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
               <button onClick={()=>setInStock(v=>!v)} style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"6px 11px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600, border:`1.5px solid ${inStock?C.gold:bord}`, background:inStock?(dark?"#1A1510":C.creamD):(dark?C.dCard:"#fff"), color:text }}>
                 <span style={{ width:14, height:14, borderRadius:3, border:`2px solid ${inStock?C.gold:(dark?C.dBorder:"#ddd")}`, background:inStock?C.gold:"transparent", display:"grid", placeItems:"center" }}>
                   {inStock&&<Check size={9} color={C.ink}/>}
                 </span>
                 {t.inStock}
               </button>
-              <select value={sort} onChange={e=>setSort(e.target.value)} style={{ ...inpStyle(dark), width:"auto", padding:"7px 12px", fontSize:12 }}>
+              <select value={sort} onChange={e=>setSort(e.target.value)} style={{ ...inpStyle(dark), width:"auto", padding:"7px 12px", fontSize:"16px" }}>
                 <option value="new">{t.sortNew}</option>
                 <option value="asc">{t.sortAsc}</option>
                 <option value="desc">{t.sortDesc}</option>
               </select>
             </div>
           </div>
+
+          {/* Filtre prix */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:18, flexWrap:"wrap" }}>
+            <span style={{ fontSize:12.5, color:dark?C.dMute:C.mute, fontWeight:600 }}>
+              {lang==="fr"?"Budget :":"Budget:"}
+            </span>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input
+                type="number"
+                value={minPrice}
+                onChange={e=>setMinPrice(e.target.value)}
+                placeholder={lang==="fr"?"Min (FCFA)":"Min (FCFA)"}
+                style={{ width:130, padding:"6px 10px", borderRadius:8, border:`1.5px solid ${minPrice?C.gold:bord}`, background:dark?C.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}
+              />
+              <span style={{ color:dark?C.dMute:C.mute, fontSize:13 }}>—</span>
+              <input
+                type="number"
+                value={maxPrice}
+                onChange={e=>setMaxPrice(e.target.value)}
+                placeholder={lang==="fr"?"Max (FCFA)":"Max (FCFA)"}
+                style={{ width:130, padding:"6px 10px", borderRadius:8, border:`1.5px solid ${maxPrice?C.gold:bord}`, background:dark?C.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}
+              />
+              {(minPrice||maxPrice)&&(
+                <button onClick={()=>{setMinPrice("");setMaxPrice("");}} style={{ border:"none", background:"none", cursor:"pointer", color:dark?C.dMute:C.mute, padding:4 }}>
+                  <X size={14}/>
+                </button>
+              )}
+            </div>
+          </div>
           {/* Grille */}
           {cat>=4?(
-            <div style={{ textAlign:"center", padding:"60px 16px", color:dark?C.dMute:"#bbb" }}>
-              <div style={{ fontSize:40 }}>{["👟","💍","🌸","💋","👗"][cat-4]}</div>
-              <h3 style={{ fontFamily:"Georgia,serif", color:text, margin:"10px 0 5px", fontSize:17 }}>{CATS[cat]} — {lang==="fr"?"bientôt disponible":"coming soon"}</h3>
+            <div style={{ textAlign:"center", padding:"60px 16px" }}>
+              <div style={{ fontSize:48 }}>{["👟","💍","🌸","💋","👗"][cat-4]}</div>
+              <h3 style={{ fontFamily:"Georgia,serif", color:text, margin:"12px 0 8px", fontSize:20 }}>
+                {CATS[cat]} — {lang==="fr"?"Bientôt disponible !":"Coming soon!"}
+              </h3>
+              <p style={{ color:dark?C.dMute:C.mute, fontSize:14, maxWidth:320, margin:"0 auto 20px", lineHeight:1.6 }}>
+                {lang==="fr"
+                  ? "Cette catégorie arrive très prochainement. Revenez nous voir !"
+                  : "This category is coming very soon. Check back later!"}
+              </p>
+              <button onClick={()=>setCat(0)} style={{ ...primaryBtn, gap:7 }}>
+                {lang==="fr"?"Voir les articles disponibles":"See available items"} <ArrowRight size={14}/>
+              </button>
             </div>
           ):list.length===0?(
             <div style={{ textAlign:"center", padding:"60px 16px" }}>
-              <Search size={36} color={dark?C.dBorder:"#ddd"}/>
-              <p style={{ marginTop:10, color:dark?C.dMute:"#bbb", fontSize:14 }}>{t.noResult}<br/>{t.noResultHint}</p>
+              {/* Vérifier si la recherche correspond à une catégorie bientôt disponible */}
+              {query.trim() && ["chaussures","shoes","bijoux","jewellery","parfums","perfumes","gloss","vêtements","vetements","clothing"].some(k=>query.toLowerCase().includes(k)) ? (
+                <div>
+                  <div style={{ fontSize:48 }}>
+                    {query.toLowerCase().includes("chaussure")||query.toLowerCase().includes("shoe") ? "👟"
+                    : query.toLowerCase().includes("bijou")||query.toLowerCase().includes("jewel") ? "💍"
+                    : query.toLowerCase().includes("parfum")||query.toLowerCase().includes("perfume") ? "🌸"
+                    : query.toLowerCase().includes("gloss") ? "💋"
+                    : "👗"}
+                  </div>
+                  <h3 style={{ fontFamily:"Georgia,serif", color:text, margin:"12px 0 8px", fontSize:20 }}>
+                    {lang==="fr"?"Bientôt disponible !":"Coming soon!"}
+                  </h3>
+                  <p style={{ color:dark?C.dMute:C.mute, fontSize:14, maxWidth:320, margin:"0 auto 20px", lineHeight:1.6 }}>
+                    {lang==="fr"
+                      ? "Cette catégorie arrive très prochainement. Revenez nous voir !"
+                      : "This category is coming very soon. Check back later!"}
+                  </p>
+                  <button onClick={()=>{setQuery("");setCat(0);}} style={{ ...primaryBtn, gap:7 }}>
+                    {lang==="fr"?"Voir les articles disponibles":"See available items"} <ArrowRight size={14}/>
+                  </button>
+                </div>
+              ):(
+                <div>
+                  <Search size={36} color={dark?C.dBorder:"#ddd"}/>
+                  {(minPrice||maxPrice) ? (
+                    <>
+                      <p style={{ marginTop:10, color:dark?C.dMute:"#bbb", fontSize:14, lineHeight:1.6 }}>
+                        {lang==="fr"
+                          ? `Aucun article disponible pour ce budget.${
+                              products.length>0
+                                ? ` Nos articles démarrent à ${Math.min(...products.map(p=>p.price)).toLocaleString("fr-FR")} FCFA.`
+                                : ""}`
+                          : `No items available for this budget.${
+                              products.length>0
+                                ? ` Our items start from ${Math.min(...products.map(p=>p.price)).toLocaleString("fr-FR")} FCFA.`
+                                : ""}`
+                        }
+                      </p>
+                      <button onClick={()=>{setMinPrice("");setMaxPrice("");}} style={{ ...primaryBtn, marginTop:16, gap:7 }}>
+                        {lang==="fr"?"Voir tous les articles":"See all items"} <ArrowRight size={14}/>
+                      </button>
+                    </>
+                  ):(
+                    <>
+                      <p style={{ marginTop:10, color:dark?C.dMute:"#bbb", fontSize:14 }}>{t.noResult}<br/>{t.noResultHint}</p>
+                      <button onClick={()=>{setQuery("");setCat(0);}} style={{ ...primaryBtn, marginTop:16, gap:7 }}>
+                        {lang==="fr"?"Voir tous les articles":"See all items"} <ArrowRight size={14}/>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ):(
             <div className="dd-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
