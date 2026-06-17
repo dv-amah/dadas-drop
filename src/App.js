@@ -518,7 +518,19 @@ function AdminDashboard({ products, setProducts, orders, t, dark, onClose }) {
 
   const login = () => { if(pass===CFG.adminPass){setAuth(true);setWrong(false);}else setWrong(true); };
   const saveProduct = () => {
-    const p = { ...form, id:editP?editP.id:Date.now(), price:parseInt(form.price)||0, stock:parseInt(form.stock)||0, imgs:editP?.imgs||[], accent:form.accent };
+    const catIdx = CATS_FR.indexOf(form.cat);
+    const catEn = catIdx>0 ? CATS_EN[catIdx] : "Handbags";
+    const p = { 
+      ...form, 
+      id:editP?editP.id:Date.now(), 
+      price:parseInt(form.price)||0, 
+      stock:parseInt(form.stock)||0, 
+      imgs:editP?.imgs||[], 
+      accent:form.accent,
+      catEn: catEn,
+      nameEn: form.nameEn||form.name,
+      descEn: form.descEn||form.desc,
+    };
     if(editP) setProducts(ps=>ps.map(x=>x.id===editP.id?p:x));
     else setProducts(ps=>[...ps,p]);
     setEditP(null); setNewP(false);
@@ -694,35 +706,48 @@ function AdminDashboard({ products, setProducts, orders, t, dark, onClose }) {
 /* ═══════════════════════════════════════
    MENU LATÉRAL (style LV)
    ═══════════════════════════════════════ */
-function SideMenu({ open, onClose, t, dark, setPage, onAdminOpen }) {
+function SideMenu({ open, onClose, t, dark, setPage, setCat, onAdminOpen }) {
   const text = dark?C.dText:C.ink;
-  const items = [
-    { label:t.home,      page:"home" },
-    { label:t.catalogue, page:"catalogue" },
-    { label:"Sacs à main",page:"catalogue" },
-    { label:"Bandoulières",page:"catalogue" },
-    { label:"Pochettes",  page:"catalogue" },
-    { label:"À propos",   page:"about" },
+  const navItems = [
+    { label:t.home,      page:"home",      cat:null },
+    { label:t.catalogue, page:"catalogue", cat:null },
+  ];
+  const catItems = CATS_FR.slice(1).map((c,i)=>({ label:c, page:"catalogue", cat:i+1 }));
+  const bottomItems = [
+    { label:"À propos", page:"about", cat:null },
   ];
   return (
     <>
       <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:60, opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
-      <div style={{ position:"fixed", top:0, left:0, height:"100%", width:"min(320px,82vw)", background:dark?C.dCard:"#fff", zIndex:61, transform:open?"translateX(0)":"translateX(-105%)", transition:"transform .35s cubic-bezier(.2,.8,.2,1)", display:"flex", flexDirection:"column" }}>
-        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${dark?C.dBorder:C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ position:"fixed", top:0, left:0, height:"100%", width:"min(320px,82vw)", background:dark?C.dCard:"#fff", zIndex:61, transform:open?"translateX(0)":"translateX(-105%)", transition:"transform .35s cubic-bezier(.2,.8,.2,1)", display:"flex", flexDirection:"column", overflowY:"auto" }}>
+        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${dark?C.dBorder:C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
           <span style={{ fontFamily:"Georgia,serif", fontSize:13, fontWeight:700, color:dark?C.dMute:C.mute, letterSpacing:1 }}>MENU</span>
           <button onClick={onClose} style={{ border:"none", background:"none", cursor:"pointer", color:text }}><X size={20}/></button>
         </div>
-        <div style={{ flex:1, padding:"24px 24px" }}>
-          {items.map((item,i)=>(
-            <div key={i}>
-              {i===3&&<div style={{ height:1, background:dark?C.dBorder:C.border, margin:"16px 0" }}/>}
-              <button onClick={()=>{ setPage(item.page); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"10px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:18, color:text, letterSpacing:.3 }}>
+        <div style={{ flex:1, padding:"20px 24px" }}>
+          {navItems.map((item,i)=>(
+            <button key={i} onClick={()=>{ setPage(item.page); if(item.cat!==null) setCat(item.cat); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:17, color:text, letterSpacing:.3 }}>
+              {item.label}
+            </button>
+          ))}
+          <div style={{ marginTop:16, marginBottom:8 }}>
+            <span style={{ fontSize:10, fontWeight:700, color:dark?C.dMute:C.mute, letterSpacing:2, textTransform:"uppercase" }}>Collections</span>
+          </div>
+          {catItems.map((item,i)=>(
+            <button key={i} onClick={()=>{ setPage(item.page); setCat(item.cat); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"8px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:16, color:text, letterSpacing:.3 }}>
+              {item.label}
+              {i>=3&&<span style={{ fontSize:10, color:dark?C.dMute:C.mute, marginLeft:6 }}>· bientôt</span>}
+            </button>
+          ))}
+          <div style={{ marginTop:16 }}>
+            {bottomItems.map((item,i)=>(
+              <button key={i} onClick={()=>{ setPage(item.page); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:17, color:text, letterSpacing:.3 }}>
                 {item.label}
               </button>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-        <div style={{ padding:"16px 24px", borderTop:`1px solid ${dark?C.dBorder:C.border}` }}>
+        <div style={{ padding:"16px 24px", borderTop:`1px solid ${dark?C.dBorder:C.border}`, flexShrink:0 }}>
           <button onClick={()=>{onAdminOpen();onClose();}} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", color:dark?C.dMute:C.mute, fontSize:13 }}>
             <Lock size={14}/> Administration
           </button>
@@ -780,7 +805,7 @@ function AboutPage({ dark }) {
       <div style={{ background:dark?C.dCard:"#fff", border:`1px solid ${bord}`, borderRadius:16, padding:"24px 28px", marginBottom:16 }}>
         <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:"0 0 12px" }}>Notre histoire</h2>
         <p style={{ fontSize:14, color:dark?C.dMute:C.mute, lineHeight:1.8 }}>
-          Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou et Bobo-Dioulasso.
+          Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou.
         </p>
       </div>
       <div style={{ background:dark?C.dCard:"#fff", border:`1px solid ${bord}`, borderRadius:16, padding:"24px 28px", marginBottom:16 }}>
@@ -835,10 +860,24 @@ export default function DadasDrop() {
 
   const list = useMemo(()=>{
     let r = products.filter(p=>{
+      // Si recherche active, ignore le filtre catégorie et cherche partout
+      if(query.trim()) {
+        if(inStock&&p.stock===0) return false;
+        const q = query.toLowerCase().trim();
+        return (
+          (p.name||"").toLowerCase().includes(q) ||
+          (p.nameEn||"").toLowerCase().includes(q) ||
+          (p.brand||"").toLowerCase().includes(q) ||
+          (p.cat||"").toLowerCase().includes(q) ||
+          (p.catEn||"").toLowerCase().includes(q) ||
+          (p.desc||"").toLowerCase().includes(q) ||
+          (p.descEn||"").toLowerCase().includes(q) ||
+          String(p.price).includes(q)
+        );
+      }
       if(cat>0){ const cn=lang==="fr"?p.cat:p.catEn; if(cn!==CATS[cat]) return false; }
       if(inStock&&p.stock===0) return false;
-      const q=query.toLowerCase();
-      return !q||p.name.toLowerCase().includes(q)||p.brand.toLowerCase().includes(q)||(p.nameEn||"").toLowerCase().includes(q);
+      return true;
     });
     if(sort==="asc")  r=[...r].sort((a,b)=>a.price-b.price);
     if(sort==="desc") r=[...r].sort((a,b)=>b.price-a.price);
@@ -899,8 +938,8 @@ export default function DadasDrop() {
           </div>
 
           {/* Droite */}
-          <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, justifyContent:"flex-end" }}>
-            <button onClick={()=>setLang(l=>l==="fr"?"en":"fr")} style={{ border:"none", background:"none", cursor:"pointer", color:dark?C.dMute:C.mute, fontSize:12, fontWeight:600, letterSpacing:.5 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flex:1, justifyContent:"flex-end" }}>
+            <button onClick={()=>setLang(l=>l==="fr"?"en":"fr")} style={{ border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", borderRadius:7, padding:"5px 9px", cursor:"pointer", color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5, flexShrink:0 }}>
               {t.lang}
             </button>
             <button onClick={()=>setDark(v=>!v)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
@@ -918,7 +957,7 @@ export default function DadasDrop() {
           <div style={{ borderTop:`1px solid ${bord}`, padding:"10px 16px", background:hdrBg }}>
             <div style={{ maxWidth:600, margin:"0 auto", position:"relative" }}>
               <Search size={15} color={dark?C.dMute:C.mute} style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)" }}/>
-              <input autoFocus value={query} onChange={e=>{setQuery(e.target.value);if(e.target.value){setPage("catalogue");}}} placeholder={t.search} style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius:8, border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", fontSize:13.5, color:text }}/>
+              <input autoFocus value={query} onChange={e=>{setQuery(e.target.value);setPage("catalogue");setCat(0);}} placeholder={t.search} style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius:8, border:`1px solid ${bord}`, background:dark?C.dCard:"#fff", fontSize:13.5, color:text }}/>
               {query&&<button onClick={()=>{setQuery("");setSearchOpen(false);}} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", border:"none", background:"none", cursor:"pointer", color:dark?C.dMute:C.mute }}><X size={15}/></button>}
             </div>
           </div>
@@ -968,7 +1007,7 @@ export default function DadasDrop() {
           <section style={{ maxWidth:1200, margin:"36px auto 0", padding:"0 16px 36px" }}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10 }}>
               {[
-                { icon:<Truck size={18} color={C.gold}/>,         t:"Livraison Ouaga & Bobo", s:"Rapide et soigné" },
+                { icon:<Truck size={18} color={C.gold}/>,         t:"Livraison Ouagadougou", s:"Rapide et soigné" },
                 { icon:<Smartphone size={18} color={C.gold}/>,    t:"Mobile Money",           s:"Orange · Moov · Wave" },
                 { icon:<ShieldCheck size={18} color={C.gold}/>,   t:"Sélection Dada",         s:"Chaque pièce choisie" },
                 { icon:<MessageCircle size={18} color="#25D366"/>, t:"Commande WhatsApp",      s:"Réponse rapide" },
@@ -1065,7 +1104,7 @@ export default function DadasDrop() {
       </a>
 
       {/* MODALS */}
-      <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} t={t} dark={dark} setPage={setPage} onAdminOpen={()=>setAdminOpen(true)}/>
+      <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} t={t} dark={dark} setPage={setPage} setCat={setCat} onAdminOpen={()=>setAdminOpen(true)}/>
       <ProductModal p={selected} t={t} dark={dark} onClose={()=>setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products} t={t} dark={dark} onClose={()=>setCartOpen(false)} onQty={setQty} onRemove={removeItem} onCheckout={()=>{setCartOpen(false);setCheckout(true);}}/>
       <Checkout open={checkout} lines={lines} total={total} t={t} dark={dark} onClose={()=>setCheckout(false)}/>
