@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import {
   ShoppingBag, Search, X, Plus, Minus, Trash2, Heart,
   ChevronDown, Check, MessageCircle, Truck, Smartphone,
@@ -1631,18 +1632,16 @@ function AdminPage({ products, setProducts, dark, setPage }) {
 /* ═══════════════════════════════════════
    🚀 APP PRINCIPALE
    ═══════════════════════════════════════ */
-export default function DadasDrop() {
+function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" }) {
   const [lang, setLang]         = useState("fr");
-  const [dark, setDark]         = useState(false);
-  const [page, setPage]         = useState("home");
+  const [page, setPage]         = useState(initialPage);
   const [query, setQuery]       = useState("");
   const [cat, setCat]           = useState(0);
   const [sort, setSort]         = useState("new");
   const [inStock, setInStock]   = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [products, setProducts] = useState(initProducts);
-  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingProducts]       = useState(false); // déjà chargé au niveau App
   const [cart, setCart] = useState(() => {
     try { const s = localStorage.getItem("dd_cart"); return s ? JSON.parse(s) : []; } catch { return []; }
   });
@@ -1653,14 +1652,6 @@ export default function DadasDrop() {
   const [menuOpen, setMenuOpen]   = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mounted, setMounted]     = useState(false);
-
-  // Charger produits depuis Supabase (fallback sur initProducts)
-  useEffect(() => {
-    sb.get("products", "?order=id.asc")
-      .then(rows => { if (rows && rows.length > 0) setProducts(rows); })
-      .catch(e => console.warn("Supabase products:", e.message))
-      .finally(() => setLoadingProducts(false));
-  }, []);
 
   // Sauvegarder panier
   useEffect(() => {
@@ -1917,5 +1908,53 @@ export default function DadasDrop() {
       <Checkout open={checkout} lines={lines} total={total} t={t} dark={dark} onClose={() => setCheckout(false)}/>
       <TrackModal open={trackOpen} t={t} dark={dark} onClose={() => setTrackOpen(false)}/>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════
+   🔒 GUARD ADMIN — redirige si pas connecté
+   ═══════════════════════════════════════ */
+function AdminGuard({ products, setProducts, dark }) {
+  const navigate = useNavigate();
+  return (
+    <AdminPage
+      products={products}
+      setProducts={setProducts}
+      dark={dark}
+      setPage={(p) => { if (p === "home") navigate("/"); }}
+    />
+  );
+}
+
+/* ═══════════════════════════════════════
+   🚀 EXPORT DEFAULT — Router racine
+   ═══════════════════════════════════════ */
+export default function App() {
+  // Les produits sont partagés entre shop et admin
+  const [products, setProducts] = useState(initProducts);
+  const [dark, setDark] = useState(false);
+
+  // Charger produits Supabase une seule fois au niveau racine
+  useEffect(() => {
+    sb.get("products", "?order=id.asc")
+      .then(rows => { if (rows && rows.length > 0) setProducts(rows); })
+      .catch(e => console.warn("Supabase products (root):", e.message));
+  }, []);
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Shop public */}
+        <Route path="/" element={<ShopApp products={products} setProducts={setProducts} dark={dark} setDark={setDark}/>}/>
+        <Route path="/catalogue" element={<ShopApp products={products} setProducts={setProducts} dark={dark} setDark={setDark} initialPage="catalogue"/>}/>
+
+        {/* Admin — URL protégée par login dans AdminPage */}
+        <Route path="/admin" element={<AdminGuard products={products} setProducts={setProducts} dark={dark}/>}/>
+        <Route path="/admin/*" element={<AdminGuard products={products} setProducts={setProducts} dark={dark}/>}/>
+
+        {/* 404 — redirige vers l'accueil */}
+        <Route path="*" element={<Navigate to="/" replace/>}/>
+      </Routes>
+    </BrowserRouter>
   );
 }
