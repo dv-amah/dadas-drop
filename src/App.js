@@ -1,3 +1,628 @@
+/* ─── PALETTE ───────────────────────────────────────────── */
+const CA = {
+  cream:"#FAF6EE", creamD:"#F0EBE0", gold:"#C9A84C", goldL:"#E8C96A",
+  ink:"#1A1A1A", mute:"#8A7A6A", border:"#E0D8CC", card:"#FFFFFF",
+  success:"#1A9E5E", danger:"#E05030", warning:"#E08030",
+  dBg:"#0F0C08", dCard:"#1A1510", dBorder:"#2E2820", dMute:"#7A6A5A", dText:"#F5F0E8",
+};
+const GRAD_A = `linear-gradient(135deg, ${CA.gold} 0%, ${CA.goldL} 100%)`;
+const fcfa_a = n => n?.toLocaleString("fr-FR") + " FCFA";
+
+/* ─── RÔLES ─────────────────────────────────────────────── */
+const ROLES = {
+  admin:     { label:"Administrateur", color:CA.gold,    badge:"👑" },
+  manager:   { label:"Gestionnaire",   color:"#1DC0D4", badge:"👩‍💼" },
+  delivery:  { label:"Livreur",        color:CA.success, badge:"🚴" },
+};
+
+/* ─── UTILISATEURS DÉMO ─────────────────────────────────── */
+const INIT_USERS = [
+  { id:1, name:"David Amah",    email:"david@dadasdrop.com",  role:"admin",    active:true  },
+  { id:2, name:"Ma Copine",     email:"copine@dadasdrop.com", role:"manager",  active:true  },
+  { id:3, name:"Livreur Ouaga", email:"livreur@dadasdrop.com",role:"delivery", active:true  },
+];
+
+/* ─── COMMANDES DÉMO ────────────────────────────────────── */
+const INIT_ORDERS = [
+  { id:"DD-1001", name:"Awa Traoré",    phone:"70 11 22 33", ville:"Ouagadougou", quartier:"Karpala",    items:["Mini Boston Rose x1"],              total:25000, status:1, payment:"orange", date:"2025-06-10", assignedTo:3 },
+  { id:"DD-1002", name:"Fatou Diallo",  phone:"76 44 55 66", ville:"Ouagadougou", quartier:"Pissy",      items:["Mini Boston Bleu Denim x2"],         total:50000, status:2, payment:"wave",   date:"2025-06-12", assignedTo:3 },
+  { id:"DD-1003", name:"Mariam Koné",   phone:"65 77 88 99", ville:"Ouagadougou", quartier:"Gounghin",   items:["Coach Torry Camel x1","Tabby x1"],   total:57000, status:3, payment:"moov",   date:"2025-06-08", assignedTo:null },
+  { id:"DD-1004", name:"Aïcha Sawadogo",phone:"71 00 11 22", ville:"Ouagadougou", quartier:"Wemtenga",   items:["Mini Boston Beige & Blanc x1"],       total:24000, status:1, payment:"livraison",date:"2025-06-15",assignedTo:null },
+  { id:"DD-1005", name:"Roukiatou B.",  phone:"78 33 44 55", ville:"Ouagadougou", quartier:"Zone du Bois",items:["Tabby Coach 8 coloris x1"],          total:35000, status:1, payment:"orange", date:"2025-06-16", assignedTo:null },
+];
+
+const CATS_FR = ["Sacs à main","Bandoulières","Pochettes","Chaussures","Bijoux","Parfums","Gloss","Vêtements"];
+const STATUS_LABELS = ["","En préparation","Expédiée","Livrée"];
+const STATUS_COLORS = ["",CA.warning,"#1DC0D4",CA.success];
+const PAYMENT_LABELS = { orange:"Orange Money", moov:"Moov Money", wave:"Wave", livraison:"À la livraison" };
+
+/* ─── COMPOSANTS UTILITAIRES ────────────────────────────── */
+const Badge = ({ children, color }) => (
+  <span style={{ background:`${color}22`, color, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, border:`1px solid ${color}44` }}>
+    {children}
+  </span>
+);
+
+const StatCard = ({ icon, value, label, color, dark }) => (
+  <div style={{ background:dark?CA.dCard:CA.card, border:`1px solid ${dark?CA.dBorder:CA.border}`, borderRadius:14, padding:"18px 18px" }}>
+    <div style={{ width:40, height:40, borderRadius:10, background:`${color}18`, display:"grid", placeItems:"center", marginBottom:12 }}>
+      {icon}
+    </div>
+    <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700, color:dark?CA.dText:CA.ink }}>{value}</div>
+    <div style={{ fontSize:12.5, color:dark?CA.dMute:CA.mute, marginTop:3 }}>{label}</div>
+  </div>
+);
+
+/* ─── PAGE ADMIN PRINCIPALE ─────────────────────────────── */
+function AdminPage({ products, setProducts, dark, setPage }) {
+  const [auth, setAuth]       = useState(null); // null = pas connecté, objet user = connecté
+  const [email, setEmail]     = useState("");
+  const [pass, setPass]       = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [wrong, setWrong]     = useState(false);
+  const [tab, setTab]         = useState("overview");
+  const [orders, setOrders]   = useState(INIT_ORDERS);
+  const [users, setUsers]     = useState(INIT_USERS);
+  const [notifs, setNotifs]   = useState([
+    { id:1, msg:"Nouvelle commande DD-1005 — Roukiatou B.", time:"Il y a 5 min", read:false },
+    { id:2, msg:"Commande DD-1002 expédiée par Livreur Ouaga", time:"Il y a 1h", read:false },
+    { id:3, msg:"Stock Mini Boston Bleu Denim : plus que 0 !", time:"Il y a 2h", read:true },
+  ]);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const bg = dark?CA.dBg:CA.cream;
+  const text = dark?CA.dText:CA.ink;
+  const bord = dark?CA.dBorder:CA.border;
+  const cardBg = dark?CA.dCard:CA.card;
+  const unread = notifs.filter(n=>!n.read).length;
+
+  // Connexion
+  const login = () => {
+    const user = users.find(u => u.email === email && u.active);
+    if (user && pass === "dada2025") {
+      setAuth(user); setWrong(false);
+    } else {
+      setWrong(true);
+    }
+  };
+
+  const logout = () => { setAuth(null); setEmail(""); setPass(""); setTab("overview"); };
+
+  // Permissions
+  const can = (action) => {
+    if (!auth) return false;
+    if (auth.role === "admin") return true;
+    if (auth.role === "manager") return ["view_orders","edit_orders","add_product","edit_product","view_stats"].includes(action);
+    if (auth.role === "delivery") return ["view_my_orders","update_delivery"].includes(action);
+    return false;
+  };
+
+  /* ── ÉCRAN DE CONNEXION ── */
+  if (!auth) return (
+    <div style={{ minHeight:"100vh", background:bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ maxWidth:380, width:"100%", background:cardBg, borderRadius:20, padding:32, boxShadow:"0 24px 56px rgba(0,0,0,.15)", border:`1px solid ${bord}` }}>
+        {/* Logo */}
+        <div style={{ textAlign:"center", marginBottom:28 }}>
+          <div style={{ width:64, height:64, borderRadius:16, background:CA.ink, border:`2px solid ${CA.gold}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 14px" }}>
+            <span style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700, color:CA.ink }}>
+              <span style={{ color:"#fff" }}>D</span><span style={{ color:CA.gold }}>D</span>
+            </span>
+          </div>
+          <h1 style={{ fontFamily:"Georgia,serif", fontSize:20, color:text, margin:"0 0 4px" }}>Dada's Drop</h1>
+          <p style={{ fontSize:12.5, color:dark?CA.dMute:CA.mute, margin:0, letterSpacing:.5 }}>ESPACE ADMINISTRATION</p>
+        </div>
+
+        {/* Formulaire */}
+        <div style={{ marginBottom:12 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:5, letterSpacing:.3 }}>ADRESSE EMAIL</label>
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="email@dadasdrop.com" type="email"
+            style={{ width:"100%", padding:"11px 13px", borderRadius:10, border:`1.5px solid ${wrong?"#E05030":bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}
+            onKeyDown={e=>e.key==="Enter"&&login()}/>
+        </div>
+        <div style={{ marginBottom:8, position:"relative" }}>
+          <label style={{ fontSize:12, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:5, letterSpacing:.3 }}>MOT DE PASSE</label>
+          <input value={pass} onChange={e=>setPass(e.target.value)} type={showPass?"text":"password"} placeholder="••••••••"
+            style={{ width:"100%", padding:"11px 40px 11px 13px", borderRadius:10, border:`1.5px solid ${wrong?"#E05030":bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}
+            onKeyDown={e=>e.key==="Enter"&&login()}/>
+          <button onClick={()=>setShowPass(v=>!v)} style={{ position:"absolute", right:11, bottom:11, border:"none", background:"none", cursor:"pointer", color:dark?CA.dMute:CA.mute }}>
+            {showPass?<EyeOff size={17}/>:<Eye size={17}/>}
+          </button>
+        </div>
+        {wrong && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, color:CA.danger, fontSize:12.5, marginBottom:8 }}>
+            <AlertCircle size={14}/> Email ou mot de passe incorrect.
+          </div>
+        )}
+        <button onClick={login} style={{ width:"100%", padding:"13px", background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:11, fontWeight:700, fontSize:15, cursor:"pointer", marginTop:8, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <Lock size={16}/> Accéder au tableau de bord
+        </button>
+        <button onClick={()=>setPage&&setPage("home")} style={{ width:"100%", padding:"10px", background:"none", color:dark?CA.dMute:CA.mute, border:"none", borderRadius:11, fontWeight:500, fontSize:13, cursor:"pointer", marginTop:8, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <ArrowLeft size={14}/> Retour au site
+        </button>
+        <p style={{ textAlign:"center", fontSize:11, color:dark?CA.dMute:"#bbb", marginTop:16 }}>
+          Accès réservé à l'équipe Dada's Drop
+        </p>
+      </div>
+    </div>
+  );
+
+  /* ── TABLEAU DE BORD ── */
+  const myOrders = auth.role==="delivery" ? orders.filter(o=>o.assignedTo===auth.id) : orders;
+  const totalRev = orders.reduce((s,o)=>s+o.total,0);
+  const pendingOrders = orders.filter(o=>o.status===1).length;
+
+  const tabs = [
+    ...(can("view_stats") ? [{ key:"overview", icon:<BarChart2 size={15}/>, label:"Vue d'ensemble" }] : []),
+    { key:"orders", icon:<ShoppingCart size={15}/>, label: auth.role==="delivery"?"Mes livraisons":"Commandes" },
+    ...(can("add_product") ? [{ key:"products", icon:<Grid size={15}/>, label:"Produits" }] : []),
+    ...(auth.role==="admin" ? [{ key:"users", icon:<Users size={15}/>, label:"Équipe" }] : []),
+    ...(auth.role==="admin" ? [{ key:"settings", icon:<Settings size={15}/>, label:"Paramètres" }] : []),
+  ];
+
+  return (
+    <div style={{ minHeight:"100vh", background:bg, fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+      {/* ── TOPBAR ── */}
+      <header style={{ background:CA.ink, borderBottom:`1px solid ${CA.gold}33`, padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:50 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:34, height:34, borderRadius:9, background:CA.cream, border:`1.5px solid ${CA.gold}`, display:"grid", placeItems:"center" }}>
+            <span style={{ fontFamily:"Georgia,serif", fontSize:13, fontWeight:700 }}><span style={{ color:CA.ink }}>D</span><span style={{ color:CA.gold }}>D</span></span>
+          </div>
+          <div>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:14, fontWeight:700, color:"#fff", letterSpacing:1 }}>DADA'S DROP</div>
+            <div style={{ fontSize:10, color:CA.gold, letterSpacing:2 }}>ADMINISTRATION</div>
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {/* Notifs */}
+          <div style={{ position:"relative" }}>
+            <button onClick={()=>setNotifOpen(v=>!v)} style={{ border:"none", background:"none", cursor:"pointer", color:"#fff", position:"relative", padding:4 }}>
+              <Bell size={19}/>
+              {unread>0&&<span style={{ position:"absolute", top:-2, right:-2, background:CA.danger, color:"#fff", fontSize:9, fontWeight:800, width:16, height:16, borderRadius:999, display:"grid", placeItems:"center" }}>{unread}</span>}
+            </button>
+            {notifOpen&&(
+              <div style={{ position:"absolute", right:0, top:36, width:300, background:cardBg, border:`1px solid ${bord}`, borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.2)", zIndex:100 }}>
+                <div style={{ padding:"12px 14px", borderBottom:`1px solid ${bord}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontWeight:700, fontSize:13.5, color:text }}>Notifications</span>
+                  <button onClick={()=>{setNotifs(n=>n.map(x=>({...x,read:true})));setNotifOpen(false);}} style={{ border:"none", background:"none", cursor:"pointer", color:CA.mute, fontSize:11.5 }}>Tout lire</button>
+                </div>
+                {notifs.map(n=>(
+                  <div key={n.id} style={{ padding:"10px 14px", borderBottom:`1px solid ${bord}`, background:n.read?"transparent":`${CA.gold}0A` }}>
+                    <div style={{ fontSize:13, color:text, fontWeight:n.read?400:600 }}>{n.msg}</div>
+                    <div style={{ fontSize:11, color:CA.mute, marginTop:2 }}>{n.time}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* User info */}
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:12.5, color:"#fff", fontWeight:600 }}>{auth.name}</div>
+              <div style={{ fontSize:10.5, color:CA.gold }}>{ROLES[auth.role].badge} {ROLES[auth.role].label}</div>
+            </div>
+            <button onClick={logout} style={{ border:`1px solid ${CA.gold}44`, background:"none", borderRadius:8, padding:"6px 11px", cursor:"pointer", color:CA.gold, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+              <LogOut size={13}/> Déconnexion
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div style={{ maxWidth:1100, margin:"0 auto", padding:"20px 16px 48px" }}>
+        {/* ── TABS ── */}
+        <div style={{ display:"flex", gap:6, marginBottom:22, flexWrap:"wrap" }}>
+          {tabs.map(tb=>(
+            <button key={tb.key} onClick={()=>setTab(tb.key)} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 15px", borderRadius:9, border:`1.5px solid ${tab===tb.key?CA.gold:bord}`, background:tab===tb.key?CA.ink:cardBg, color:tab===tb.key?CA.gold:text, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+              {tb.icon} {tb.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── VUE D'ENSEMBLE ── */}
+        {tab==="overview"&&(
+          <div>
+            {pendingOrders>0&&(
+              <div style={{ background:`${CA.warning}15`, border:`1px solid ${CA.warning}44`, borderRadius:12, padding:"12px 16px", marginBottom:18, display:"flex", alignItems:"center", gap:10 }}>
+                <AlertCircle size={18} color={CA.warning}/>
+                <span style={{ fontSize:13.5, color:text, fontWeight:600 }}>{pendingOrders} commande{pendingOrders>1?"s":""} en attente de traitement</span>
+                <button onClick={()=>setTab("orders")} style={{ marginLeft:"auto", background:CA.warning, color:"#fff", border:"none", borderRadius:7, padding:"5px 12px", cursor:"pointer", fontSize:12.5, fontWeight:700 }}>Voir</button>
+              </div>
+            )}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:24 }}>
+              <StatCard icon={<ShoppingCart size={20} color={CA.gold}/>} value={orders.length} label="Commandes totales" color={CA.gold} dark={dark}/>
+              <StatCard icon={<TrendingUp size={20} color={CA.success}/>} value={fcfa_a(totalRev)} label="Revenus totaux" color={CA.success} dark={dark}/>
+              <StatCard icon={<Grid size={20} color="#1DC0D4}"/>} value={products.length} label="Articles en catalogue" color="#1DC0D4" dark={dark}/>
+              <StatCard icon={<Package size={20} color={CA.warning}/>} value={pendingOrders} label="En attente" color={CA.warning} dark={dark}/>
+            </div>
+
+            {/* Commandes récentes */}
+            <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"16px 18px", marginBottom:18 }}>
+              <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>Commandes récentes</h3>
+              {orders.slice(0,5).map((o,i)=>(
+                <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom:i<4?`1px solid ${bord}`:"none" }}>
+                  <div>
+                    <div style={{ fontWeight:600, fontSize:13.5, color:text }}>#{o.id} — {o.name}</div>
+                    <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{o.items.join(", ")} · {o.date}</div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <Badge color={STATUS_COLORS[o.status]}>{STATUS_LABELS[o.status]}</Badge>
+                    <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:CA.gold, fontSize:13.5 }}>{fcfa_a(o.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Stock faible */}
+            <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"16px 18px" }}>
+              <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>⚠️ Stock faible</h3>
+              {products.filter(p=>p.stock<=2).length===0?(
+                <p style={{ color:dark?CA.dMute:CA.mute, fontSize:13.5 }}>Tous les stocks sont corrects ✅</p>
+              ):products.filter(p=>p.stock<=2).map((p,i)=>(
+                <div key={p.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${bord}` }}>
+                  <span style={{ fontSize:13.5, color:text }}>{p.name}</span>
+                  <Badge color={p.stock===0?CA.danger:CA.warning}>{p.stock===0?"Épuisé":`${p.stock} restant${p.stock>1?"s":""}`}</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── COMMANDES ── */}
+        {tab==="orders"&&(
+          <OrdersTab orders={myOrders} setOrders={setOrders} users={users} auth={auth} dark={dark} text={text} bord={bord} cardBg={cardBg}/>
+        )}
+
+        {/* ── PRODUITS ── */}
+        {tab==="products"&&can("add_product")&&(
+          <ProductsTab products={products} setProducts={setProducts} dark={dark} text={text} bord={bord} cardBg={cardBg}/>
+        )}
+
+        {/* ── ÉQUIPE ── */}
+        {tab==="users"&&auth.role==="admin"&&(
+          <UsersTab users={users} setUsers={setUsers} dark={dark} text={text} bord={bord} cardBg={cardBg}/>
+        )}
+
+        {/* ── PARAMÈTRES ── */}
+        {tab==="settings"&&auth.role==="admin"&&(
+          <SettingsTab dark={dark} text={text} bord={bord} cardBg={cardBg}/>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── ONGLET COMMANDES ──────────────────────────────────── */
+function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg }) {
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState(0);
+  const [selected, setSelected] = useState(null);
+
+  const filtered = orders.filter(o=>{
+    if(filterStatus>0 && o.status!==filterStatus) return false;
+    if(search && !o.name.toLowerCase().includes(search.toLowerCase()) && !o.id.includes(search)) return false;
+    return true;
+  });
+
+  const updateStatus = (id, status) => setOrders(os=>os.map(o=>o.id===id?{...o,status}:o));
+  const assignDelivery = (id, userId) => setOrders(os=>os.map(o=>o.id===id?{...o,assignedTo:userId?parseInt(userId):null}:o));
+  const deliverers = users.filter(u=>u.role==="delivery"&&u.active);
+
+  return (
+    <div>
+      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:1, minWidth:200 }}>
+          <Search size={14} color={dark?CA.dMute:CA.mute} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher une commande..." style={{ width:"100%", padding:"8px 12px 8px 32px", borderRadius:9, border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
+        </div>
+        {[0,1,2,3].map(s=>(
+          <button key={s} onClick={()=>setFilterStatus(s)} style={{ padding:"7px 13px", borderRadius:9, border:`1.5px solid ${filterStatus===s?CA.gold:bord}`, background:filterStatus===s?CA.ink:cardBg, color:filterStatus===s?CA.gold:text, cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
+            {s===0?"Toutes":STATUS_LABELS[s]}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gap:10 }}>
+        {filtered.map(o=>(
+          <div key={o.id} style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:13, padding:"14px 16px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+              <div>
+                <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:text, fontSize:15 }}>#{o.id}</span>
+                <span style={{ marginLeft:10, fontSize:13, color:dark?CA.dMute:CA.mute }}>{o.date}</span>
+              </div>
+              <Badge color={STATUS_COLORS[o.status]}>{STATUS_LABELS[o.status]}</Badge>
+            </div>
+            <div style={{ fontSize:14, color:text, fontWeight:600 }}>{o.name}</div>
+            <div style={{ fontSize:12.5, color:dark?CA.dMute:CA.mute, marginBottom:4 }}>📞 {o.phone} · 📍 {o.quartier}, {o.ville}</div>
+            <div style={{ fontSize:12.5, color:dark?CA.dMute:CA.mute, marginBottom:8 }}>💳 {PAYMENT_LABELS[o.payment]}</div>
+            {o.items.map((item,i)=><div key={i} style={{ fontSize:13, color:text }}>• {item}</div>)}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, flexWrap:"wrap", gap:8 }}>
+              <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:CA.gold, fontSize:15 }}>{fcfa_a(o.total)}</span>
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
+                {/* Changer statut */}
+                {auth.role!=="delivery"&&o.status<3&&(
+                  <button onClick={()=>updateStatus(o.id, o.status+1)} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:12.5, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+                    <ChevronUp size={13}/> {o.status===1?"Marquer expédiée":"Marquer livrée"}
+                  </button>
+                )}
+                {/* Assigner livreur */}
+                {auth.role!=="delivery"&&deliverers.length>0&&(
+                  <select value={o.assignedTo||""} onChange={e=>assignDelivery(o.id,e.target.value)} style={{ padding:"6px 10px", borderRadius:8, border:`1px solid ${bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit", cursor:"pointer" }}>
+                    <option value="">Assigner un livreur</option>
+                    {deliverers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                )}
+                {o.assignedTo&&(
+                  <Badge color={CA.success}>🚴 {users.find(u=>u.id===o.assignedTo)?.name||"Livreur"}</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        {filtered.length===0&&(
+          <div style={{ textAlign:"center", padding:"40px 20px", color:dark?CA.dMute:"#bbb" }}>
+            <ShoppingCart size={36} strokeWidth={1.2}/>
+            <p style={{ marginTop:10, fontSize:14 }}>Aucune commande trouvée.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── ONGLET PRODUITS ───────────────────────────────────── */
+function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
+  const [editP, setEditP] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, desc:"", accent:["#C9A84C","#1A1A1A"] });
+  const setF = k => e => setForm(f=>({...f,[k]:e.target.type==="checkbox"?e.target.checked:e.target.value}));
+
+  const CATS_EN_MAP = { "Sacs à main":"Handbags","Bandoulières":"Shoulder bags","Pochettes":"Clutches","Chaussures":"Shoes","Bijoux":"Jewellery","Parfums":"Perfumes","Gloss":"Gloss","Vêtements":"Clothing" };
+
+  const save = () => {
+    const p = { ...form, id:editP?editP.id:Date.now(), price:parseInt(form.price)||0, stock:parseInt(form.stock)||0, imgs:editP?.imgs||[], catEn:CATS_EN_MAP[form.cat]||form.cat, nameEn:form.nameEn||form.name, descEn:form.descEn||form.desc };
+    if(editP) setProducts(ps=>ps.map(x=>x.id===editP.id?p:x));
+    else setProducts(ps=>[...ps,p]);
+    setEditP(null); setShowForm(false);
+  };
+
+  const del = id => { if(window.confirm("Supprimer cet article ?")) setProducts(ps=>ps.filter(p=>p.id!==id)); };
+
+  const startEdit = p => { setForm({...p,price:String(p.price),stock:String(p.stock)}); setEditP(p); setShowForm(true); };
+  const startNew = () => { setForm({ name:"",brand:"Coach",price:"",cat:"Sacs à main",stock:"",isNew:false,isBest:false,desc:"",accent:["#C9A84C","#1A1A1A"] }); setEditP(null); setShowForm(true); };
+
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>{products.length} articles</span>
+        <button onClick={startNew} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"9px 16px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          <PlusCircle size={15}/> Ajouter un article
+        </button>
+      </div>
+
+      {showForm&&(
+        <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`, borderRadius:14, padding:"20px", marginBottom:16 }}>
+          <h4 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>{editP?"Modifier l'article":"Nouvel article"}</h4>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Nom *</span>
+              <input style={inp} value={form.name||""} onChange={setF("name")} placeholder="Ex : Mini Boston Rose"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Marque *</span>
+              <input style={inp} value={form.brand||""} onChange={setF("brand")} placeholder="Ex : Coach"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Prix (FCFA) *</span>
+              <input style={inp} type="number" value={form.price||""} onChange={setF("price")} placeholder="Ex : 25000"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Stock *</span>
+              <input style={inp} type="number" value={form.stock||""} onChange={setF("stock")} placeholder="Ex : 5"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Catégorie *</span>
+              <select style={inp} value={form.cat||"Sacs à main"} onChange={setF("cat")}>
+                {CATS_FR.map(c=><option key={c}>{c}</option>)}
+              </select>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Lien photo (URL)</span>
+              <input style={inp} value={form.imgs?.[0]||""} onChange={e=>setForm(f=>({...f,imgs:[e.target.value]}))} placeholder="https://i.ibb.co/..."/>
+            </label>
+          </div>
+          <label style={{ display:"block", marginBottom:10 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Description</span>
+            <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={form.desc||""} onChange={setF("desc")}/>
+          </label>
+          <div style={{ display:"flex", gap:16, margin:"10px 0 14px" }}>
+            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13.5, color:text }}>
+              <input type="checkbox" checked={!!form.isNew} onChange={setF("isNew")}/> Nouveauté
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13.5, color:text }}>
+              <input type="checkbox" checked={!!form.isBest} onChange={setF("isBest")}/> Best-seller
+            </label>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={save} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"10px 18px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+              <Save size={14}/> Enregistrer
+            </button>
+            <button onClick={()=>{setShowForm(false);setEditP(null);}} style={{ background:"none", color:text, border:`1px solid ${bord}`, borderRadius:10, padding:"10px 16px", cursor:"pointer", fontSize:13.5, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
+              <X size={14}/> Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:"grid", gap:10 }}>
+        {products.map(p=>(
+          <div key={p.id} style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:12, padding:"12px 14px", display:"flex", gap:12, alignItems:"center" }}>
+            <div style={{ width:56, height:56, borderRadius:10, overflow:"hidden", flexShrink:0, background:p.accent?`linear-gradient(135deg,${p.accent[0]},${p.accent[1]})`:"#eee", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:22 }}>👜</span>}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:"Georgia,serif", fontSize:14, color:text, fontWeight:600 }}>{p.name}</div>
+              <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{p.brand} · {fcfa_a(p.price)}</div>
+              <div style={{ display:"flex", gap:6, marginTop:4 }}>
+                <Badge color={p.stock===0?CA.danger:p.stock<=2?CA.warning:CA.success}>
+                  {p.stock===0?"Épuisé":`Stock : ${p.stock}`}
+                </Badge>
+                {p.isNew&&<Badge color={CA.gold}>Nouveau</Badge>}
+                {p.isBest&&<Badge color="#1DC0D4">Top</Badge>}
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={()=>startEdit(p)} style={{ width:34, height:34, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:text }}>
+                <Edit size={14}/>
+              </button>
+              <button onClick={()=>del(p.id)} style={{ width:34, height:34, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
+                <Trash2 size={14}/>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── ONGLET ÉQUIPE ─────────────────────────────────────── */
+function UsersTab({ users, setUsers, dark, text, bord, cardBg }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name:"", email:"", role:"delivery" });
+  const setF = k => e => setForm(f=>({...f,[k]:e.target.value}));
+
+  const add = () => {
+    if(!form.name||!form.email) return;
+    setUsers(us=>[...us,{ id:Date.now(), ...form, active:true }]);
+    setForm({ name:"", email:"", role:"delivery" });
+    setShowForm(false);
+  };
+
+  const toggle = id => setUsers(us=>us.map(u=>u.id===id?{...u,active:!u.active}:u));
+  const del = id => { if(window.confirm("Supprimer cet utilisateur ?")) setUsers(us=>us.filter(u=>u.id!==id)); };
+
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>{users.length} membres</span>
+        <button onClick={()=>setShowForm(v=>!v)} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"9px 16px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          <PlusCircle size={15}/> Ajouter un membre
+        </button>
+      </div>
+
+      {showForm&&(
+        <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`, borderRadius:14, padding:"18px", marginBottom:16 }}>
+          <h4 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 14px" }}>Nouveau membre</h4>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Nom *</span>
+              <input style={inp} value={form.name} onChange={setF("name")} placeholder="Ex : Jean Kaboré"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Email *</span>
+              <input style={inp} value={form.email} onChange={setF("email")} type="email" placeholder="jean@dadasdrop.com"/>
+            </label>
+          </div>
+          <label style={{ display:"block", marginBottom:14 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Rôle *</span>
+            <select style={inp} value={form.role} onChange={setF("role")}>
+              <option value="manager">👩‍💼 Gestionnaire</option>
+              <option value="delivery">🚴 Livreur</option>
+            </select>
+          </label>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={add} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"10px 18px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+              <Check size={14}/> Ajouter
+            </button>
+            <button onClick={()=>setShowForm(false)} style={{ background:"none", color:text, border:`1px solid ${bord}`, borderRadius:10, padding:"10px 16px", cursor:"pointer", fontSize:13.5, display:"flex", alignItems:"center", gap:6 }}>
+              <X size={14}/> Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:"grid", gap:10 }}>
+        {users.map(u=>(
+          <div key={u.id} style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:12, padding:"13px 15px", display:"flex", alignItems:"center", gap:12, opacity:u.active?1:.55 }}>
+            <div style={{ width:42, height:42, borderRadius:999, background:`${CA.gold}22`, display:"grid", placeItems:"center", fontSize:18, flexShrink:0 }}>
+              {ROLES[u.role].badge}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:600, fontSize:14, color:text }}>{u.name}</div>
+              <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{u.email}</div>
+              <Badge color={u.role==="admin"?CA.gold:u.role==="manager"?"#1DC0D4":CA.success}>{ROLES[u.role].label}</Badge>
+            </div>
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={()=>toggle(u.id)} title={u.active?"Désactiver":"Activer"} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:u.active?CA.success:CA.danger }}>
+                {u.active?<CheckCircle size={14}/>:<X size={14}/>}
+              </button>
+              {u.role!=="admin"&&(
+                <button onClick={()=>del(u.id)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
+                  <Trash2 size={14}/>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── ONGLET PARAMÈTRES ─────────────────────────────────── */
+function SettingsTab({ dark, text, bord, cardBg }) {
+  const [cfg, setCfg] = useState({
+    whatsapp:"22670000000",
+    orangeMoney:"+226 70 00 00 00",
+    moovMoney:"+226 60 00 00 00",
+    wave:"+226 77 00 00 00",
+    freeFrom:"20000",
+    city:"Ouagadougou",
+  });
+  const [saved, setSaved] = useState(false);
+  const setC = k => e => setCfg(c=>({...c,[k]:e.target.value}));
+  const save = () => { setSaved(true); setTimeout(()=>setSaved(false),2500); };
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  return (
+    <div style={{ maxWidth:600 }}>
+      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px", marginBottom:14 }}>
+        <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>📞 Contacts & Paiement</h3>
+        <div style={{ display:"grid", gap:12 }}>
+          {[
+            { key:"whatsapp",    label:"Numéro WhatsApp",   placeholder:"226XXXXXXXX" },
+            { key:"orangeMoney", label:"Orange Money",       placeholder:"+226 XX XX XX XX" },
+            { key:"moovMoney",   label:"Moov Money",         placeholder:"+226 XX XX XX XX" },
+            { key:"wave",        label:"Wave",               placeholder:"+226 XX XX XX XX" },
+          ].map(f=>(
+            <label key={f.key} style={{ display:"block" }}>
+              <span style={{ fontSize:12, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>{f.label}</span>
+              <input style={inp} value={cfg[f.key]} onChange={setC(f.key)} placeholder={f.placeholder}/>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px", marginBottom:14 }}>
+        <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🚚 Livraison</h3>
+        <label style={{ display:"block", marginBottom:12 }}>
+          <span style={{ fontSize:12, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Ville principale</span>
+          <input style={inp} value={cfg.city} onChange={setC("city")}/>
+        </label>
+        <label style={{ display:"block" }}>
+          <span style={{ fontSize:12, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>Livraison gratuite à partir de (FCFA)</span>
+          <input style={inp} type="number" value={cfg.freeFrom} onChange={setC("freeFrom")}/>
+        </label>
+      </div>
+      <button onClick={save} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:11, padding:"12px 22px", cursor:"pointer", fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
+        {saved?<><CheckCircle size={16}/> Enregistré !</>:<><Save size={16}/> Enregistrer les paramètres</>}
+      </button>
+    </div>
+  );
+}
+
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   ShoppingBag, Search, X, Plus, Minus, Trash2, Heart,
@@ -706,7 +1331,7 @@ function AdminDashboard({ products, setProducts, orders, t, dark, onClose }) {
 /* ═══════════════════════════════════════
    MENU LATÉRAL (style LV)
    ═══════════════════════════════════════ */
-function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, onAdminOpen }) {
+function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat }) {
   const text = dark?C.dText:C.ink;
   const navItems = [
     { label:t.home,      page:"home",      cat:null },
@@ -748,12 +1373,9 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, onAd
             ))}
           </div>
         </div>
-        <div style={{ padding:"16px 24px", borderTop:`1px solid ${dark?C.dBorder:C.border}`, flexShrink:0, display:"flex", flexDirection:"column", gap:12 }}>
+        <div style={{ padding:"16px 24px", borderTop:`1px solid ${dark?C.dBorder:C.border}`, flexShrink:0 }}>
           <button onClick={()=>{setLang(l=>l==="fr"?"en":"fr");}} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:`1px solid ${dark?C.dBorder:C.border}`, borderRadius:8, padding:"8px 12px", cursor:"pointer", color:dark?C.dText:C.ink, fontSize:13, fontWeight:600, width:"fit-content" }}>
             <Globe size={14}/> {lang==="fr"?"Passer en anglais":"Switch to French"}
-          </button>
-          <button onClick={()=>{onAdminOpen();onClose();}} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:"none", cursor:"pointer", color:dark?C.dMute:C.mute, fontSize:13 }}>
-            <Lock size={14}/> Administration
           </button>
         </div>
       </div>
@@ -853,7 +1475,6 @@ export default function DadasDrop() {
   const [checkout, setCheckout] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -861,10 +1482,10 @@ export default function DadasDrop() {
 
   // Bloquer le scroll quand menu ou panier ou modal est ouvert
   useEffect(()=>{
-    const isOpen = menuOpen || cartOpen || checkout || trackOpen || adminOpen || !!selected;
+    const isOpen = menuOpen || cartOpen || checkout || trackOpen || !!selected;
     document.body.style.overflow = isOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  },[menuOpen, cartOpen, checkout, trackOpen, adminOpen, selected]);
+  },[menuOpen, cartOpen, checkout, trackOpen, selected]);
 
   const t    = T[lang];
   const CATS = lang==="fr"?CATS_FR:CATS_EN;
@@ -912,6 +1533,8 @@ export default function DadasDrop() {
 
   const bg = dark?C.dBg:C.cream, text = dark?C.dText:C.ink, bord = dark?C.dBorder:C.border;
   const hdrBg = dark?"rgba(15,12,8,.92)":"rgba(250,246,238,.92)";
+
+  if(page==="admin") return <AdminPage products={products} setProducts={setProducts} dark={dark} t={t} setPage={setPage}/>;
 
   return (
     <div style={{ background:bg, minHeight:"100vh", color:text, fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
@@ -1180,6 +1803,7 @@ export default function DadasDrop() {
       )}
 
       {page==="about"&&<AboutPage dark={dark}/>}
+      {page==="admin"&&<AdminPage products={products} setProducts={setProducts} dark={dark} t={t}/>}
 
       {/* FOOTER */}
       <footer style={{ background:C.ink, color:"#fff", padding:"32px 16px", borderTop:`1px solid ${C.gold}22` }}>
@@ -1210,12 +1834,12 @@ export default function DadasDrop() {
       </a>
 
       {/* MODALS */}
-      <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} t={t} lang={lang} setLang={setLang} dark={dark} setPage={setPage} setCat={setCat} onAdminOpen={()=>setAdminOpen(true)}/>
+      <SideMenu open={menuOpen} onClose={()=>setMenuOpen(false)} t={t} lang={lang} setLang={setLang} dark={dark} setPage={setPage} setCat={setCat}/>
       <ProductModal p={selected} t={t} dark={dark} onClose={()=>setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products} t={t} dark={dark} onClose={()=>setCartOpen(false)} onQty={setQty} onRemove={removeItem} onCheckout={()=>{setCartOpen(false);setCheckout(true);}}/>
       <Checkout open={checkout} lines={lines} total={total} t={t} dark={dark} onClose={()=>setCheckout(false)}/>
       <TrackModal open={trackOpen} t={t} dark={dark} onClose={()=>setTrackOpen(false)}/>
-      {adminOpen&&<AdminDashboard products={products} setProducts={setProducts} orders={demoOrders} t={t} dark={dark} onClose={()=>setAdminOpen(false)}/>}
+
     </div>
   );
 }
