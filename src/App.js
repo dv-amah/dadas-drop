@@ -799,6 +799,18 @@ function FilterPanel({ CATS, cat, setCat, sort, setSort, inStock, setInStock, mi
   const [open, setOpen] = useState(false);
   const activeFilters = (cat > 0 ? 1 : 0) + (inStock ? 1 : 0) + (minPrice || maxPrice ? 1 : 0) + (sort !== "new" ? 1 : 0);
 
+  // Scroll lock quand filtre ouvert
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add("filter-open");
+    } else {
+      document.body.classList.remove("filter-open");
+    }
+    return () => document.body.classList.remove("filter-open");
+  }, [open]);
+
+  const closeFilter = () => setOpen(false);
+
   return (
     <>
       <div style={{ display:"flex", gap:8, marginBottom:16, alignItems:"center" }}>
@@ -819,7 +831,7 @@ function FilterPanel({ CATS, cat, setCat, sort, setSort, inStock, setInStock, mi
           </div>
         )}
       </div>
-      {open && <div onClick={() => setOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:60, animation:"ddFade .2s ease" }}/>}
+      {open && <div onClick={closeFilter} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:60, animation:"ddFade .2s ease" }}/>}
       <div style={{ position:"fixed", bottom:0, left:0, right:0, background: dark ? C.dCard : "#fff", zIndex:61, borderRadius:"20px 20px 0 0", padding:"0 0 40px", transform: open ? "translateY(0)" : "translateY(105%)", transition:"transform .35s cubic-bezier(.2,.8,.2,1)", maxHeight:"80vh", overflowY:"auto", boxShadow:"0 -8px 32px rgba(0,0,0,.2)" }}>
         <div style={{ display:"flex", justifyContent:"center", padding:"12px 0 0" }}>
           <div style={{ width:40, height:4, borderRadius:99, background: dark ? C.dBorder : C.border }}/>
@@ -828,7 +840,7 @@ function FilterPanel({ CATS, cat, setCat, sort, setSort, inStock, setInStock, mi
           <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>{lang === "fr" ? "Filtres" : "Filters"}</span>
           <div style={{ display:"flex", gap:8 }}>
             {activeFilters > 0 && <button onClick={() => { setCat(0); setSort("new"); setInStock(false); setMinPrice(""); setMaxPrice(""); }} style={{ fontSize:12.5, color:C.gold, background:"none", border:"none", cursor:"pointer" }}>{lang === "fr" ? "Tout effacer" : "Clear all"}</button>}
-            <button onClick={() => setOpen(false)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}><X size={20}/></button>
+            <button onClick={closeFilter} style={{ border:"none", background:"none", cursor:"pointer", color:text }}><X size={20}/></button>
           </div>
         </div>
         <div style={{ padding:"16px 20px" }}>
@@ -871,7 +883,7 @@ function FilterPanel({ CATS, cat, setCat, sort, setSort, inStock, setInStock, mi
               <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="Max" style={{ flex:1, padding:"10px 12px", borderRadius:9, border:`1.5px solid ${maxPrice ? C.gold : bord}`, background: dark ? C.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
             </div>
           </div>
-          <button onClick={() => setOpen(false)} style={{ width:"100%", padding:"14px", background:C.ink, color:C.gold, border:`1px solid ${C.gold}44`, borderRadius:12, fontWeight:700, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+          <button onClick={closeFilter} style={{ width:"100%", padding:"14px", background:C.ink, color:C.gold, border:`1px solid ${C.gold}44`, borderRadius:12, fontWeight:700, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
             <Check size={16}/> {lang === "fr" ? "Appliquer les filtres" : "Apply filters"}
             {activeFilters > 0 && <span style={{ background:C.gold, color:C.ink, fontSize:11, fontWeight:800, padding:"2px 8px", borderRadius:999 }}>{activeFilters}</span>}
           </button>
@@ -1052,12 +1064,14 @@ function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg })
 
   return (
     <div>
-      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
-        <div style={{ position:"relative", flex:1, minWidth:200 }}>
+      <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+        <div style={{ position:"relative", flex:"1 1 200px", minWidth:0 }}>
           <Search size={14} color={dark ? CA.dMute : CA.mute} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une commande…"
             style={{ width:"100%", padding:"8px 12px 8px 32px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
         </div>
+      </div>
+      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
         {[0,1,2,3].map(s => (
           <button key={s} onClick={() => setFilterStatus(s)} style={{ padding:"7px 13px", borderRadius:9, border:`1.5px solid ${filterStatus===s ? CA.gold : bord}`, background: filterStatus===s ? CA.ink : cardBg, color: filterStatus===s ? CA.gold : text, cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
             {s === 0 ? "Toutes" : STATUS_LABELS[s]}
@@ -1518,22 +1532,22 @@ function AdminPage({ products, setProducts, dark, setPage }) {
   return (
     <div style={{ minHeight:"100vh", background:bg, fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
       {/* TOPBAR */}
-      <header style={{ background:CA.ink, borderBottom:`1px solid ${CA.gold}33`, padding:"0 20px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:50 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <LogoDD size={34}/>
-          <div>
-            <div style={{ fontFamily:"Georgia,serif", fontSize:14, fontWeight:700, color:"#fff", letterSpacing:1 }}>DADA'S DROP</div>
-            <div style={{ fontSize:10, color:CA.gold, letterSpacing:2 }}>ADMINISTRATION</div>
+      <header style={{ background:CA.ink, borderBottom:`1px solid ${CA.gold}33`, padding:"0 12px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:50 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+          <LogoDD size={32}/>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:13, fontWeight:700, color:"#fff", letterSpacing:.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>DADA'S DROP</div>
+            <div style={{ fontSize:9, color:CA.gold, letterSpacing:1.5 }}>ADMINISTRATION</div>
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
           <div style={{ position:"relative" }}>
             <button onClick={() => setNotifOpen(v => !v)} style={{ border:"none", background:"none", cursor:"pointer", color:"#fff", position:"relative", padding:4 }}>
               <Bell size={19}/>
               {unread > 0 && <span style={{ position:"absolute", top:-2, right:-2, background:CA.danger, color:"#fff", fontSize:9, fontWeight:800, width:16, height:16, borderRadius:999, display:"grid", placeItems:"center" }}>{unread}</span>}
             </button>
             {notifOpen && (
-              <div style={{ position:"absolute", right:0, top:36, width:300, background:cardBg, border:`1px solid ${bord}`, borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.2)", zIndex:100 }}>
+              <div style={{ position:"absolute", right:0, top:36, width:"min(300px, 90vw)", background:cardBg, border:`1px solid ${bord}`, borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.2)", zIndex:100 }}>
                 <div style={{ padding:"12px 14px", borderBottom:`1px solid ${bord}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <span style={{ fontWeight:700, fontSize:13.5, color:text }}>Notifications</span>
                   <button onClick={() => { setNotifs(n => n.map(x => ({ ...x, read:true }))); setNotifOpen(false); }} style={{ border:"none", background:"none", cursor:"pointer", color:CA.mute, fontSize:11.5 }}>Tout lire</button>
@@ -1547,15 +1561,16 @@ function AdminPage({ products, setProducts, dark, setPage }) {
               </div>
             )}
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {/* Nom visible uniquement sur desktop */}
+          <div style={{ display:"none" }} className="dd-admin-userinfo">
             <div style={{ textAlign:"right" }}>
               <div style={{ fontSize:12.5, color:"#fff", fontWeight:600 }}>{auth.name}</div>
               <div style={{ fontSize:10.5, color:CA.gold }}>{ROLES[auth.role].badge} {ROLES[auth.role].label}</div>
             </div>
-            <button onClick={logout} style={{ border:`1px solid ${CA.gold}44`, background:"none", borderRadius:8, padding:"6px 11px", cursor:"pointer", color:CA.gold, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
-              <LogOut size={13}/> Déconnexion
-            </button>
           </div>
+          <button onClick={logout} style={{ border:`1px solid ${CA.gold}44`, background:"none", borderRadius:8, padding:"6px 10px", cursor:"pointer", color:CA.gold, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+            <LogOut size={13}/> <span className="dd-admin-logout-txt">Déconnexion</span>
+          </button>
         </div>
       </header>
 
@@ -1723,10 +1738,13 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
         .dd-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.12);transform:translateY(-2px)!important}
         @keyframes ddFade{from{opacity:0}to{opacity:1}}
         @keyframes ddHero{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        .dd-lang-btn{display:inline-flex}
         @media(max-width:600px){
           .dd-grid{grid-template-columns:repeat(2,1fr)!important}
           .dd-hero-title{font-size:28px!important}
+          .dd-lang-btn{display:none!important}
         }
+        body.filter-open{overflow:hidden!important;touch-action:none}
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-thumb{background:${C.gold}44;border-radius:99px}
       `}</style>
@@ -1747,7 +1765,7 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
             <span style={{ fontSize:8, color:C.gold, letterSpacing:4, marginTop:1, whiteSpace:"nowrap" }}>✦ COLLECTION PREMIUM ✦</span>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8, flex:1, justifyContent:"flex-end" }}>
-            <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} style={{ border:`1px solid ${bord}`, background: dark ? C.dCard : "#fff", borderRadius:7, padding:"5px 9px", cursor:"pointer", color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5 }}>
+            <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} className="dd-lang-btn" style={{ border:`1px solid ${bord}`, background: dark ? C.dCard : "#fff", borderRadius:7, padding:"5px 9px", cursor:"pointer", color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5 }}>
               {t.lang}
             </button>
             <button onClick={() => setDark(v => !v)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
