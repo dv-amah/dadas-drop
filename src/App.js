@@ -105,7 +105,7 @@ const CATS_ADMIN = ["Sacs à main","Bandoulières","Pochettes","Chaussures","Bij
 // Config
 const CFG = {
   brand: "DADA'S DROP",
-  whatsapp: "22670000000",
+  whatsapp: "+33 07 68 74 58 41",
   orangeMoney: "+226 70 00 00 00",
   moovMoney: "+226 60 00 00 00",
   wave: "+226 77 00 00 00",
@@ -1200,7 +1200,7 @@ function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
   const [editP, setEditP]     = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving]   = useState(false);
-  const emptyForm = { name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, isPinned:false, isHidden:false, discount:0, desc:"", imgs:["","",""], accent:["#C9A84C","#1A1A1A"] };
+  const emptyForm = { name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, isPinned:false, isHidden:false, discount:0, desc:"", imgs:["","","",""], accent:["#C9A84C","#1A1A1A"] };
   const [form, setForm] = useState(emptyForm);
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
@@ -1254,7 +1254,7 @@ function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
 
   const startEdit = p => {
     const imgs = p.imgs || [];
-    setForm({ ...p, price:String(p.price), stock:String(p.stock), discount:String(p.discount||0), imgs:[imgs[0]||"", imgs[1]||"", imgs[2]||""] });
+    setForm({ ...p, price:String(p.price), stock:String(p.stock), discount:String(p.discount||0), imgs:[imgs[0]||"", imgs[1]||"", imgs[2]||"", imgs[3]||""] });
     setEditP(p); setShowForm(true);
   };
   const startNew = () => { setForm(emptyForm); setEditP(null); setShowForm(true); };
@@ -1321,9 +1321,9 @@ function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
 
           {/* 3 URLs photos */}
           <div style={{ marginBottom:10 }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:6 }}>Photos (jusqu'à 3 URLs)</span>
+            <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:6 }}>Photos (jusqu'à 4 URLs)</span>
             <div style={{ display:"grid", gap:7 }}>
-              {[0,1,2].map(i => (
+              {[0,1,2,3].map(i => (
                 <div key={i} style={{ display:"flex", gap:8, alignItems:"center" }}>
                   <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, width:60, flexShrink:0 }}>Photo {i+1}{i===0?" *":""}</span>
                   <input style={{ ...inp, marginBottom:0 }} value={form.imgs?.[i]||""} onChange={e => setForm(f => { const imgs=[...(f.imgs||["","",""])]; imgs[i]=e.target.value; return {...f,imgs}; })} placeholder="https://i.ibb.co/…"/>
@@ -2056,8 +2056,13 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
     <div style={{ background:bg, minHeight:"100vh", color:text, fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
       <style>{`
         *{box-sizing:border-box}
-        input,textarea,select{font-family:inherit}
+        input,textarea,select{font-family:inherit;font-size:16px}
         input:focus,textarea:focus,select:focus{outline:none;border-color:${C.gold}!important}
+        /* Empêche le zoom auto sur iOS quand on tape dans un input
+           sans bloquer le pinch-to-zoom manuel des clientes */
+        @supports (-webkit-touch-callout: none) {
+          input, textarea, select { font-size: 16px !important; }
+        }
         .dd-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.12);transform:translateY(-2px)!important}
         @keyframes ddFade{from{opacity:0}to{opacity:1}}
         @keyframes ddHero{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
