@@ -1561,15 +1561,12 @@ function AdminPage({ products, setProducts, dark, setPage }) {
               </div>
             )}
           </div>
-          {/* Nom visible uniquement sur desktop */}
-          <div style={{ display:"none" }} className="dd-admin-userinfo">
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:12.5, color:"#fff", fontWeight:600 }}>{auth.name}</div>
-              <div style={{ fontSize:10.5, color:CA.gold }}>{ROLES[auth.role].badge} {ROLES[auth.role].label}</div>
-            </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:12, color:"#fff", fontWeight:600, whiteSpace:"nowrap" }}>{auth.name.split(" ")[0]}</div>
+            <div style={{ fontSize:9.5, color:CA.gold, whiteSpace:"nowrap" }}>{ROLES[auth.role].badge} {ROLES[auth.role].label}</div>
           </div>
-          <button onClick={logout} style={{ border:`1px solid ${CA.gold}44`, background:"none", borderRadius:8, padding:"6px 10px", cursor:"pointer", color:CA.gold, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
-            <LogOut size={13}/> <span className="dd-admin-logout-txt">Déconnexion</span>
+          <button onClick={logout} title="Déconnexion" style={{ border:`1px solid ${CA.gold}44`, background:"none", borderRadius:8, padding:"7px 10px", cursor:"pointer", color:CA.gold, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+            <LogOut size={14}/>
           </button>
         </div>
       </header>
@@ -1780,11 +1777,67 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
         {searchOpen && (
           <div style={{ borderTop:`1px solid ${bord}`, padding:"10px 16px", background:hdrBg }}>
             <div style={{ maxWidth:600, margin:"0 auto", position:"relative" }}>
-              <Search size={15} color={dark ? C.dMute : C.mute} style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)" }}/>
-              <input autoFocus value={query} onChange={e => { setQuery(e.target.value); setPage("catalogue"); setCat(0); }}
+              <Search size={15} color={dark ? C.dMute : C.mute} style={{ position:"absolute", left:11, top:14, zIndex:1 }}/>
+              <input autoFocus value={query}
+                onChange={e => { setQuery(e.target.value); setPage("catalogue"); setCat(0); }}
+                onKeyDown={e => { if (e.key === "Escape") { setQuery(""); setSearchOpen(false); } }}
                 placeholder={t.search}
-                style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius:8, border:`1px solid ${bord}`, background: dark ? C.dCard : "#fff", fontSize:"16px", color:text }}/>
-              {query && <button onClick={() => { setQuery(""); setSearchOpen(false); }} style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", border:"none", background:"none", cursor:"pointer", color: dark ? C.dMute : C.mute }}><X size={15}/></button>}
+                style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius: query && products.some(p => p.name.toLowerCase().includes(query.toLowerCase()) && query.trim().length > 0) ? "8px 8px 0 0" : 8, border:`1px solid ${bord}`, background: dark ? C.dCard : "#fff", fontSize:"16px", color:text }}/>
+              {query && (
+                <button onClick={() => { setQuery(""); setSearchOpen(false); }}
+                  style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", border:"none", background:"none", cursor:"pointer", color: dark ? C.dMute : C.mute }}>
+                  <X size={15}/>
+                </button>
+              )}
+              {/* Suggestions autocomplétion */}
+              {query.trim().length >= 1 && (() => {
+                const q = query.toLowerCase().trim();
+                const suggestions = products.filter(p =>
+                  p.name.toLowerCase().includes(q) ||
+                  (p.brand || "").toLowerCase().includes(q) ||
+                  (p.cat || "").toLowerCase().includes(q)
+                ).slice(0, 6);
+                if (suggestions.length === 0) return null;
+                return (
+                  <div style={{ position:"absolute", top:"100%", left:0, right:0, background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderTop:"none", borderRadius:"0 0 10px 10px", zIndex:200, boxShadow:"0 8px 24px rgba(0,0,0,.12)", overflow:"hidden" }}>
+                    {suggestions.map((p, i) => (
+                      <button key={p.id} onClick={() => {
+                        setQuery(p.name);
+                        setPage("catalogue");
+                        setCat(0);
+                        setSearchOpen(false);
+                      }}
+                        style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 14px", border:"none", borderBottom: i < suggestions.length - 1 ? `1px solid ${dark ? C.dBorder : C.border}` : "none", background:"none", cursor:"pointer", textAlign:"left" }}
+                        onMouseEnter={e => e.currentTarget.style.background = dark ? C.dBorder : C.creamD}
+                        onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                        {/* Mini vignette */}
+                        <div style={{ width:32, height:32, borderRadius:6, overflow:"hidden", flexShrink:0, background: p.accent ? `linear-gradient(135deg,${p.accent[0]},${p.accent[1]})` : "#eee" }}>
+                          {p.imgs?.[0] && <img src={p.imgs[0]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color: dark ? C.dText : C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                            {/* Highlight la partie tapée */}
+                            {p.name.split(new RegExp(`(${query.trim()})`, "gi")).map((part, j) =>
+                              part.toLowerCase() === q
+                                ? <span key={j} style={{ color:C.gold }}>{part}</span>
+                                : part
+                            )}
+                          </div>
+                          <div style={{ fontSize:11, color: dark ? C.dMute : C.mute }}>{p.brand} · {fcfa(p.price)}</div>
+                        </div>
+                        {p.stock === 0
+                          ? <span style={{ fontSize:10, color:C.danger, fontWeight:600 }}>Épuisé</span>
+                          : <span style={{ fontSize:10, color:C.success, fontWeight:600 }}>En stock</span>}
+                      </button>
+                    ))}
+                    {/* Voir tous les résultats */}
+                    <button onClick={() => { setPage("catalogue"); setCat(0); setSearchOpen(false); }}
+                      style={{ width:"100%", padding:"9px 14px", border:"none", background: dark ? `${C.gold}11` : `${C.gold}0A`, cursor:"pointer", color:C.gold, fontSize:12.5, fontWeight:700, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+                      <Search size={13}/> Voir tous les résultats pour "{query}"
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1915,7 +1968,8 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
       </footer>
 
       {/* WHATSAPP FLOTTANT */}
-      <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?")}`} target="_blank" rel="noreferrer" style={{ position:"fixed", bottom:20, right:18, width:48, height:48, borderRadius:999, background:"#25D366", display:"grid", placeItems:"center", zIndex:49, boxShadow:"0 4px 16px rgba(37,211,102,.4)", textDecoration:"none" }}>
+      <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?")}`} target="_blank" rel="noreferrer"
+        style={{ position:"fixed", bottom:80, right:18, width:48, height:48, borderRadius:999, background:"#25D366", display:"grid", placeItems:"center", zIndex:49, boxShadow:"0 4px 16px rgba(37,211,102,.4)", textDecoration:"none" }}>
         <MessageCircle size={22} color="#fff"/>
       </a>
 
