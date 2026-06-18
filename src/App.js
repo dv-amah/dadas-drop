@@ -1037,11 +1037,12 @@ function LegalPage({ type, dark, setPage }) {
 }
 
 /* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET COMMANDES
+   🏢 ADMIN — ONGLET COMMANDES V14
    ═══════════════════════════════════════ */
 function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch]           = useState("");
   const [filterStatus, setFilterStatus] = useState(0);
+  const [printOrder, setPrintOrder]   = useState(null);
 
   const filtered = orders.filter(o => {
     if (filterStatus > 0 && o.status !== filterStatus) return false;
@@ -1051,25 +1052,90 @@ function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg })
 
   const updateStatus = async (id, status) => {
     setOrders(os => os.map(o => o.id === id ? { ...o, status } : o));
-    try { await sb.patch("orders", id, { status }); } catch (e) { console.warn("Supabase patch:", e.message); }
+    try { await sb.patch("orders", id, { status }); } catch (e) { console.warn(e.message); }
   };
 
   const assignDelivery = async (id, userId) => {
     const val = userId ? parseInt(userId) : null;
     setOrders(os => os.map(o => o.id === id ? { ...o, assignedTo:val } : o));
-    try { await sb.patch("orders", id, { assigned_to:val }); } catch (e) { console.warn("Supabase patch:", e.message); }
+    try { await sb.patch("orders", id, { assigned_to:val }); } catch (e) { console.warn(e.message); }
+  };
+
+  // Export Excel CSV
+  const exportExcel = () => {
+    const rows = [
+      ["ID","Client","Téléphone","Ville","Quartier","Articles","Total (FCFA)","Paiement","Statut","Date"],
+      ...orders.map(o => [
+        o.id, o.name, o.phone, o.ville, o.quartier||"",
+        (o.items||[]).join(" | "),
+        o.total,
+        PAYMENT_LABELS[o.payment]||o.payment,
+        STATUS_LABELS[o.status]||"",
+        o.date
+      ])
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `commandes-dadas-drop-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  // Impression bon de commande
+  const printBon = (o) => {
+    const w = window.open("","_blank","width=600,height=800");
+    w.document.write(`
+      <!DOCTYPE html><html><head><meta charset="utf-8"/>
+      <title>Bon de commande ${o.id}</title>
+      <style>
+        body{font-family:Georgia,serif;padding:32px;color:#1A1A1A;max-width:520px;margin:0 auto}
+        .logo{font-size:28px;font-weight:700;letter-spacing:3px;margin-bottom:4px}
+        .sub{font-size:11px;color:#8A7A6A;letter-spacing:4px;margin-bottom:24px}
+        .divider{border:none;border-top:1px solid #E0D8CC;margin:16px 0}
+        .row{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
+        .label{color:#8A7A6A}
+        .item{padding:6px 0;border-bottom:1px solid #E0D8CC;font-size:14px}
+        .total{font-size:20px;font-weight:700;color:#C9A84C;margin-top:16px}
+        .status{display:inline-block;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#E08030;color:#fff}
+        @media print{button{display:none}}
+      </style></head><body>
+      <div class="logo">DADA'S DROP</div>
+      <div class="sub">✦ BON DE COMMANDE ✦</div>
+      <hr class="divider"/>
+      <div class="row"><span class="label">N° commande</span><strong>#${o.id}</strong></div>
+      <div class="row"><span class="label">Date</span><span>${o.date||new Date().toLocaleDateString("fr-FR")}</span></div>
+      <div class="row"><span class="label">Statut</span><span class="status">${STATUS_LABELS[o.status]||""}</span></div>
+      <hr class="divider"/>
+      <div class="row"><span class="label">Client</span><strong>${o.name}</strong></div>
+      <div class="row"><span class="label">Téléphone</span><span>${o.phone}</span></div>
+      <div class="row"><span class="label">Adresse</span><span>${o.quartier?o.quartier+", ":""}${o.ville}</span></div>
+      <div class="row"><span class="label">Paiement</span><span>${PAYMENT_LABELS[o.payment]||o.payment}</span></div>
+      <hr class="divider"/>
+      <strong style="font-size:13px;color:#8A7A6A">ARTICLES</strong>
+      ${(o.items||[]).map(i=>`<div class="item">${i}</div>`).join("")}
+      <div class="total">Total : ${(o.total||0).toLocaleString("fr-FR")} FCFA</div>
+      <hr class="divider"/>
+      <p style="font-size:11px;color:#8A7A6A;text-align:center;margin-top:24px">Dada's Drop · Ouagadougou, Burkina Faso<br/>WhatsApp : +${CFG.whatsapp}</p>
+      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Imprimer</button>
+      </body></html>
+    `);
+    w.document.close();
   };
 
   const deliverers = users.filter(u => u.role === "delivery" && u.active);
 
   return (
     <div>
-      <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
         <div style={{ position:"relative", flex:"1 1 200px", minWidth:0 }}>
           <Search size={14} color={dark ? CA.dMute : CA.mute} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une commande…"
             style={{ width:"100%", padding:"8px 12px 8px 32px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
         </div>
+        <button onClick={exportExcel} style={{ background:"#1A9E5E", color:"#fff", border:"none", borderRadius:9, padding:"8px 14px", cursor:"pointer", fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+          📊 Export Excel
+        </button>
       </div>
       <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
         {[0,1,2,3].map(s => (
@@ -1095,6 +1161,10 @@ function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg })
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, flexWrap:"wrap", gap:8 }}>
               <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:CA.gold, fontSize:15 }}>{fcfa_a(o.total)}</span>
               <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
+                {/* Impression */}
+                <button onClick={() => printBon(o)} style={{ background:"none", color: dark ? CA.dMute : CA.mute, border:`1px solid ${bord}`, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
+                  🖨️ Imprimer
+                </button>
                 {auth.role !== "delivery" && o.status < 3 && (
                   <button onClick={() => updateStatus(o.id, o.status + 1)} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:12.5, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
                     <ChevronUp size={13}/> {o.status === 1 ? "Marquer expédiée" : "Marquer livrée"}
@@ -1107,9 +1177,7 @@ function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg })
                     {deliverers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 )}
-                {o.assignedTo && (
-                  <Badge color={CA.success}>🚴 {users.find(u => u.id === o.assignedTo)?.name || "Livreur"}</Badge>
-                )}
+                {o.assignedTo && <Badge color={CA.success}>🚴 {users.find(u => u.id === o.assignedTo)?.name || "Livreur"}</Badge>}
               </div>
             </div>
           </div>
@@ -1126,93 +1194,165 @@ function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg })
 }
 
 /* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET PRODUITS
+   🏢 ADMIN — ONGLET PRODUITS V14
    ═══════════════════════════════════════ */
 function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
-  const [editP, setEditP] = useState(null);
+  const [editP, setEditP]     = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, desc:"", accent:["#C9A84C","#1A1A1A"] });
+  const [saving, setSaving]   = useState(false);
+  const emptyForm = { name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, isPinned:false, isHidden:false, discount:0, desc:"", imgs:["","",""], accent:["#C9A84C","#1A1A1A"] };
+  const [form, setForm] = useState(emptyForm);
   const setF = k => e => setForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
 
   const save = async () => {
     setSaving(true);
     const catIdx = CATS_ADMIN.indexOf(form.cat);
-    const catEn = catIdx >= 0 ? CATS_EN[catIdx + 1] : form.cat;
-    const p = { ...form, id: editP ? editP.id : Date.now(), price: parseInt(form.price) || 0, stock: parseInt(form.stock) || 0, imgs: editP?.imgs || [], catEn, nameEn: form.name };
+    const catEn  = catIdx >= 0 ? CATS_EN[catIdx + 1] : form.cat;
+    const imgs   = (form.imgs || []).filter(u => u.trim() !== "");
+    const p = {
+      ...form,
+      id:       editP ? editP.id : Date.now(),
+      price:    parseInt(form.price)    || 0,
+      stock:    parseInt(form.stock)    || 0,
+      discount: parseInt(form.discount) || 0,
+      imgs, catEn, nameEn: form.name,
+    };
     if (editP) {
       setProducts(ps => ps.map(x => x.id === editP.id ? p : x));
-      try { await sb.patch("products", editP.id, p); } catch (e) { console.warn("Supabase patch:", e.message); }
+      try { await sb.patch("products", editP.id, p); } catch (e) { console.warn(e.message); }
     } else {
       setProducts(ps => [...ps, p]);
-      try { await sb.post("products", p); } catch (e) { console.warn("Supabase post:", e.message); }
+      try { await sb.post("products", p); } catch (e) { console.warn(e.message); }
     }
-    setSaving(false);
-    setEditP(null);
-    setShowForm(false);
+    setSaving(false); setEditP(null); setShowForm(false);
   };
 
   const del = async id => {
     if (!window.confirm("Supprimer cet article ?")) return;
     setProducts(ps => ps.filter(p => p.id !== id));
-    try { await sb.delete("products", id); } catch (e) { console.warn("Supabase delete:", e.message); }
+    try { await sb.delete("products", id); } catch (e) { console.warn(e.message); }
   };
 
-  const startEdit = p => { setForm({ ...p, price:String(p.price), stock:String(p.stock) }); setEditP(p); setShowForm(true); };
-  const startNew = () => { setForm({ name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, desc:"", accent:["#C9A84C","#1A1A1A"] }); setEditP(null); setShowForm(true); };
+  // Épingler / masquer
+  const toggleProp = async (id, prop) => {
+    setProducts(ps => ps.map(p => p.id === id ? { ...p, [prop]:!p[prop] } : p));
+    const product = products.find(p => p.id === id);
+    try { await sb.patch("products", id, { [prop]:!product[prop] }); } catch (e) { console.warn(e.message); }
+  };
+
+  // Monter / descendre dans la liste
+  const move = (idx, dir) => {
+    setProducts(ps => {
+      const arr = [...ps];
+      const swap = idx + dir;
+      if (swap < 0 || swap >= arr.length) return arr;
+      [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+      return arr;
+    });
+  };
+
+  const startEdit = p => {
+    const imgs = p.imgs || [];
+    setForm({ ...p, price:String(p.price), stock:String(p.stock), discount:String(p.discount||0), imgs:[imgs[0]||"", imgs[1]||"", imgs[2]||""] });
+    setEditP(p); setShowForm(true);
+  };
+  const startNew = () => { setForm(emptyForm); setEditP(null); setShowForm(true); };
+
+  const visible  = products.filter(p => !p.isHidden);
+  const hidden   = products.filter(p => p.isHidden);
+  const pinned   = products.filter(p => p.isPinned && !p.isHidden);
 
   return (
     <div>
+      {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>{products.length} articles</span>
+        <div style={{ fontSize:13, color: dark ? CA.dMute : CA.mute }}>
+          <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>{products.length} articles</span>
+          {pinned.length > 0 && <span style={{ marginLeft:10 }}>📌 {pinned.length} épinglé{pinned.length > 1 ? "s" : ""}</span>}
+          {hidden.length > 0 && <span style={{ marginLeft:10 }}>👁️ {hidden.length} masqué{hidden.length > 1 ? "s" : ""}</span>}
+        </div>
         <button onClick={startNew} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"9px 16px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
           <PlusCircle size={15}/> Ajouter un article
         </button>
       </div>
+
+      {/* Formulaire */}
       {showForm && (
         <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`, borderRadius:14, padding:"20px", marginBottom:16 }}>
           <h4 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>{editP ? "Modifier l'article" : "Nouvel article"}</h4>
+
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            {/* Nom */}
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Nom *</span>
-              <input style={inp} value={form.name || ""} onChange={setF("name")} placeholder="Ex : Mini Boston Rose"/>
+              <input style={inp} value={form.name||""} onChange={setF("name")} placeholder="Ex : Mini Boston Rose"/>
             </label>
+            {/* Marque */}
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Marque *</span>
-              <input style={inp} value={form.brand || ""} onChange={setF("brand")} placeholder="Ex : Coach"/>
+              <input style={inp} value={form.brand||""} onChange={setF("brand")} placeholder="Ex : Coach"/>
             </label>
+            {/* Prix */}
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Prix (FCFA) *</span>
-              <input style={inp} type="number" value={form.price || ""} onChange={setF("price")} placeholder="Ex : 25000"/>
+              <input style={inp} type="number" value={form.price||""} onChange={setF("price")} placeholder="Ex : 25000"/>
             </label>
+            {/* Réduction */}
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>
+                Réduction (%) <span style={{ color:CA.gold }}>{form.discount > 0 ? `→ ${fcfa_a(Math.round((parseInt(form.price)||0)*(1-(parseInt(form.discount)||0)/100)))}` : ""}</span>
+              </span>
+              <input style={inp} type="number" min="0" max="90" value={form.discount||0} onChange={setF("discount")} placeholder="0"/>
+            </label>
+            {/* Stock */}
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Stock *</span>
-              <input style={inp} type="number" value={form.stock || ""} onChange={setF("stock")} placeholder="Ex : 5"/>
+              <input style={inp} type="number" value={form.stock||""} onChange={setF("stock")} placeholder="Ex : 5"/>
             </label>
+            {/* Catégorie */}
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Catégorie *</span>
-              <select style={inp} value={form.cat || "Sacs à main"} onChange={setF("cat")}>
+              <select style={inp} value={form.cat||"Sacs à main"} onChange={setF("cat")}>
                 {CATS_ADMIN.map(c => <option key={c}>{c}</option>)}
               </select>
             </label>
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Lien photo (URL)</span>
-              <input style={inp} value={form.imgs?.[0] || ""} onChange={e => setForm(f => ({ ...f, imgs:[e.target.value] }))} placeholder="https://i.ibb.co/…"/>
-            </label>
           </div>
+
+          {/* 3 URLs photos */}
+          <div style={{ marginBottom:10 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:6 }}>Photos (jusqu'à 3 URLs)</span>
+            <div style={{ display:"grid", gap:7 }}>
+              {[0,1,2].map(i => (
+                <div key={i} style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, width:60, flexShrink:0 }}>Photo {i+1}{i===0?" *":""}</span>
+                  <input style={{ ...inp, marginBottom:0 }} value={form.imgs?.[i]||""} onChange={e => setForm(f => { const imgs=[...(f.imgs||["","",""])]; imgs[i]=e.target.value; return {...f,imgs}; })} placeholder="https://i.ibb.co/…"/>
+                  {form.imgs?.[i] && <div style={{ width:36, height:36, borderRadius:6, overflow:"hidden", flexShrink:0 }}><img src={form.imgs[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>e.target.style.opacity=".2"}/></div>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Description */}
           <label style={{ display:"block", marginBottom:10 }}>
             <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Description</span>
-            <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={form.desc || ""} onChange={setF("desc")}/>
+            <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={form.desc||""} onChange={setF("desc")}/>
           </label>
-          <div style={{ display:"flex", gap:16, margin:"10px 0 14px" }}>
-            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13.5, color:text }}>
-              <input type="checkbox" checked={!!form.isNew} onChange={setF("isNew")}/> Nouveauté
-            </label>
-            <label style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13.5, color:text }}>
-              <input type="checkbox" checked={!!form.isBest} onChange={setF("isBest")}/> Best-seller
-            </label>
+
+          {/* Checkboxes */}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:16, margin:"10px 0 14px" }}>
+            {[
+              { k:"isNew",    label:"🆕 Nouveauté" },
+              { k:"isBest",   label:"⭐ Best-seller" },
+              { k:"isPinned", label:"📌 Épingler en haut" },
+              { k:"isHidden", label:"👁️ Masquer du catalogue" },
+            ].map(({ k, label }) => (
+              <label key={k} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13, color:text }}>
+                <input type="checkbox" checked={!!form[k]} onChange={setF(k)}/> {label}
+              </label>
+            ))}
           </div>
+
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={save} disabled={saving} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"10px 18px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
               <Save size={14}/> {saving ? "Enregistrement…" : "Enregistrer"}
@@ -1223,29 +1363,53 @@ function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
           </div>
         </div>
       )}
-      <div style={{ display:"grid", gap:10 }}>
-        {products.map(p => (
-          <div key={p.id} style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:12, padding:"12px 14px", display:"flex", gap:12, alignItems:"center" }}>
-            <div style={{ width:56, height:56, borderRadius:10, overflow:"hidden", flexShrink:0, background: p.accent ? `linear-gradient(135deg,${p.accent[0]},${p.accent[1]})` : "#eee", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:22 }}>👜</span>}
+
+      {/* Liste produits */}
+      <div style={{ display:"grid", gap:8 }}>
+        {products.map((p, idx) => (
+          <div key={p.id} style={{ background:cardBg, border:`1px solid ${p.isPinned ? CA.gold+"88" : p.isHidden ? bord : bord}`, borderRadius:12, padding:"11px 13px", display:"flex", gap:11, alignItems:"center", opacity: p.isHidden ? .5 : 1 }}>
+            {/* Ordre */}
+            <div style={{ display:"flex", flexDirection:"column", gap:2, flexShrink:0 }}>
+              <button onClick={() => move(idx, -1)} disabled={idx===0} style={{ border:"none", background:"none", cursor:"pointer", color: idx===0 ? bord : dark ? CA.dMute : CA.mute, padding:2 }}><ChevronUp size={13}/></button>
+              <button onClick={() => move(idx, 1)}  disabled={idx===products.length-1} style={{ border:"none", background:"none", cursor:"pointer", color: idx===products.length-1 ? bord : dark ? CA.dMute : CA.mute, padding:2 }}><ChevronDown size={13}/></button>
             </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:"Georgia,serif", fontSize:14, color:text, fontWeight:600 }}>{p.name}</div>
-              <div style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>{p.brand} · {fcfa_a(p.price)}</div>
-              <div style={{ display:"flex", gap:6, marginTop:4 }}>
-                <Badge color={p.stock === 0 ? CA.danger : p.stock <= 2 ? CA.warning : CA.success}>
-                  {p.stock === 0 ? "Épuisé" : `Stock : ${p.stock}`}
+            {/* Vignette */}
+            <div style={{ width:52, height:52, borderRadius:9, overflow:"hidden", flexShrink:0, background: p.accent ? `linear-gradient(135deg,${p.accent[0]},${p.accent[1]})` : "#eee", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:20 }}>👜</span>}
+            </div>
+            {/* Infos */}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:"Georgia,serif", fontSize:13.5, color:text, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {p.isPinned && "📌 "}{p.name}
+              </div>
+              <div style={{ fontSize:11.5, color: dark ? CA.dMute : CA.mute }}>
+                {p.brand} ·{" "}
+                {p.discount > 0 ? (
+                  <><span style={{ textDecoration:"line-through", marginRight:4 }}>{fcfa_a(p.price)}</span><span style={{ color:CA.danger, fontWeight:700 }}>{fcfa_a(Math.round(p.price*(1-p.discount/100)))}</span><span style={{ background:CA.danger, color:"#fff", fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:999, marginLeft:4 }}>-{p.discount}%</span></>
+                ) : fcfa_a(p.price)}
+              </div>
+              <div style={{ display:"flex", gap:5, marginTop:4, flexWrap:"wrap" }}>
+                <Badge color={p.stock===0 ? CA.danger : p.stock<=2 ? CA.warning : CA.success}>
+                  {p.stock===0 ? "Épuisé" : `Stock : ${p.stock}`}
                 </Badge>
-                {p.isNew && <Badge color={CA.gold}>Nouveau</Badge>}
-                {p.isBest && <Badge color="#1DC0D4">Top</Badge>}
+                {p.isNew    && <Badge color={CA.gold}>Nouveau</Badge>}
+                {p.isBest   && <Badge color="#1DC0D4">Top</Badge>}
+                {p.isHidden && <Badge color={CA.mute}>Masqué</Badge>}
               </div>
             </div>
-            <div style={{ display:"flex", gap:6 }}>
-              <button onClick={() => startEdit(p)} style={{ width:34, height:34, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:text }}>
-                <Edit size={14}/>
+            {/* Actions */}
+            <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+              <button onClick={() => toggleProp(p.id, "isPinned")} title={p.isPinned?"Désépingler":"Épingler"} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${p.isPinned ? CA.gold : bord}`, background: p.isPinned ? `${CA.gold}22` : "none", cursor:"pointer", display:"grid", placeItems:"center", color:p.isPinned ? CA.gold : dark ? CA.dMute : CA.mute }}>
+                📌
               </button>
-              <button onClick={() => del(p.id)} style={{ width:34, height:34, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
-                <Trash2 size={14}/>
+              <button onClick={() => toggleProp(p.id, "isHidden")} title={p.isHidden?"Afficher":"Masquer"} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color: dark ? CA.dMute : CA.mute, fontSize:15 }}>
+                {p.isHidden ? "👁️" : "🙈"}
+              </button>
+              <button onClick={() => startEdit(p)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:text }}>
+                <Edit size={13}/>
+              </button>
+              <button onClick={() => del(p.id)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
+                <Trash2 size={13}/>
               </button>
             </div>
           </div>
@@ -1352,60 +1516,206 @@ function UsersTab({ users, setUsers, dark, text, bord, cardBg }) {
 }
 
 /* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET PARAMÈTRES
+   🏢 ADMIN — ONGLET PARAMÈTRES V14
    ═══════════════════════════════════════ */
-function SettingsTab({ dark, text, bord, cardBg }) {
+function SettingsTab({ dark, text, bord, cardBg, onSiteUpdate }) {
   const [cfg, setCfg] = useState({
-    whatsapp: CFG.whatsapp,
+    whatsapp:    CFG.whatsapp,
     orangeMoney: CFG.orangeMoney,
-    moovMoney: CFG.moovMoney,
-    wave: CFG.wave,
-    freeFrom: String(CFG.freeFrom),
-    city: CFG.city,
+    moovMoney:   CFG.moovMoney,
+    wave:        CFG.wave,
+    freeFrom:    String(CFG.freeFrom),
+    city:        CFG.city,
+    heroTitle:   "L'élégance, livrée chez vous.",
+    heroSub:     "Sacs & accessoires Coach sélectionnés avec soin, livrés à",
+    waMessage:   "Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?",
+    bannerActive: false,
+    bannerText:  "🔥 Promo spéciale — Livraison offerte dès 15 000 FCFA ce week-end !",
+    bannerColor: "#C9A84C",
   });
-  const [saved, setSaved] = useState(false);
-  const setC = k => e => setCfg(c => ({ ...c, [k]:e.target.value }));
+  const [promos, setPromos] = useState([
+    { code:"DADA10", discount:10, maxUses:50, uses:3, active:true },
+    { code:"BIENVENUE", discount:15, maxUses:100, uses:12, active:true },
+  ]);
+  const [newPromo, setNewPromo] = useState({ code:"", discount:"", maxUses:"" });
+  const [saved, setSaved]    = useState(false);
+  const [tab, setTab]        = useState("contacts");
+  const setC = k => e => setCfg(c => ({ ...c, [k]: e.target.type==="checkbox" ? e.target.checked : e.target.value }));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
 
   const save = async () => {
-    try {
-      // Upsert dans la table announcements (ou une table settings dédiée si tu l'as)
-      await sb.post("announcements", { id:"config", data:cfg });
-    } catch (e) { console.warn("Supabase settings save:", e.message); }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    try { await sb.post("announcements", { id:"config", data:cfg }); } catch (e) { console.warn(e.message); }
+    if (onSiteUpdate) onSiteUpdate(cfg);
+    setSaved(true); setTimeout(() => setSaved(false), 2500);
   };
 
+  const addPromo = () => {
+    if (!newPromo.code || !newPromo.discount) return;
+    const p = { code:newPromo.code.toUpperCase(), discount:parseInt(newPromo.discount)||0, maxUses:parseInt(newPromo.maxUses)||999, uses:0, active:true };
+    setPromos(ps => [...ps, p]);
+    setNewPromo({ code:"", discount:"", maxUses:"" });
+  };
+
+  const togglePromo = code => setPromos(ps => ps.map(p => p.code===code ? {...p,active:!p.active} : p));
+  const delPromo    = code => setPromos(ps => ps.filter(p => p.code!==code));
+
+  const settingTabs = [
+    { k:"contacts",  label:"📞 Contacts" },
+    { k:"livraison", label:"🚚 Livraison" },
+    { k:"banniere",  label:"📢 Bannière" },
+    { k:"promos",    label:"🎁 Codes promo" },
+    { k:"apparence", label:"🎨 Apparence" },
+  ];
+
   return (
-    <div style={{ maxWidth:600 }}>
-      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px", marginBottom:14 }}>
-        <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>📞 Contacts & Paiement</h3>
-        <div style={{ display:"grid", gap:12 }}>
-          {[
-            { key:"whatsapp",    label:"Numéro WhatsApp",   placeholder:"226XXXXXXXX" },
-            { key:"orangeMoney", label:"Orange Money",       placeholder:"+226 XX XX XX XX" },
-            { key:"moovMoney",   label:"Moov Money",         placeholder:"+226 XX XX XX XX" },
-            { key:"wave",        label:"Wave",               placeholder:"+226 XX XX XX XX" },
-          ].map(f => (
-            <label key={f.key} style={{ display:"block" }}>
-              <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>{f.label}</span>
-              <input style={inp} value={cfg[f.key]} onChange={setC(f.key)} placeholder={f.placeholder}/>
-            </label>
-          ))}
+    <div style={{ maxWidth:640 }}>
+      {/* Sous-tabs paramètres */}
+      <div style={{ display:"flex", gap:6, marginBottom:18, flexWrap:"wrap" }}>
+        {settingTabs.map(st => (
+          <button key={st.k} onClick={() => setTab(st.k)} style={{ padding:"7px 12px", borderRadius:9, border:`1.5px solid ${tab===st.k ? CA.gold : bord}`, background: tab===st.k ? CA.ink : cardBg, color: tab===st.k ? CA.gold : text, cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+
+      {/* CONTACTS */}
+      {tab === "contacts" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>📞 Contacts & Paiement</h3>
+          <div style={{ display:"grid", gap:12 }}>
+            {[
+              { key:"whatsapp",    label:"Numéro WhatsApp",  placeholder:"226XXXXXXXX" },
+              { key:"orangeMoney", label:"Orange Money",      placeholder:"+226 XX XX XX XX" },
+              { key:"moovMoney",   label:"Moov Money",        placeholder:"+226 XX XX XX XX" },
+              { key:"wave",        label:"Wave",              placeholder:"+226 XX XX XX XX" },
+            ].map(f => (
+              <label key={f.key} style={{ display:"block" }}>
+                <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>{f.label}</span>
+                <input style={inp} value={cfg[f.key]} onChange={setC(f.key)} placeholder={f.placeholder}/>
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
-      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px", marginBottom:14 }}>
-        <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🚚 Livraison</h3>
-        <label style={{ display:"block", marginBottom:12 }}>
-          <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Ville principale</span>
-          <input style={inp} value={cfg.city} onChange={setC("city")}/>
-        </label>
-        <label style={{ display:"block" }}>
-          <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Livraison gratuite à partir de (FCFA)</span>
-          <input style={inp} type="number" value={cfg.freeFrom} onChange={setC("freeFrom")}/>
-        </label>
-      </div>
-      <button onClick={save} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:11, padding:"12px 22px", cursor:"pointer", fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
+      )}
+
+      {/* LIVRAISON */}
+      {tab === "livraison" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🚚 Livraison</h3>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Ville principale</span>
+            <input style={inp} value={cfg.city} onChange={setC("city")}/>
+          </label>
+          <label style={{ display:"block" }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Livraison gratuite à partir de (FCFA)</span>
+            <input style={inp} type="number" value={cfg.freeFrom} onChange={setC("freeFrom")}/>
+          </label>
+        </div>
+      )}
+
+      {/* BANNIÈRE */}
+      {tab === "banniere" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>📢 Bannière d'annonce</h3>
+          {/* Prévisualisation */}
+          {cfg.bannerActive && (
+            <div style={{ background:cfg.bannerColor, color:CA.ink, padding:"10px 16px", borderRadius:9, fontSize:13, fontWeight:600, textAlign:"center", marginBottom:14 }}>
+              {cfg.bannerText}
+            </div>
+          )}
+          <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", marginBottom:14, fontSize:14, color:text }}>
+            <input type="checkbox" checked={!!cfg.bannerActive} onChange={setC("bannerActive")}/>
+            Activer la bannière sur le site
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Texte de la bannière</span>
+            <input style={inp} value={cfg.bannerText} onChange={setC("bannerText")} placeholder="🔥 Promo spéciale…"/>
+          </label>
+          <label style={{ display:"block" }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Couleur de fond</span>
+            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+              <input type="color" value={cfg.bannerColor} onChange={setC("bannerColor")} style={{ width:44, height:36, borderRadius:8, border:`1px solid ${bord}`, cursor:"pointer", padding:2 }}/>
+              <span style={{ fontSize:13, color: dark ? CA.dMute : CA.mute }}>{cfg.bannerColor}</span>
+              {[CA.gold, "#E05030", "#1A9E5E", "#1DC0D4", CA.ink].map(c => (
+                <button key={c} onClick={() => setCfg(cfg => ({...cfg, bannerColor:c}))} style={{ width:24, height:24, borderRadius:999, background:c, border: cfg.bannerColor===c ? "2px solid #fff" : "2px solid transparent", cursor:"pointer", outline: cfg.bannerColor===c ? `2px solid ${CA.gold}` : "none" }}/>
+              ))}
+            </div>
+          </label>
+        </div>
+      )}
+
+      {/* CODES PROMO */}
+      {tab === "promos" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🎁 Codes promo</h3>
+          {/* Créer un code */}
+          <div style={{ background: dark ? `${CA.gold}0A` : `${CA.gold}08`, border:`1px solid ${CA.gold}33`, borderRadius:10, padding:"14px", marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, marginBottom:10 }}>NOUVEAU CODE</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:3 }}>Code *</span>
+                <input style={inp} value={newPromo.code} onChange={e=>setNewPromo(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="DADA20"/>
+              </label>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:3 }}>Réduction (%) *</span>
+                <input style={inp} type="number" min="1" max="90" value={newPromo.discount} onChange={e=>setNewPromo(p=>({...p,discount:e.target.value}))} placeholder="20"/>
+              </label>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:3 }}>Utilisations max</span>
+                <input style={inp} type="number" value={newPromo.maxUses} onChange={e=>setNewPromo(p=>({...p,maxUses:e.target.value}))} placeholder="100"/>
+              </label>
+            </div>
+            <button onClick={addPromo} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:9, padding:"8px 16px", cursor:"pointer", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+              <PlusCircle size={14}/> Créer le code
+            </button>
+          </div>
+          {/* Liste codes */}
+          <div style={{ display:"grid", gap:8 }}>
+            {promos.map(p => (
+              <div key={p.code} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${p.active ? CA.gold+"44" : bord}`, background: p.active ? `${CA.gold}08` : "none", opacity:p.active?1:.6 }}>
+                <div style={{ fontFamily:"Georgia,serif", fontWeight:700, color:p.active?CA.gold:text, fontSize:15, flex:1 }}>{p.code}</div>
+                <Badge color={p.active ? CA.success : CA.mute}>{p.active ? "Actif" : "Inactif"}</Badge>
+                <span style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>-{p.discount}%</span>
+                <span style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>{p.uses}/{p.maxUses} utilisations</span>
+                <button onClick={() => togglePromo(p.code)} style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color: p.active ? CA.success : CA.mute }}>
+                  {p.active ? <CheckCircle size={13}/> : <X size={13}/>}
+                </button>
+                <button onClick={() => delPromo(p.code)} style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
+                  <Trash2 size={13}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* APPARENCE */}
+      {tab === "apparence" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🎨 Apparence du site</h3>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Titre du hero</span>
+            <input style={inp} value={cfg.heroTitle} onChange={setC("heroTitle")}/>
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Sous-titre du hero</span>
+            <input style={inp} value={cfg.heroSub} onChange={setC("heroSub")}/>
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Message WhatsApp flottant</span>
+            <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={cfg.waMessage} onChange={setC("waMessage")}/>
+          </label>
+          {/* Prévisualisation hero */}
+          <div style={{ background:CA.ink, borderRadius:12, padding:"20px", marginTop:8, textAlign:"center" }}>
+            <div style={{ fontSize:9, color:CA.gold, letterSpacing:4, marginBottom:8 }}>✦ DADA'S DROP ✦</div>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:18, color:"#fff", marginBottom:6 }}>{cfg.heroTitle}</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,.6)" }}>{cfg.heroSub} {cfg.city}.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Bouton save global */}
+      <button onClick={save} style={{ marginTop:16, background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:11, padding:"12px 22px", cursor:"pointer", fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
         {saved ? <><CheckCircle size={16}/> Enregistré !</> : <><Save size={16}/> Enregistrer les paramètres</>}
       </button>
     </div>
@@ -1653,7 +1963,8 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
   const [inStock, setInStock]   = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [loadingProducts]       = useState(false); // déjà chargé au niveau App
+  const [loadingProducts]       = useState(false);
+  const [siteConfig, setSiteConfig] = useState(null); // config depuis admin
   const [cart, setCart] = useState(() => {
     try { const s = localStorage.getItem("dd_cart"); return s ? JSON.parse(s) : []; } catch { return []; }
   });
@@ -1664,6 +1975,21 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
   const [menuOpen, setMenuOpen]   = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mounted, setMounted]     = useState(false);
+
+  // Charger config site depuis Supabase
+  useEffect(() => {
+    sb.get("announcements", "?id=eq.config&select=data")
+      .then(rows => { if (rows?.[0]?.data) setSiteConfig(rows[0].data); })
+      .catch(() => {});
+  }, []);
+
+  // Produits visibles (pas masqués), épinglés en premier
+  const visibleProducts = useMemo(() => {
+    const visible = products.filter(p => !p.isHidden);
+    const pinned  = visible.filter(p => p.isPinned);
+    const rest    = visible.filter(p => !p.isPinned);
+    return [...pinned, ...rest];
+  }, [products]);
 
   // Sauvegarder panier
   useEffect(() => {
@@ -1682,7 +2008,7 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
   const CATS = lang === "fr" ? CATS_FR : CATS_EN;
 
   const list = useMemo(() => {
-    let r = products.filter(p => {
+    let r = visibleProducts.filter(p => {
       if (query.trim()) {
         if (inStock && p.stock === 0) return false;
         const q = query.toLowerCase().trim();
@@ -1705,9 +2031,9 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
     if (sort === "asc")  r = [...r].sort((a, b) => a.price - b.price);
     if (sort === "desc") r = [...r].sort((a, b) => b.price - a.price);
     return r;
-  }, [query, cat, sort, inStock, lang, products, minPrice, maxPrice, CATS]);
+  }, [query, cat, sort, inStock, lang, visibleProducts, minPrice, maxPrice, CATS]);
 
-  const bestSellers = products.filter(p => p.isBest && p.stock > 0).slice(0, 4);
+  const bestSellers = visibleProducts.filter(p => p.isBest && p.stock > 0).slice(0, 4);
 
   const addToCart = useCallback((p, qty = 1) => {
     setCart(c => { const ex = c.find(i => i.id === p.id); if (ex) return c.map(i => i.id === p.id ? { ...i, qty:Math.min(p.stock, i.qty + qty) } : i); return [...c, { id:p.id, qty }]; });
@@ -1843,6 +2169,13 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
         )}
       </header>
 
+      {/* ── BANNIÈRE ADMIN ── */}
+      {siteConfig?.bannerActive && siteConfig?.bannerText && (
+        <div style={{ background:siteConfig.bannerColor||CA.gold, color: siteConfig.bannerColor===CA.ink?"#fff":CA.ink, padding:"9px 16px", fontSize:13, fontWeight:700, textAlign:"center", letterSpacing:.3, zIndex:49 }}>
+          {siteConfig.bannerText}
+        </div>
+      )}
+
       {/* ── PAGES ── */}
       {page === "home" && (
         <>
@@ -1852,8 +2185,12 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
               <div style={{ position:"absolute", inset:0, background:"linear-gradient(135deg, #1A1510 0%, #2A2015 50%, #1A1008 100%)" }}/>
               <div style={{ position:"relative", zIndex:1, textAlign:"center", padding:"48px 24px", color:"#fff" }}>
                 <span style={{ fontSize:10, color:C.gold, letterSpacing:5, fontWeight:600, display:"block", marginBottom:16 }}>✦ DADA'S DROP ✦</span>
-                <h1 className="dd-hero-title" style={{ fontFamily:"Georgia,serif", fontSize:42, fontWeight:400, lineHeight:1.15, margin:"0 0 14px", letterSpacing:.5, maxWidth:560 }}>{t.heroTitle}</h1>
-                <p style={{ fontSize:15, color:"rgba(255,255,255,.7)", maxWidth:400, margin:"0 auto 28px", lineHeight:1.6 }}>{t.heroSub} {CFG.city}.</p>
+                <h1 className="dd-hero-title" style={{ fontFamily:"Georgia,serif", fontSize:42, fontWeight:400, lineHeight:1.15, margin:"0 0 14px", letterSpacing:.5, maxWidth:560 }}>
+                  {siteConfig?.heroTitle || t.heroTitle}
+                </h1>
+                <p style={{ fontSize:15, color:"rgba(255,255,255,.7)", maxWidth:400, margin:"0 auto 28px", lineHeight:1.6 }}>
+                  {siteConfig?.heroSub || t.heroSub} {siteConfig?.city || CFG.city}.
+                </p>
                 <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
                   <button onClick={() => setPage("catalogue")} style={{ display:"inline-flex", alignItems:"center", gap:7, background:C.gold, color:C.ink, border:"none", borderRadius:8, padding:"12px 22px", fontWeight:700, fontSize:14, cursor:"pointer" }}>
                     {t.discover} <ArrowRight size={16}/>
@@ -1968,7 +2305,7 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
       </footer>
 
       {/* WHATSAPP FLOTTANT */}
-      <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?")}`} target="_blank" rel="noreferrer"
+      <a href={`https://wa.me/${siteConfig?.whatsapp||CFG.whatsapp}?text=${encodeURIComponent(siteConfig?.waMessage||"Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?")}`} target="_blank" rel="noreferrer"
         style={{ position:"fixed", bottom:80, right:18, width:48, height:48, borderRadius:999, background:"#25D366", display:"grid", placeItems:"center", zIndex:49, boxShadow:"0 4px 16px rgba(37,211,102,.4)", textDecoration:"none" }}>
         <MessageCircle size={22} color="#fff"/>
       </a>
