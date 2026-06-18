@@ -1,191 +1,149 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import {
   ShoppingBag, Search, X, Plus, Minus, Trash2, Heart,
-  ChevronDown, Check, MessageCircle, Truck, Smartphone,
-  ArrowRight, Phone, Moon, Sun, ChevronLeft, ChevronRight,
-  Package, MapPin, Star, Copy, CheckCircle, Globe, Menu,
-  Home, Grid, User, Lock, BarChart2, Settings, LogOut,
-  Edit, Trash, Eye, EyeOff, PlusCircle, Bell, TrendingUp,
+  Check, MessageCircle, Truck, Smartphone, ArrowRight,
+  Phone, Moon, Sun, ChevronLeft, ChevronRight, Package,
+  MapPin, Copy, CheckCircle, Globe, Menu, Lock, BarChart2,
+  Settings, LogOut, Edit, PlusCircle, Bell, TrendingUp,
   ShoppingCart, AlertCircle, Filter, ShieldCheck, Users,
-  ChevronUp, Save, ArrowLeft
+  ChevronUp, ChevronDown, Save, ArrowLeft, Eye, EyeOff,
+  Tag, Star, Trash2 as Trash
 } from "lucide-react";
 
-/* ═══════════════════════════════════════
-   🌐 SUPABASE CLIENT
-   ═══════════════════════════════════════ */
-const SUPABASE_URL = "https://oypjgjhlqmsibunvzmwu.supabase.co";
-const SUPABASE_KEY = "sb_publishable_p-h-HJ7_MK4fHiRh5OxC0w_h-SxK3lN";
-
+/* ════════════════════════════════════════════
+   🌐 SUPABASE
+════════════════════════════════════════════ */
+const SB_URL = "https://oypjgjhlqmsibunvzmwu.supabase.co";
+const SB_KEY = "sb_publishable_p-h-HJ7_MK4fHiRh5OxC0w_h-SxK3lN";
+const sbHeaders = {
+  apikey: SB_KEY,
+  Authorization: `Bearer ${SB_KEY}`,
+  "Content-Type": "application/json",
+};
 const sb = {
-  async get(table, params = "") {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!res.ok) throw new Error(`Supabase GET ${table}: ${res.status}`);
-    return res.json();
-  },
-  async post(table, body) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Supabase POST ${table}: ${res.status}`);
-    return res.json();
-  },
-  async patch(table, id, body) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Supabase PATCH ${table}: ${res.status}`);
-    return res.json();
-  },
-  async delete(table, id) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
-      method: "DELETE",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-    });
-    if (!res.ok) throw new Error(`Supabase DELETE ${table}: ${res.status}`);
-    return true;
-  },
+  get:    async (t, q="")  => { const r = await fetch(`${SB_URL}/rest/v1/${t}${q}`, { headers:sbHeaders }); if(!r.ok) throw new Error(r.status); return r.json(); },
+  post:   async (t, b)     => { const r = await fetch(`${SB_URL}/rest/v1/${t}`, { method:"POST",   headers:{...sbHeaders,Prefer:"return=representation"}, body:JSON.stringify(b) }); if(!r.ok) throw new Error(r.status); return r.json(); },
+  patch:  async (t, id, b) => { const r = await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`, { method:"PATCH",  headers:{...sbHeaders,Prefer:"return=representation"}, body:JSON.stringify(b) }); if(!r.ok) throw new Error(r.status); return r.json(); },
+  upsert: async (t, b)     => { const r = await fetch(`${SB_URL}/rest/v1/${t}`, { method:"POST",   headers:{...sbHeaders,Prefer:"resolution=merge-duplicates,return=representation"}, body:JSON.stringify(b) }); if(!r.ok) throw new Error(r.status); return r.json(); },
+  del:    async (t, id)    => { const r = await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`, { method:"DELETE", headers:sbHeaders }); if(!r.ok) throw new Error(r.status); return true; },
 };
 
-/* ═══════════════════════════════════════
-   🎨 PALETTES & CONSTANTES GLOBALES
-   ═══════════════════════════════════════ */
-
-// Palette admin
-const CA = {
-  cream:"#FAF6EE", creamD:"#F0EBE0", gold:"#C9A84C", goldL:"#E8C96A",
-  ink:"#1A1A1A", mute:"#8A7A6A", border:"#E0D8CC", card:"#FFFFFF",
-  success:"#1A9E5E", danger:"#E05030", warning:"#E08030",
-  dBg:"#0F0C08", dCard:"#1A1510", dBorder:"#2E2820", dMute:"#7A6A5A", dText:"#F5F0E8",
-};
-
-// Palette shop
+/* ════════════════════════════════════════════
+   🎨 PALETTE
+════════════════════════════════════════════ */
 const C = {
   cream:"#FAF6EE", creamD:"#F0EBE0", gold:"#C9A84C", goldL:"#E8C96A",
   ink:"#1A1A1A", inkSoft:"#3A3530", mute:"#8A7A6A", border:"#E0D8CC", card:"#FFFFFF",
-  success:"#1A9E5E", danger:"#E05030",
+  success:"#1A9E5E", danger:"#E05030", warning:"#E08030",
   dBg:"#0F0C08", dCard:"#1A1510", dBorder:"#2E2820", dMute:"#7A6A5A", dText:"#F5F0E8",
 };
+const GRAD = `linear-gradient(135deg,${C.gold},${C.goldL})`;
+const fcfa = n => (n||0).toLocaleString("fr-FR") + " FCFA";
 
-const GRAD = `linear-gradient(135deg, ${C.gold} 0%, ${C.goldL} 100%)`;
-const GRAD_A = `linear-gradient(135deg, ${CA.gold} 0%, ${CA.goldL} 100%)`;
-
-// Formatage monétaire
-const fcfa = n => (n || 0).toLocaleString("fr-FR") + " FCFA";
-const fcfa_a = n => n?.toLocaleString("fr-FR") + " FCFA";
-
-// Catégories
-const CATS_FR = ["Tout","Sacs à main","Bandoulières","Pochettes","Chaussures","Bijoux","Parfums","Gloss","Vêtements"];
-const CATS_EN = ["All","Handbags","Shoulder bags","Clutches","Shoes","Jewellery","Perfumes","Gloss","Clothing"];
-const CATS_ADMIN = ["Sacs à main","Bandoulières","Pochettes","Chaussures","Bijoux","Parfums","Gloss","Vêtements"];
-
-// Config
-const CFG = {
-  brand: "DADA'S DROP",
-  whatsapp: "+33 07 68 74 58 41",
+/* ════════════════════════════════════════════
+   ⚙️ CONFIG PAR DÉFAUT
+════════════════════════════════════════════ */
+const DEFAULT_CFG = {
+  brand:       "DADA'S DROP",
+  whatsapp:    "33768745841",
   orangeMoney: "+226 70 00 00 00",
-  moovMoney: "+226 60 00 00 00",
-  wave: "+226 77 00 00 00",
-  city: "Ouagadougou",
-  freeFrom: 20000,
-  adminPass: "dada2025",
+  moovMoney:   "+226 60 00 00 00",
+  wave:        "+226 77 00 00 00",
+  city:        "Ouagadougou",
+  freeFrom:    20000,
+  heroTitle:   "L'élégance, livrée chez vous.",
+  heroSub:     "Sacs & accessoires sélectionnés avec soin, livrés à",
+  waMessage:   "Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?",
+  bannerActive: false,
+  bannerText:  "",
+  bannerColor: "#C9A84C",
 };
 
-/* ═══════════════════════════════════════
-   🔐 RÔLES ADMIN
-   ═══════════════════════════════════════ */
-const ROLES = {
-  admin:    { label:"Administrateur", color:CA.gold,    badge:"👑" },
-  manager:  { label:"Gestionnaire",   color:"#1DC0D4",  badge:"👩‍💼" },
-  delivery: { label:"Livreur",        color:CA.success, badge:"🚴" },
-};
-
-/* ═══════════════════════════════════════
-   📦 DONNÉES DÉMO (fallback si Supabase vide)
-   ═══════════════════════════════════════ */
-const INIT_USERS = [
-  { id:1, name:"David Amah",    email:"david@dadasdrop.com",   role:"admin",    active:true },
-  { id:2, name:"Ma Copine",     email:"copine@dadasdrop.com",  role:"manager",  active:true },
-  { id:3, name:"Livreur Ouaga", email:"livreur@dadasdrop.com", role:"delivery", active:true },
+/* ════════════════════════════════════════════
+   📦 CATÉGORIES PAR DÉFAUT (dynamiques depuis admin)
+════════════════════════════════════════════ */
+const DEFAULT_CATS = [
+  { id:"sacs",       label:"Sacs à main",   labelEn:"Handbags",      soon:false },
+  { id:"bandoul",    label:"Bandoulières",   labelEn:"Shoulder bags", soon:false },
+  { id:"pochettes",  label:"Pochettes",      labelEn:"Clutches",      soon:false },
+  { id:"chaussures", label:"Chaussures",     labelEn:"Shoes",         soon:true  },
+  { id:"bijoux",     label:"Bijoux",         labelEn:"Jewellery",     soon:true  },
+  { id:"parfums",    label:"Parfums",        labelEn:"Perfumes",      soon:true  },
+  { id:"gloss",      label:"Gloss",          labelEn:"Gloss",         soon:true  },
+  { id:"vetements",  label:"Vêtements",      labelEn:"Clothing",      soon:true  },
 ];
 
-const STATUS_LABELS = ["","En préparation","Expédiée","Livrée"];
-const STATUS_COLORS = ["", CA.warning, "#1DC0D4", CA.success];
-const PAYMENT_LABELS = {
-  orange:"Orange Money", moov:"Moov Money", wave:"Wave", livraison:"À la livraison"
-};
-
-const initProducts = [
-  { id:1, name:"Mini Boston Rose", nameEn:"Mini Boston Pink", brand:"Coach", price:25000,
-    cat:"Sacs à main", catEn:"Handbags", stock:3, isNew:true, isBest:true,
+/* ════════════════════════════════════════════
+   🛍 PRODUITS DÉMO
+════════════════════════════════════════════ */
+const DEMO_PRODUCTS = [
+  { id:1, name:"Mini Boston Rose", brand:"Coach", price:25000, cat:"sacs",
+    stock:3, isNew:true, isBest:true, isPinned:false, isHidden:false, discount:0,
     accent:["#F4A0B0","#E8175D"],
-    imgs:["https://i.ibb.co/XrgMg8kL/dc4bf9bd-aa95-47aa-9e7f-f7fa7061b61d.jpg"],
+    imgs:["https://i.ibb.co/XrgMg8kL/dc4bf9bd-aa95-47aa-9e7f-f7fa7061b61d.jpg","","",""],
     desc:"Petit sac Boston Coach monogrammé rose poudré, double anse + bandoulière réglable, finitions dorées.",
-    descEn:"Pink monogram mini Boston bag, double handle + adjustable strap, gold finishes." },
-  { id:2, name:"Mini Boston Bleu Denim", nameEn:"Mini Boston Denim Blue", brand:"Coach", price:25000,
-    cat:"Sacs à main", catEn:"Handbags", stock:2, isNew:true, isBest:true,
+    variants:[
+      { type:"color", label:"Rose poudré",  hex:"#F4A0B0", stock:2 },
+      { type:"color", label:"Rose fuchsia", hex:"#E8175D", stock:1 },
+    ]
+  },
+  { id:2, name:"Mini Boston Bleu Denim", brand:"Coach", price:25000, cat:"sacs",
+    stock:2, isNew:true, isBest:true, isPinned:false, isHidden:false, discount:0,
     accent:["#A8C4D8","#5A8FAA"],
-    imgs:["https://i.ibb.co/v4XQcD1Z/d3766d6c-cc2d-4fe4-ae36-128d07fbb530.jpg"],
+    imgs:["https://i.ibb.co/v4XQcD1Z/d3766d6c-cc2d-4fe4-ae36-128d07fbb530.jpg","","",""],
     desc:"Mini Boston Coach en denim bleu ciel, look estival et frais. Bandoulière incluse.",
-    descEn:"Coach mini Boston in sky blue denim, fresh summer vibe. Strap included." },
-  { id:3, name:"Coach Torry Camel", nameEn:"Coach Torry Camel", brand:"Coach", price:22000,
-    cat:"Bandoulières", catEn:"Shoulder bags", stock:4, isNew:false, isBest:true,
+    variants:[]
+  },
+  { id:3, name:"Coach Torry Camel", brand:"Coach", price:22000, cat:"bandoul",
+    stock:4, isNew:false, isBest:true, isPinned:false, isHidden:false, discount:0,
     accent:["#C49060","#8B5E30"],
-    imgs:["https://i.ibb.co/rKMpTt3v/4ab98af4-0144-4abe-afd8-ae9e7001e0c8.jpg"],
+    imgs:["https://i.ibb.co/rKMpTt3v/4ab98af4-0144-4abe-afd8-ae9e7001e0c8.jpg","","",""],
     desc:"Sac Torry Coach monogrammé camel et cognac, chaîne dorée, look baguette très tendance.",
-    descEn:"Coach Torry monogram bag in camel and cognac, gold chain, trendy baguette look." },
-  { id:4, name:"Coach Torry — 4 coloris", nameEn:"Coach Torry — 4 colors", brand:"Coach", price:22000,
-    cat:"Bandoulières", catEn:"Shoulder bags", stock:6, isNew:false, isBest:false,
-    accent:["#3A3530","#C49060"],
-    imgs:["https://i.ibb.co/nNPrjH0V/3edfe0d8-9988-4d70-adb8-bfea6d9a4c0c.jpg"],
-    desc:"Sac Torry Coach disponible en 4 coloris : camel, beige, noir et camel/blanc. Précisez votre couleur.",
-    descEn:"Coach Torry bag in 4 colors: camel, beige, black & camel/white. Specify your color." },
-  { id:5, name:"Mini Boston Beige & Blanc", nameEn:"Mini Boston Beige & White", brand:"Coach", price:24000,
-    cat:"Sacs à main", catEn:"Handbags", stock:5, isNew:true, isBest:false,
+    variants:[
+      { type:"color", label:"Camel",  hex:"#C49060", stock:2 },
+      { type:"color", label:"Cognac", hex:"#8B5E30", stock:2 },
+    ]
+  },
+  { id:4, name:"Mini Boston Beige & Blanc", brand:"Coach", price:24000, cat:"sacs",
+    stock:5, isNew:true, isBest:false, isPinned:false, isHidden:false, discount:0,
     accent:["#E8DFC8","#C8B89A"],
-    imgs:["https://i.ibb.co/0yZqtSWT/0eeb033d-192f-45d6-8e60-480ff04c63ea.jpg"],
+    imgs:["https://i.ibb.co/0yZqtSWT/0eeb033d-192f-45d6-8e60-480ff04c63ea.jpg","","",""],
     desc:"Mini Boston Coach beige signature avec anses blanches, ultra élégant et polyvalent.",
-    descEn:"Coach signature beige mini Boston with white handles, ultra elegant and versatile." },
-  { id:6, name:"Tabby Coach — 8 coloris", nameEn:"Tabby Coach — 8 colors", brand:"Coach", price:35000,
-    cat:"Bandoulières", catEn:"Shoulder bags", stock:8, isNew:true, isBest:true,
+    variants:[]
+  },
+  { id:5, name:"Tabby Coach — 8 coloris", brand:"Coach", price:35000, cat:"bandoul",
+    stock:8, isNew:true, isBest:true, isPinned:false, isHidden:false, discount:0,
     accent:["#2A2A2A","#8B1A1A"],
-    imgs:["https://i.ibb.co/nNPrjH0V/3edfe0d8-9988-4d70-adb8-bfea6d9a4c0c.jpg"],
+    imgs:["https://i.ibb.co/nNPrjH0V/3edfe0d8-9988-4d70-adb8-bfea6d9a4c0c.jpg","","",""],
     desc:"L'iconique Tabby Coach matelassé, chaîne dorée. 8 coloris disponibles. Précisez votre choix.",
-    descEn:"The iconic quilted Coach Tabby, gold chain. 8 colors available. Specify your choice." },
+    variants:[
+      { type:"color", label:"Noir",    hex:"#1A1A1A", stock:2 },
+      { type:"color", label:"Bordeaux",hex:"#8B1A1A", stock:2 },
+      { type:"color", label:"Camel",   hex:"#C49060", stock:2 },
+      { type:"color", label:"Blanc",   hex:"#F5F0E8", stock:2 },
+    ]
+  },
+];
+
+const DEMO_PROMOS = [
+  { code:"DADA10",     discount:10, maxUses:50,  uses:3,  active:true },
+  { code:"BIENVENUE",  discount:15, maxUses:100, uses:12, active:true },
 ];
 
 const DEMO_ORDERS_TRACK = {
-  "DD-001":{ status:1, name:"Awa Traoré",   items:["Mini Boston Rose x1"],             total:25000, date:"10/06/2025" },
-  "DD-002":{ status:2, name:"Fatou Diallo", items:["Mini Boston Bleu Denim x2"],        total:50000, date:"12/06/2025" },
-  "DD-003":{ status:3, name:"Mariam Koné",  items:["Coach Torry Camel x1","Tabby x1"], total:57000, date:"08/06/2025" },
+  "DD-001":{ status:1, name:"Awa Traoré",    items:["Mini Boston Rose x1"],              total:25000, date:"10/06/2025", phone:"70112233" },
+  "DD-002":{ status:2, name:"Fatou Diallo",  items:["Mini Boston Bleu Denim x2"],        total:50000, date:"12/06/2025", phone:"76445566" },
+  "DD-003":{ status:3, name:"Mariam Koné",   items:["Coach Torry Camel x1","Tabby x1"], total:57000, date:"08/06/2025", phone:"65778899" },
 };
 
-/* ═══════════════════════════════════════
+const STATUS_LABELS = ["","En préparation","Expédiée","Livrée"];
+const STATUS_COLORS = ["", C.warning, "#1DC0D4", C.success];
+const PAYMENT_LABELS = { orange:"Orange Money", moov:"Moov Money", wave:"Wave", livraison:"À la livraison" };
+
+/* ════════════════════════════════════════════
    🌍 TRADUCTIONS
-   ═══════════════════════════════════════ */
+════════════════════════════════════════════ */
 const T = {
   fr: {
     search:"Que recherchez-vous ?", cart:"Mon panier", empty:"Votre panier est vide.",
@@ -196,21 +154,27 @@ const T = {
     deliverySub:"Vous payez à réception", send:"Envoyer sur WhatsApp",
     sent:"Commande envoyée !", sentMsg:"Votre commande s'ouvre dans WhatsApp.",
     capture:"N'oubliez pas d'envoyer votre capture de paiement.",
-    locMsg:"📍 Envoyez votre localisation WhatsApp pour estimer les frais de livraison.",
+    locMsg:"📍 Envoyez votre localisation WhatsApp pour faciliter la livraison.",
     shippingNote:"Frais de livraison selon votre zone. Livraison offerte dès",
     close:"Fermer", inStock:"En stock", outStock:"Épuisé", lowStock:"Plus que",
     newBadge:"Nouveau", bestSeller:"Sélection", noResult:"Aucun article trouvé.",
     noResultHint:"Essayez un autre mot ou une autre catégorie.",
+    outOfStockSearch:"est momentanément en rupture de stock",
+    outOfStockMsg:"Contactez-nous sur WhatsApp pour être prévenue dès son retour !",
     trackOrder:"Suivre ma commande", trackTitle:"Suivi de commande",
     trackBtn:"Rechercher", trackNotFound:"Commande introuvable.",
+    trackByPhone:"Rechercher par téléphone",
     statusPrep:"Préparation", statusShip:"Expédiée", statusDeliv:"Livrée",
     comment:"Laisser un avis", commentSend:"Envoyer",
-    freeShip:"Livraison offerte dès", addCart:"Ajouter au panier",
-    filterAll:"Tout", sortNew:"Nouveautés", sortAsc:"Prix croissant", sortDesc:"Prix décroissant",
-    itemCount:"article", lang:"EN", contactUs:"Nous contacter",
+    addCart:"Ajouter au panier", lang:"EN",
     discover:"Découvrir la collection", heroTitle:"L'élégance, livrée chez vous.",
-    heroSub:"Sacs & accessoires Coach sélectionnés avec soin, livrés à",
-    menuTitle:"Collections", home:"Accueil", catalogue:"Catalogue", about:"À propos",
+    heroSub:"Sacs & accessoires sélectionnés avec soin, livrés à",
+    home:"Accueil", catalogue:"Catalogue", about:"À propos",
+    chooseColor:"Choisir une couleur", chooseSize:"Choisir une taille",
+    chooseVariant:"Choisir une option",
+    promoCode:"Code promo", promoApply:"Appliquer", promoInvalid:"Code invalide ou expiré.",
+    promoApplied:"Code appliqué !",
+    shareMsg:"👜 {name} — {price} chez Dada's Drop !\n🛍 Voir l'article : dadas-drop.vercel.app\n📲 Commander sur WhatsApp !",
   },
   en: {
     search:"What are you looking for?", cart:"My bag", empty:"Your bag is empty.",
@@ -221,147 +185,150 @@ const T = {
     deliverySub:"You pay upon receipt", send:"Send via WhatsApp",
     sent:"Order sent!", sentMsg:"Your order opens in WhatsApp.",
     capture:"Don't forget to send your payment screenshot.",
-    locMsg:"📍 Send your WhatsApp location for delivery fee estimate.",
+    locMsg:"📍 Send your WhatsApp location to make delivery easier.",
     shippingNote:"Delivery fees apply. Free delivery from",
     close:"Close", inStock:"In stock", outStock:"Sold out", lowStock:"Only",
     newBadge:"New", bestSeller:"Selection", noResult:"No items found.",
     noResultHint:"Try another word or category.",
+    outOfStockSearch:"is temporarily out of stock",
+    outOfStockMsg:"Contact us on WhatsApp to be notified when it's back!",
     trackOrder:"Track order", trackTitle:"Order tracking",
     trackBtn:"Search", trackNotFound:"Order not found.",
+    trackByPhone:"Search by phone number",
     statusPrep:"Preparing", statusShip:"Shipped", statusDeliv:"Delivered",
     comment:"Leave a review", commentSend:"Send",
-    freeShip:"Free delivery from", addCart:"Add to bag",
-    filterAll:"All", sortNew:"New arrivals", sortAsc:"Price: low to high", sortDesc:"Price: high to low",
-    itemCount:"item", lang:"FR", contactUs:"Contact us",
+    addCart:"Add to bag", lang:"FR",
     discover:"Discover the collection", heroTitle:"Elegance, delivered to you.",
-    heroSub:"Carefully selected Coach bags & accessories, delivered in",
-    menuTitle:"Collections", home:"Home", catalogue:"Catalogue", about:"About",
+    heroSub:"Carefully selected bags & accessories, delivered in",
+    home:"Home", catalogue:"Catalogue", about:"About",
+    chooseColor:"Choose a color", chooseSize:"Choose a size",
+    chooseVariant:"Choose an option",
+    promoCode:"Promo code", promoApply:"Apply", promoInvalid:"Invalid or expired code.",
+    promoApplied:"Code applied!",
+    shareMsg:"👜 {name} — {price} at Dada's Drop!\n🛍 See item: dadas-drop.vercel.app\n📲 Order on WhatsApp!",
   },
 };
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    🎨 STYLES PARTAGÉS
-   ═══════════════════════════════════════ */
+════════════════════════════════════════════ */
 const sheetStyle = dark => ({
-  background: dark ? C.dCard : "#fff",
-  borderRadius: 18, padding: 20, position: "relative",
-  boxShadow: "0 24px 56px rgba(0,0,0,.22)"
+  background: dark ? C.dCard : "#fff", borderRadius:18, padding:20,
+  position:"relative", boxShadow:"0 24px 56px rgba(0,0,0,.22)",
 });
 const closeBtnStyle = dark => ({
-  position:"absolute", top:12, right:12, width:30, height:30,
-  borderRadius:999, border:"none",
-  background: dark ? C.dBorder : C.creamD,
+  position:"absolute", top:12, right:12, width:32, height:32,
+  borderRadius:999, border:"none", background: dark ? C.dBorder : C.creamD,
   cursor:"pointer", display:"grid", placeItems:"center",
-  color: dark ? C.dText : C.ink, zIndex:2
+  color: dark ? C.dText : C.ink, zIndex:2,
 });
-const stepBtnStyle = dark => ({
+const stepBtn = dark => ({
   width:32, height:36, border:"none",
   background: dark ? C.dBorder : C.creamD,
   cursor:"pointer", display:"grid", placeItems:"center",
-  color: dark ? C.dText : C.ink
+  color: dark ? C.dText : C.ink,
 });
-const stepBtnSmStyle = dark => ({
-  width:24, height:24, border:"none",
+const stepBtnSm = dark => ({
+  width:26, height:26, border:"none",
   background: dark ? C.dBorder : C.creamD,
   cursor:"pointer", display:"grid", placeItems:"center",
-  color: dark ? C.dText : C.ink
+  color: dark ? C.dText : C.ink,
 });
 const primaryBtn = {
   display:"inline-flex", alignItems:"center", gap:7,
-  background: C.ink, color: C.gold,
-  border:`1px solid ${C.gold}44`,
-  borderRadius:10, padding:"11px 18px",
-  fontWeight:700, fontSize:13.5, cursor:"pointer"
+  background:C.ink, color:C.gold, border:`1px solid ${C.gold}44`,
+  borderRadius:10, padding:"11px 18px", fontWeight:700, fontSize:13.5, cursor:"pointer",
 };
-const secondaryBtn = dark => ({
-  display:"inline-flex", alignItems:"center", gap:7,
-  background:"none", color: dark ? C.dText : C.ink,
-  border:`1px solid ${dark ? C.dBorder : C.border}`,
-  borderRadius:10, padding:"11px 16px",
-  fontWeight:600, fontSize:13.5, cursor:"pointer"
-});
-const iconBtn = dark => ({
-  width:32, height:32, borderRadius:8,
-  border:`1px solid ${dark ? C.dBorder : C.border}`,
-  background:"none", cursor:"pointer",
-  display:"grid", placeItems:"center",
-  color: dark ? C.dText : C.ink
-});
 const inpStyle = dark => ({
-  width:"100%", padding:"9px 11px", borderRadius:9,
+  width:"100%", padding:"10px 12px", borderRadius:10,
   border:`1.5px solid ${dark ? C.dBorder : C.border}`,
   background: dark ? C.dCard : "#fff",
-  fontSize:"16px", color: dark ? C.dText : C.ink,
-  fontFamily:"inherit"
+  fontSize:"16px", color: dark ? C.dText : C.ink, fontFamily:"inherit",
 });
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    🔧 COMPOSANTS UTILITAIRES
-   ═══════════════════════════════════════ */
-const Field = ({ label, children, dark, flex }) => (
-  <label style={{ display:"block", marginBottom:10, flex:flex?1:"none" }}>
-    <span style={{ fontSize:11.5, fontWeight:600, color: dark ? C.dText : C.ink, display:"block", marginBottom:4 }}>{label}</span>
-    {children}
-  </label>
-);
-
-const Badge = ({ children, color }) => (
-  <span style={{ background:`${color}22`, color, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, border:`1px solid ${color}44` }}>
-    {children}
-  </span>
-);
-
-const StatCard = ({ icon, value, label, color, dark }) => (
-  <div style={{ background: dark ? CA.dCard : CA.card, border:`1px solid ${dark ? CA.dBorder : CA.border}`, borderRadius:14, padding:"18px 18px" }}>
-    <div style={{ width:40, height:40, borderRadius:10, background:`${color}18`, display:"grid", placeItems:"center", marginBottom:12 }}>
-      {icon}
-    </div>
-    <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700, color: dark ? CA.dText : CA.ink }}>{value}</div>
-    <div style={{ fontSize:12.5, color: dark ? CA.dMute : CA.mute, marginTop:3 }}>{label}</div>
-  </div>
-);
-
-function LogoDD({ size = 44 }) {
+════════════════════════════════════════════ */
+function Overlay({ children, onClose }) {
   return (
-    <div style={{ width:size, height:size, borderRadius:size*0.22, background:C.cream, border:`1.5px solid ${C.gold}`, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", boxShadow:`0 2px 8px rgba(201,168,76,.2)`, flexShrink:0 }}>
-      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", display:"flex", alignItems:"center" }}>
-        <span style={{ fontFamily:"Georgia,serif", fontSize:size*0.38, fontWeight:700, color:C.ink, lineHeight:1 }}>D</span>
-        <span style={{ fontFamily:"Georgia,serif", fontSize:size*0.38, fontWeight:700, color:C.gold, lineHeight:1 }}>D</span>
-      </div>
+    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:70,
+      background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center",
+      justifyContent:"center", padding:14, animation:"ddFade .22s ease" }}>
+      {children}
     </div>
   );
 }
 
-function Thumb({ p, idx = 0 }) {
-  if (p?.imgs?.[idx]) return (
-    <img src={p.imgs[idx]} alt={p.name}
+function Field({ label, children, dark, flex }) {
+  return (
+    <label style={{ display:"block", marginBottom:10, flex:flex?1:"none" }}>
+      <span style={{ fontSize:12, fontWeight:600, color: dark ? C.dMute : C.mute,
+        display:"block", marginBottom:4 }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function LogoDD({ size=44 }) {
+  return (
+    <div style={{ width:size, height:size, borderRadius:size*0.22,
+      background:C.cream, border:`1.5px solid ${C.gold}`,
+      display:"flex", alignItems:"center", justifyContent:"center",
+      flexShrink:0, boxShadow:`0 2px 8px rgba(201,168,76,.2)` }}>
+      <span style={{ fontFamily:"Georgia,serif", fontSize:size*0.38,
+        fontWeight:700, color:C.ink, lineHeight:1 }}>D</span>
+      <span style={{ fontFamily:"Georgia,serif", fontSize:size*0.38,
+        fontWeight:700, color:C.gold, lineHeight:1 }}>D</span>
+    </div>
+  );
+}
+
+function Thumb({ p, idx=0 }) {
+  const src = p?.imgs?.[idx];
+  if (src) return (
+    <img src={src} alt={p.name}
       style={{ width:"100%", height:"100%", objectFit:"cover" }}
       onError={e => e.target.style.display="none"} />
   );
   return (
-    <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg,${p?.accent?.[0]||"#ccc"},${p?.accent?.[1]||"#999"})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <ShoppingBag size={44} color="rgba(255,255,255,.7)" strokeWidth={1.2} />
+    <div style={{ width:"100%", height:"100%",
+      background:`linear-gradient(135deg,${p?.accent?.[0]||"#ccc"},${p?.accent?.[1]||"#999"})`,
+      display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <ShoppingBag size={40} color="rgba(255,255,255,.7)" strokeWidth={1.2}/>
     </div>
   );
 }
 
 function Carousel({ p }) {
   const [idx, setIdx] = useState(0);
-  const total = Math.max(p.imgs?.length || 1, 1);
-  const arrowBtnStyle = side => ({
-    position:"absolute", top:"50%", [side]:8, transform:"translateY(-50%)",
-    width:28, height:28, borderRadius:999, border:"none",
-    background:"rgba(255,255,255,.9)", cursor:"pointer", display:"grid", placeItems:"center"
-  });
+  const imgs = (p.imgs||[]).filter(u => u && u.trim() !== "");
+  const total = Math.max(imgs.length, 1);
   return (
-    <div style={{ position:"relative", aspectRatio:"4/3", borderRadius:12, overflow:"hidden", background:C.creamD }}>
-      <Thumb p={p} idx={idx} />
+    <div style={{ position:"relative", aspectRatio:"4/3", borderRadius:12,
+      overflow:"hidden", background:C.creamD }}>
+      <Thumb p={p} idx={idx}/>
       {total > 1 && (<>
-        <button onClick={() => setIdx(i => (i - 1 + total) % total)} style={arrowBtnStyle("left")}><ChevronLeft size={16}/></button>
-        <button onClick={() => setIdx(i => (i + 1) % total)} style={arrowBtnStyle("right")}><ChevronRight size={16}/></button>
-        <div style={{ position:"absolute", bottom:8, left:"50%", transform:"translateX(-50%)", display:"flex", gap:4 }}>
+        <button onClick={() => setIdx(i => (i-1+total)%total)}
+          style={{ position:"absolute", top:"50%", left:8,
+            transform:"translateY(-50%)", width:28, height:28,
+            borderRadius:999, border:"none", background:"rgba(255,255,255,.9)",
+            cursor:"pointer", display:"grid", placeItems:"center" }}>
+          <ChevronLeft size={16}/>
+        </button>
+        <button onClick={() => setIdx(i => (i+1)%total)}
+          style={{ position:"absolute", top:"50%", right:8,
+            transform:"translateY(-50%)", width:28, height:28,
+            borderRadius:999, border:"none", background:"rgba(255,255,255,.9)",
+            cursor:"pointer", display:"grid", placeItems:"center" }}>
+          <ChevronRight size={16}/>
+        </button>
+        <div style={{ position:"absolute", bottom:8, left:"50%",
+          transform:"translateX(-50%)", display:"flex", gap:4 }}>
           {Array.from({length:total}).map((_,i) => (
-            <div key={i} onClick={() => setIdx(i)} style={{ width:i===idx?14:5, height:5, borderRadius:99, background:i===idx?C.gold:"rgba(255,255,255,.5)", cursor:"pointer", transition:"all .2s" }}/>
+            <div key={i} onClick={() => setIdx(i)}
+              style={{ width:i===idx?14:5, height:5, borderRadius:99,
+                background:i===idx?C.gold:"rgba(255,255,255,.5)",
+                cursor:"pointer", transition:"all .2s" }}/>
           ))}
         </div>
       </>)}
@@ -369,66 +336,179 @@ function Carousel({ p }) {
   );
 }
 
-function Overlay({ children, onClose }) {
+/* ════════════════════════════════════════════
+   🎨 SÉLECTEUR DE VARIANTES
+════════════════════════════════════════════ */
+function VariantPicker({ p, selected, onSelect, t, dark }) {
+  if (!p.variants || p.variants.length === 0) return null;
+  const isColor = p.variants[0]?.type === "color";
+  const isSize  = p.variants[0]?.type === "size";
+  const text = dark ? C.dText : C.ink;
+  const bord = dark ? C.dBorder : C.border;
+
   return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, zIndex:70, background:"rgba(0,0,0,.55)", display:"flex", alignItems:"center", justifyContent:"center", padding:14, animation:"ddFade .22s ease" }}>
-      {children}
+    <div style={{ marginBottom:14 }}>
+      <div style={{ fontSize:12.5, fontWeight:600, color: dark ? C.dMute : C.mute,
+        marginBottom:8 }}>
+        {isColor ? t.chooseColor : isSize ? t.chooseSize : t.chooseVariant}
+        {selected && <span style={{ color:C.gold, marginLeft:6 }}>→ {selected.label}</span>}
+      </div>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+        {p.variants.map((v, i) => {
+          const active = selected?.label === v.label;
+          const oos    = v.stock === 0;
+          if (isColor) return (
+            <button key={i} onClick={() => !oos && onSelect(v)}
+              title={v.label}
+              style={{ width:32, height:32, borderRadius:999,
+                background:v.hex, border:`3px solid ${active ? C.gold : "transparent"}`,
+                outline: active ? `2px solid ${C.gold}` : "none",
+                cursor: oos ? "not-allowed" : "pointer",
+                opacity: oos ? .4 : 1,
+                position:"relative", flexShrink:0 }}>
+              {oos && <div style={{ position:"absolute", inset:0, borderRadius:999,
+                background:"rgba(0,0,0,.4)", display:"grid", placeItems:"center" }}>
+                <X size={12} color="#fff"/>
+              </div>}
+            </button>
+          );
+          return (
+            <button key={i} onClick={() => !oos && onSelect(v)}
+              style={{ padding:"6px 12px", borderRadius:8, fontSize:13, fontWeight:600,
+                border:`1.5px solid ${active ? C.gold : bord}`,
+                background: active ? C.ink : "none",
+                color: active ? C.gold : text,
+                cursor: oos ? "not-allowed" : "pointer",
+                opacity: oos ? .4 : 1,
+                textDecoration: oos ? "line-through" : "none" }}>
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    🛍 CARTE PRODUIT
-   ═══════════════════════════════════════ */
-function ProductCard({ p, t, onOpen, onAdd, dark, idx, mounted }) {
+════════════════════════════════════════════ */
+function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted }) {
   const [fav, setFav] = useState(false);
-  const out = p.stock === 0, low = p.stock > 0 && p.stock <= 2;
-  const bg = dark ? C.dCard : C.card;
+  const out  = p.stock === 0;
+  const low  = p.stock > 0 && p.stock <= 2;
+  const bg   = dark ? C.dCard : C.card;
   const bord = dark ? C.dBorder : C.border;
   const text = dark ? C.dText : C.ink;
-  const displayPrice = p.discount > 0 ? Math.round(p.price * (1 - p.discount / 100)) : p.price;
+  const displayPrice = p.discount > 0
+    ? Math.round(p.price * (1 - p.discount/100)) : p.price;
+
+  const shareArticle = e => {
+    e.stopPropagation();
+    const msg = t.shareMsg
+      .replace("{name}", p.name)
+      .replace("{price}", fcfa(displayPrice));
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
 
   return (
     <div onClick={() => onOpen(p)} className="dd-card"
-      style={{ background:bg, borderRadius:16, overflow:"hidden", border:`1px solid ${bord}`, cursor:"pointer", opacity:mounted?1:0, transform:mounted?"translateY(0)":"translateY(12px)", transition:`opacity .5s ${idx*40}ms, transform .5s ${idx*40}ms, box-shadow .2s` }}>
-      <div style={{ position:"relative", aspectRatio:"1/1", background: dark ? "#1A1510" : C.creamD }}>
+      style={{ background:bg, borderRadius:16, overflow:"hidden",
+        border:`1px solid ${bord}`, cursor:"pointer",
+        opacity:mounted?1:0, transform:mounted?"translateY(0)":"translateY(12px)",
+        transition:`opacity .5s ${idx*40}ms, transform .5s ${idx*40}ms, box-shadow .2s` }}>
+      {/* Image */}
+      <div style={{ position:"relative", aspectRatio:"1/1",
+        background: dark ? "#1A1510" : C.creamD }}>
         <Thumb p={p}/>
-        <div style={{ position:"absolute", top:8, left:8, display:"flex", flexDirection:"column", gap:3 }}>
-          {p.isNew && <span style={{ background:C.ink, color:C.gold, fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:999, letterSpacing:.8, border:`1px solid ${C.gold}44` }}>{t.newBadge.toUpperCase()}</span>}
-          {p.isBest && <span style={{ background:C.gold, color:C.ink, fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:999 }}>✦ TOP</span>}
+        {/* Badges */}
+        <div style={{ position:"absolute", top:8, left:8,
+          display:"flex", flexDirection:"column", gap:3 }}>
+          {p.isNew && <span style={{ background:C.ink, color:C.gold, fontSize:9,
+            fontWeight:700, padding:"2px 7px", borderRadius:999,
+            letterSpacing:.8, border:`1px solid ${C.gold}44` }}>
+            {t.newBadge.toUpperCase()}
+          </span>}
+          {p.isBest && <span style={{ background:C.gold, color:C.ink,
+            fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:999 }}>
+            ✦ TOP
+          </span>}
+          {p.discount > 0 && <span style={{ background:"#E05030", color:"#fff",
+            fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:999 }}>
+            -{p.discount}%
+          </span>}
         </div>
-        {out && <span style={{ position:"absolute", top:8, right:8, background:"rgba(26,26,26,.85)", color:"#fff", fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:999 }}>{t.outStock.toUpperCase()}</span>}
-        {low && !out && <span style={{ position:"absolute", top:8, right:8, background:C.gold, color:C.ink, fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:999 }}>{t.lowStock} {p.stock}!</span>}
-        <button onClick={e => { e.stopPropagation(); setFav(v => !v); }}
-          style={{ position:"absolute", bottom:8, right:8, width:28, height:28, borderRadius:999, border:"none", background:"rgba(255,255,255,.92)", display:"grid", placeItems:"center", cursor:"pointer" }}>
-          <Heart size={13} color={fav ? C.gold : "#bbb"} fill={fav ? C.gold : "none"}/>
+        {out && <span style={{ position:"absolute", top:8, right:8,
+          background:"rgba(26,26,26,.85)", color:"#fff",
+          fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:999 }}>
+          {t.outStock.toUpperCase()}
+        </span>}
+        {low && !out && <span style={{ position:"absolute", top:8, right:8,
+          background:C.gold, color:C.ink,
+          fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:999 }}>
+          {t.lowStock} {p.stock}!
+        </span>}
+        {/* Favoris */}
+        <button onClick={e => { e.stopPropagation(); setFav(v=>!v); }}
+          style={{ position:"absolute", bottom:8, right:8, width:28, height:28,
+            borderRadius:999, border:"none", background:"rgba(255,255,255,.92)",
+            display:"grid", placeItems:"center", cursor:"pointer" }}>
+          <Heart size={13} color={fav?C.gold:"#bbb"} fill={fav?C.gold:"none"}/>
         </button>
+        {/* Variantes couleurs sur la carte */}
+        {p.variants?.length > 0 && p.variants[0]?.type === "color" && (
+          <div style={{ position:"absolute", bottom:8, left:8,
+            display:"flex", gap:3 }}>
+            {p.variants.slice(0,4).map((v,i) => (
+              <div key={i} style={{ width:12, height:12, borderRadius:999,
+                background:v.hex, border:"1.5px solid rgba(255,255,255,.8)" }}/>
+            ))}
+            {p.variants.length > 4 && <span style={{ fontSize:9, color:"#fff",
+              background:"rgba(0,0,0,.5)", padding:"1px 4px", borderRadius:999 }}>
+              +{p.variants.length-4}
+            </span>}
+          </div>
+        )}
       </div>
+      {/* Infos */}
       <div style={{ padding:"11px 13px 14px" }}>
-        <div style={{ fontSize:9.5, fontWeight:700, color:C.gold, letterSpacing:1, textTransform:"uppercase", marginBottom:3 }}>{p.brand}</div>
-        <div style={{ fontFamily:"Georgia,serif", fontWeight:400, color:text, fontSize:13.5, lineHeight:1.3, marginBottom:4 }}>{p.name}</div>
-        <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:7 }}>
-          {[1,2,3,4,5].map(s => (
-            <span key={s} style={{ fontSize:11, color: s <= (p.rating || 4) ? C.gold : (dark ? "#3A2E20" : "#ddd") }}>★</span>
-          ))}
-          <span style={{ fontSize:10.5, color: dark ? C.dMute : C.mute, marginLeft:2 }}>({p.reviews || 12})</span>
+        <div style={{ fontSize:9.5, fontWeight:700, color:C.gold,
+          letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>
+          {p.brand}
         </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ fontFamily:"Georgia,serif", color:text,
+          fontSize:13.5, lineHeight:1.3, marginBottom:6 }}>
+          {p.name}
+        </div>
+        {/* Prix */}
+        <div style={{ display:"flex", alignItems:"center",
+          justifyContent:"space-between" }}>
           <div>
-            {p.discount > 0 && <span style={{ fontSize:11, color: dark ? C.dMute : C.mute, textDecoration:"line-through", display:"block" }}>{fcfa(p.price)}</span>}
-            <span style={{ fontFamily:"Georgia,serif", fontWeight:700, fontSize:14, color: p.discount > 0 ? "#E05030" : text }}>{fcfa(displayPrice)}</span>
-            {p.discount > 0 && <span style={{ fontSize:10, background:"#E05030", color:"#fff", padding:"2px 6px", borderRadius:999, marginLeft:6, fontWeight:700 }}>-{p.discount}%</span>}
+            {p.discount > 0 && (
+              <span style={{ fontSize:11, color: dark?C.dMute:C.mute,
+                textDecoration:"line-through", display:"block" }}>
+                {fcfa(p.price)}
+              </span>
+            )}
+            <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+              fontSize:14, color: p.discount>0 ? "#E05030" : text }}>
+              {fcfa(displayPrice)}
+            </span>
           </div>
           <button disabled={out} onClick={e => { e.stopPropagation(); onAdd(p); }}
-            style={{ width:32, height:32, borderRadius:9, border:"none", background: out ? "#ddd" : C.ink, color: out ? "#999" : C.gold, cursor: out ? "not-allowed" : "pointer", display:"grid", placeItems:"center" }}>
+            style={{ width:32, height:32, borderRadius:9, border:"none",
+              background: out?"#ddd":C.ink, color: out?"#999":C.gold,
+              cursor: out?"not-allowed":"pointer", display:"grid", placeItems:"center" }}>
             <Plus size={16}/>
           </button>
         </div>
-        <button onClick={e => {
-          e.stopPropagation();
-          const msg = `👜 ${p.name} — ${fcfa(displayPrice)} chez Dada's Drop ! 🛍️ Commande sur dadas-drop.vercel.app`;
-          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-        }} style={{ width:"100%", marginTop:6, padding:"6px", border:`1px solid ${dark ? C.dBorder : C.border}`, borderRadius:8, background:"none", color: dark ? C.dMute : C.mute, cursor:"pointer", fontSize:11.5, display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+        {/* Partager */}
+        <button onClick={shareArticle}
+          style={{ width:"100%", marginTop:7, padding:"6px",
+            border:`1px solid ${bord}`, borderRadius:8,
+            background:"none", color: dark?C.dMute:C.mute,
+            cursor:"pointer", fontSize:11.5,
+            display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
           <MessageCircle size={12}/> Partager
         </button>
       </div>
@@ -436,62 +516,133 @@ function ProductCard({ p, t, onOpen, onAdd, dark, idx, mounted }) {
   );
 }
 
-/* ═══════════════════════════════════════
-   🔍 FICHE PRODUIT (Modal)
-   ═══════════════════════════════════════ */
+/* ════════════════════════════════════════════
+   🔍 FICHE PRODUIT
+════════════════════════════════════════════ */
 function ProductModal({ p, t, onClose, onAdd, dark }) {
-  const [qty, setQty] = useState(1);
+  const [qty, setQty]           = useState(1);
+  const [variant, setVariant]   = useState(null);
+  const [variantErr, setVariantErr] = useState(false);
+
+  useEffect(() => { setVariant(null); setQty(1); setVariantErr(false); }, [p]);
+
   if (!p) return null;
-  const out = p.stock === 0;
+  const out  = p.stock === 0;
   const text = dark ? C.dText : C.ink;
-  const displayPrice = p.discount > 0 ? Math.round(p.price * (1 - p.discount / 100)) : p.price;
+  const bord = dark ? C.dBorder : C.border;
+  const displayPrice = p.discount > 0
+    ? Math.round(p.price * (1-p.discount/100)) : p.price;
+  const hasVariants = p.variants && p.variants.length > 0;
+
+  const handleAdd = () => {
+    if (hasVariants && !variant) { setVariantErr(true); return; }
+    onAdd(p, qty, variant);
+    onClose();
+  };
+
+  const shareArticle = () => {
+    const msg = t.shareMsg
+      .replace("{name}", p.name)
+      .replace("{price}", fcfa(displayPrice));
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
   return (
     <Overlay onClose={onClose}>
-      <div style={{ maxWidth:480, width:"100%" }} onClick={e => e.stopPropagation()}>
+      <div style={{ maxWidth:480, width:"100%" }}
+        onClick={e => e.stopPropagation()}>
         <div style={{ ...sheetStyle(dark), maxHeight:"90vh", overflowY:"auto" }}>
           <button onClick={onClose} style={closeBtnStyle(dark)}><X size={16}/></button>
           <Carousel p={p}/>
           <div style={{ marginTop:14 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:C.gold, letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>{p.brand}</div>
-            <h3 style={{ fontFamily:"Georgia,serif", fontSize:22, color:text, margin:"0 0 4px" }}>{p.name}</h3>
-            <div style={{ fontFamily:"Georgia,serif", fontWeight:700, fontSize:20, color: p.discount > 0 ? "#E05030" : C.gold, margin:"0 0 6px" }}>{fcfa(displayPrice)}</div>
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
-              <div style={{ display:"flex", gap:2 }}>
-                {[1,2,3,4,5].map(s => (
-                  <span key={s} style={{ fontSize:16, color: s <= (p.rating || 4) ? C.gold : (dark ? "#3A2E20" : "#ddd") }}>★</span>
-                ))}
-              </div>
-              <span style={{ fontSize:13, color: dark ? C.dMute : C.mute }}>{p.reviews || 12} avis</span>
-              <span style={{ marginLeft:"auto", fontSize:12, color: dark ? C.dMute : C.mute }}>👁️ {Math.floor(Math.random() * 30) + 5} personnes regardent</span>
+            {/* Marque */}
+            <div style={{ fontSize:10, fontWeight:700, color:C.gold,
+              letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>
+              {p.brand}
             </div>
-            {p.discount > 0 && (
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                <span style={{ fontFamily:"Georgia,serif", fontSize:16, color: dark ? C.dMute : C.mute, textDecoration:"line-through" }}>{fcfa(p.price)}</span>
-                <span style={{ background:"#E05030", color:"#fff", fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:999 }}>-{p.discount}%</span>
-              </div>
-            )}
-            <p style={{ color: dark ? C.dMute : C.mute, fontSize:13.5, lineHeight:1.6, margin:"0 0 12px" }}>{p.desc}</p>
-            <div style={{ fontSize:12, color: out ? "#999" : C.success, fontWeight:600, marginBottom:14 }}>
-              {out ? t.outStock : `${t.inStock} · ${p.stock} disponible${p.stock > 1 ? "s" : ""}`}
+            {/* Nom */}
+            <h3 style={{ fontFamily:"Georgia,serif", fontSize:22,
+              color:text, margin:"0 0 6px" }}>{p.name}</h3>
+            {/* Prix */}
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+              <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                fontSize:20, color: p.discount>0?"#E05030":C.gold }}>
+                {fcfa(displayPrice)}
+              </span>
+              {p.discount > 0 && <>
+                <span style={{ fontFamily:"Georgia,serif", fontSize:15,
+                  color: dark?C.dMute:C.mute, textDecoration:"line-through" }}>
+                  {fcfa(p.price)}
+                </span>
+                <span style={{ background:"#E05030", color:"#fff",
+                  fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:999 }}>
+                  -{p.discount}%
+                </span>
+              </>}
             </div>
-            {!out && (
-              <div>
-                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                  <div style={{ display:"flex", alignItems:"center", border:`1px solid ${dark ? C.dBorder : C.border}`, borderRadius:9, overflow:"hidden" }}>
-                    <button onClick={() => setQty(q => Math.max(1, q - 1))} style={stepBtnStyle(dark)}><Minus size={13}/></button>
-                    <span style={{ width:32, textAlign:"center", fontWeight:700, color:text, fontSize:14 }}>{qty}</span>
-                    <button onClick={() => setQty(q => Math.min(p.stock, q + 1))} style={stepBtnStyle(dark)}><Plus size={13}/></button>
-                  </div>
-                  <button onClick={() => { onAdd(p, qty); onClose(); }} style={{ flex:1, ...primaryBtn, justifyContent:"center" }}>
-                    <ShoppingBag size={15}/> {t.addCart}
+            {/* Description */}
+            <p style={{ color: dark?C.dMute:C.mute, fontSize:13.5,
+              lineHeight:1.6, margin:"0 0 12px" }}>{p.desc}</p>
+            {/* Stock */}
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:14,
+              color: out?"#999":C.success }}>
+              {out ? t.outStock : `${t.inStock} · ${p.stock} disponible${p.stock>1?"s":""}`}
+            </div>
+
+            {!out && (<>
+              {/* Variantes */}
+              <VariantPicker p={p} selected={variant} onSelect={v => { setVariant(v); setVariantErr(false); }} t={t} dark={dark}/>
+              {variantErr && (
+                <div style={{ color:"#E05030", fontSize:12.5, marginBottom:10,
+                  display:"flex", alignItems:"center", gap:5 }}>
+                  <AlertCircle size={13}/> Veuillez choisir une option avant d'ajouter
+                </div>
+              )}
+              {/* Quantité + ajouter */}
+              <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center",
+                  border:`1px solid ${bord}`, borderRadius:9, overflow:"hidden" }}>
+                  <button onClick={() => setQty(q=>Math.max(1,q-1))} style={stepBtn(dark)}>
+                    <Minus size={13}/>
+                  </button>
+                  <span style={{ width:32, textAlign:"center",
+                    fontWeight:700, color:text, fontSize:14 }}>{qty}</span>
+                  <button onClick={() => setQty(q=>Math.min(p.stock,q+1))} style={stepBtn(dark)}>
+                    <Plus size={13}/>
                   </button>
                 </div>
-                <button onClick={() => {
-                  const msg = `👜 ${p.name} — ${fcfa(displayPrice)} chez Dada's Drop ! 🛍️ dadas-drop.vercel.app`;
-                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
-                }} style={{ width:"100%", marginTop:10, padding:"10px", border:`1px solid ${dark ? C.dBorder : C.border}`, borderRadius:10, background:"none", color:"#25D366", cursor:"pointer", fontSize:13.5, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
-                  <MessageCircle size={16}/> Partager sur WhatsApp
+                <button onClick={handleAdd}
+                  style={{ flex:1, ...primaryBtn, justifyContent:"center" }}>
+                  <ShoppingBag size={15}/> {t.addCart}
                 </button>
+              </div>
+              {/* Partager */}
+              <button onClick={shareArticle}
+                style={{ width:"100%", padding:"10px",
+                  border:`1px solid ${bord}`, borderRadius:10,
+                  background:"none", color:"#25D366", cursor:"pointer",
+                  fontSize:13.5, fontWeight:600,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                <MessageCircle size={16}/> Partager sur WhatsApp
+              </button>
+            </>)}
+
+            {/* Rupture de stock */}
+            {out && (
+              <div style={{ background:`${C.danger}11`, border:`1px solid ${C.danger}33`,
+                borderRadius:12, padding:"14px 16px", marginTop:8 }}>
+                <p style={{ fontSize:13.5, color: dark?C.dText:C.ink,
+                  margin:"0 0 10px", lineHeight:1.6 }}>
+                  😔 <strong>{p.name}</strong> {t.outOfStockSearch}.<br/>
+                  {t.outOfStockMsg}
+                </p>
+                <a href={`https://wa.me/${DEFAULT_CFG.whatsapp}?text=${encodeURIComponent(`Bonjour ! Je suis intéressée par "${p.name}" mais il est épuisé. Pouvez-vous me prévenir quand il est disponible ?`)}`}
+                  target="_blank" rel="noreferrer"
+                  style={{ display:"inline-flex", alignItems:"center", gap:7,
+                    background:"#25D366", color:"#fff", textDecoration:"none",
+                    padding:"10px 16px", borderRadius:10, fontWeight:700, fontSize:13.5 }}>
+                  <MessageCircle size={16}/> Me prévenir sur WhatsApp
+                </a>
               </div>
             )}
           </div>
@@ -501,472 +652,849 @@ function ProductModal({ p, t, onClose, onAdd, dark }) {
   );
 }
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    🛒 PANIER
-   ═══════════════════════════════════════ */
+════════════════════════════════════════════ */
 function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout, t, dark }) {
-  const lines = cart.map(it => ({ ...products.find(p => p.id === it.id), qty:it.qty })).filter(l => l.id);
-  const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
-  const bg = dark ? C.dCard : "#fff";
+  const lines = cart.map(it => {
+    const p = products.find(x => x.id === it.id);
+    return p ? { ...p, qty:it.qty, variant:it.variant } : null;
+  }).filter(Boolean);
+  const total = lines.reduce((s,l) => {
+    const price = l.discount>0 ? Math.round(l.price*(1-l.discount/100)) : l.price;
+    return s + price * l.qty;
+  }, 0);
+  const bg   = dark ? C.dCard : "#fff";
   const bord = dark ? C.dBorder : C.border;
   const text = dark ? C.dText : C.ink;
-  return (
-    <>
-      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:60, opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
-      <aside style={{ position:"fixed", top:0, right:0, height:"100%", width:"min(380px,90vw)", background:bg, zIndex:61, transform:open?"translateX(0)":"translateX(105%)", transition:"transform .35s cubic-bezier(.2,.8,.2,1)", display:"flex", flexDirection:"column", boxShadow:"-8px 0 32px rgba(0,0,0,.15)" }}>
-        <div style={{ padding:"16px 18px", borderBottom:`1px solid ${bord}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>{t.cart}</span>
-          <button onClick={onClose} style={{ border:"none", background:"none", cursor:"pointer", color:text }}><X size={20}/></button>
+
+  return (<>
+    <div onClick={onClose}
+      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:60,
+        opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
+    <aside style={{ position:"fixed", top:0, right:0, height:"100%",
+      width:"min(380px,90vw)", background:bg, zIndex:61,
+      transform:open?"translateX(0)":"translateX(105%)",
+      transition:"transform .35s cubic-bezier(.2,.8,.2,1)",
+      display:"flex", flexDirection:"column",
+      boxShadow:"-8px 0 32px rgba(0,0,0,.15)" }}>
+      <div style={{ padding:"16px 18px", borderBottom:`1px solid ${bord}`,
+        display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>{t.cart}</span>
+        <button onClick={onClose}
+          style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
+          <X size={20}/>
+        </button>
+      </div>
+      {total >= DEFAULT_CFG.freeFrom && (
+        <div style={{ background:C.ink, color:C.gold, padding:"7px 16px",
+          fontSize:12, fontWeight:600, textAlign:"center" }}>
+          ✦ Livraison offerte pour cette commande
         </div>
-        {total >= CFG.freeFrom && (
-          <div style={{ background:C.ink, color:C.gold, padding:"7px 16px", fontSize:12, fontWeight:600, textAlign:"center", letterSpacing:.5 }}>
-            ✦ Livraison offerte pour cette commande
+      )}
+      <div style={{ flex:1, overflowY:"auto", padding:14 }}>
+        {lines.length === 0 ? (
+          <div style={{ textAlign:"center", color: dark?C.dMute:"#bbb", marginTop:50 }}>
+            <ShoppingBag size={38} strokeWidth={1.2}/>
+            <p style={{ marginTop:10, fontSize:13.5 }}>{t.empty}<br/>{t.emptyHint}</p>
           </div>
-        )}
-        <div style={{ flex:1, overflowY:"auto", padding:14 }}>
-          {lines.length === 0 ? (
-            <div style={{ textAlign:"center", color: dark ? C.dMute : "#bbb", marginTop:50 }}>
-              <ShoppingBag size={38} strokeWidth={1.2}/>
-              <p style={{ marginTop:10, fontSize:13.5 }}>{t.empty}<br/>{t.emptyHint}</p>
-            </div>
-          ) : lines.map(l => (
-            <div key={l.id} style={{ display:"flex", gap:10, padding:"10px 0", borderBottom:`1px solid ${bord}` }}>
-              <div style={{ width:58, height:58, borderRadius:9, overflow:"hidden", flexShrink:0 }}><Thumb p={l}/></div>
+        ) : lines.map(l => {
+          const lPrice = l.discount>0 ? Math.round(l.price*(1-l.discount/100)) : l.price;
+          return (
+            <div key={`${l.id}-${l.variant?.label||""}`}
+              style={{ display:"flex", gap:10, padding:"10px 0",
+                borderBottom:`1px solid ${bord}` }}>
+              <div style={{ width:58, height:58, borderRadius:9,
+                overflow:"hidden", flexShrink:0 }}><Thumb p={l}/></div>
               <div style={{ flex:1 }}>
-                <div style={{ fontFamily:"Georgia,serif", fontSize:13, color:text, marginBottom:2 }}>{l.name}</div>
-                <div style={{ fontSize:12.5, color:C.gold, fontWeight:700 }}>{fcfa(l.price)}</div>
-                <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:5 }}>
-                  <div style={{ display:"flex", alignItems:"center", border:`1px solid ${bord}`, borderRadius:7 }}>
-                    <button onClick={() => onQty(l.id, l.qty - 1)} style={stepBtnSmStyle(dark)}><Minus size={11}/></button>
-                    <span style={{ width:22, textAlign:"center", fontSize:12, fontWeight:700, color:text }}>{l.qty}</span>
-                    <button onClick={() => onQty(l.id, Math.min(l.stock, l.qty + 1))} style={stepBtnSmStyle(dark)}><Plus size={11}/></button>
+                <div style={{ fontFamily:"Georgia,serif", fontSize:13,
+                  color:text, marginBottom:2 }}>{l.name}</div>
+                {l.variant && (
+                  <div style={{ fontSize:11, color:C.gold, marginBottom:2,
+                    display:"flex", alignItems:"center", gap:4 }}>
+                    {l.variant.type==="color" && (
+                      <div style={{ width:10, height:10, borderRadius:999,
+                        background:l.variant.hex, border:`1px solid ${bord}` }}/>
+                    )}
+                    {l.variant.label}
                   </div>
-                  <button onClick={() => onRemove(l.id)} style={{ border:"none", background:"none", cursor:"pointer", color:"#bbb" }}><Trash2 size={13}/></button>
+                )}
+                <div style={{ fontSize:12.5, color:C.gold, fontWeight:700 }}>
+                  {fcfa(lPrice)}
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:7, marginTop:5 }}>
+                  <div style={{ display:"flex", alignItems:"center",
+                    border:`1px solid ${bord}`, borderRadius:7 }}>
+                    <button onClick={() => onQty(l.id, l.qty-1, l.variant)}
+                      style={stepBtnSm(dark)}><Minus size={11}/></button>
+                    <span style={{ width:22, textAlign:"center",
+                      fontSize:12, fontWeight:700, color:text }}>{l.qty}</span>
+                    <button onClick={() => onQty(l.id, Math.min(l.stock,l.qty+1), l.variant)}
+                      style={stepBtnSm(dark)}><Plus size={11}/></button>
+                  </div>
+                  <button onClick={() => onRemove(l.id, l.variant)}
+                    style={{ border:"none", background:"none", cursor:"pointer", color:"#bbb" }}>
+                    <Trash size={13}/>
+                  </button>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-        {lines.length > 0 && (
-          <div style={{ padding:16, borderTop:`1px solid ${bord}` }}>
-            {total < CFG.freeFrom && <p style={{ fontSize:11, color:C.mute, margin:"0 0 8px" }}>Livraison offerte dès {fcfa(CFG.freeFrom)}</p>}
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
-              <span style={{ color: dark ? C.dMute : C.mute, fontSize:14 }}>{t.total}</span>
-              <span style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:text }}>{fcfa(total)}</span>
-            </div>
-            <button onClick={onCheckout} style={{ width:"100%", ...primaryBtn, justifyContent:"center" }}>{t.order} <ArrowRight size={15}/></button>
+          );
+        })}
+      </div>
+      {lines.length > 0 && (
+        <div style={{ padding:16, borderTop:`1px solid ${bord}` }}>
+          {total < DEFAULT_CFG.freeFrom && (
+            <p style={{ fontSize:11, color:C.mute, margin:"0 0 8px" }}>
+              Livraison offerte dès {fcfa(DEFAULT_CFG.freeFrom)}
+            </p>
+          )}
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+            <span style={{ color: dark?C.dMute:C.mute, fontSize:14 }}>{t.total}</span>
+            <span style={{ fontFamily:"Georgia,serif", fontSize:18,
+              fontWeight:700, color:text }}>{fcfa(total)}</span>
           </div>
-        )}
-      </aside>
-    </>
-  );
+          <button onClick={onCheckout}
+            style={{ width:"100%", ...primaryBtn, justifyContent:"center" }}>
+            {t.order} <ArrowRight size={15}/>
+          </button>
+        </div>
+      )}
+    </aside>
+  </>);
 }
 
-/* ═══════════════════════════════════════
-   ✅ CHECKOUT — avec sauvegarde Supabase
-   ═══════════════════════════════════════ */
-function Checkout({ open, lines, total, onClose, t, dark, onOrderSaved }) {
-  const [form, setForm] = useState({ nom:"", tel:"", ville:CFG.city, adresse:"", note:"" });
-  const [pay, setPay] = useState("orange");
-  const [sent, setSent] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [orderNum] = useState(() => "DD-" + String(Math.floor(Math.random() * 9000) + 1000));
-  const [copied, setCopied] = useState(false);
+/* ════════════════════════════════════════════
+   💳 CHECKOUT
+════════════════════════════════════════════ */
+function Checkout({ open, lines, total, onClose, t, dark, promos, cfg }) {
+  const [form, setForm]         = useState({ nom:"", tel:"", ville: cfg?.city||DEFAULT_CFG.city, adresse:"", note:"" });
+  const [pay, setPay]           = useState("orange");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState(null);
+  const [promoErr, setPromoErr] = useState(false);
+  const [sent, setSent]         = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [orderNum]              = useState(() => "DD-" + String(Math.floor(Math.random()*9000)+1000));
+  const [copied, setCopied]     = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]:e.target.value }));
-  const valid = form.nom.trim() && /^[0-9]{8}$/.test(form.tel.replace(/\s/g, "")) && form.ville.trim();
+
+  const finalTotal = promoApplied
+    ? Math.round(total * (1 - promoApplied.discount/100)) : total;
+  const valid = form.nom.trim() && /^[0-9]{8}$/.test(form.tel.replace(/\s/g,"")) && form.ville.trim();
+
   if (!open) return null;
-  const payLabels = { orange:t.orange, moov:t.moov, wave:t.wave, livraison:t.delivery };
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
+  const payLabels = { orange:t.orange, moov:t.moov, wave:t.wave, livraison:t.delivery };
+  const whatsapp  = cfg?.whatsapp || DEFAULT_CFG.whatsapp;
+
+  const applyPromo = () => {
+    const found = (promos||[]).find(p =>
+      p.code === promoCode.toUpperCase().trim() &&
+      p.active && p.uses < p.maxUses
+    );
+    if (found) { setPromoApplied(found); setPromoErr(false); }
+    else { setPromoErr(true); setPromoApplied(null); }
+  };
 
   const send = async () => {
-    const items = lines.map(l => `• ${l.qty}x ${l.name} — ${fcfa(l.price * l.qty)}`).join("\n");
-    const msg = `Bonjour ${CFG.brand} 👋\nCommande #${orderNum}\n\n${items}\n\n💰 Total : ${fcfa(total)}\n💳 Règlement : ${payLabels[pay]}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse || "—"}\nNote : ${form.note || "—"}\n\n📍 Je vous envoie ma localisation WhatsApp.${pay !== "livraison" ? "\n✅ Je joins la capture du paiement." : ""}`;
-    window.open(`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
-
-    // Sauvegarder dans Supabase
+    const items = lines.map(l => {
+      const lPrice = l.discount>0 ? Math.round(l.price*(1-l.discount/100)) : l.price;
+      const varStr = l.variant ? ` (${l.variant.label})` : "";
+      return `• ${l.qty}x ${l.name}${varStr} — ${fcfa(lPrice*l.qty)}`;
+    }).join("\n");
+    const promoStr = promoApplied ? `\n🎁 Code promo : ${promoApplied.code} (-${promoApplied.discount}%)` : "";
+    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}\n\n💰 Total : ${fcfa(finalTotal)}\n💳 Règlement : ${payLabels[pay]}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${pay!=="livraison"?"\n✅ Je joins la capture du paiement.":""}`;
+    window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
     setSaving(true);
     try {
       await sb.post("orders", {
-        id: orderNum,
-        name: form.nom,
-        phone: form.tel,
-        ville: form.ville,
-        quartier: form.adresse,
-        note: form.note,
-        items: lines.map(l => `${l.name} x${l.qty}`),
-        total,
-        payment: pay,
-        status: 1,
-        date: new Date().toISOString().split("T")[0],
+        id:orderNum, name:form.nom, phone:form.tel, ville:form.ville,
+        quartier:form.adresse, note:form.note,
+        items:lines.map(l=>l.name+(l.variant?` (${l.variant.label})`:"")+" x"+l.qty),
+        total:finalTotal, payment:pay, status:1,
+        date:new Date().toISOString().split("T")[0],
+        promo:promoApplied?.code||null,
       });
-      if (onOrderSaved) onOrderSaved();
-    } catch (err) {
-      console.warn("Supabase order save failed (offline?):", err.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch(e) { console.warn("Supabase order:", e.message); }
+    setSaving(false);
     setSent(true);
   };
 
   const copy = () => {
-    navigator.clipboard?.writeText(orderNum).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard?.writeText(orderNum).catch(()=>{});
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <Overlay onClose={onClose}>
-      <div style={{ maxWidth:440, width:"100%" }} onClick={e => e.stopPropagation()}>
+      <div style={{ maxWidth:440, width:"100%" }} onClick={e=>e.stopPropagation()}>
         <div style={{ ...sheetStyle(dark), maxHeight:"90vh", overflowY:"auto" }}>
           <button onClick={onClose} style={closeBtnStyle(dark)}><X size={16}/></button>
           {sent ? (
             <div style={{ textAlign:"center" }}>
-              <div style={{ width:52, height:52, borderRadius:999, background:"#E8F8EF", display:"grid", placeItems:"center", margin:"0 auto 12px" }}><Check size={24} color={C.success}/></div>
-              <h3 style={{ fontFamily:"Georgia,serif", fontSize:20, color:text, margin:"0 0 6px" }}>{t.sent}</h3>
-              <p style={{ color: dark ? C.dMute : C.mute, fontSize:13, lineHeight:1.5, margin:"0 0 14px" }}>{t.sentMsg}{pay !== "livraison" && ` ${t.capture}`}</p>
-              <div style={{ background: dark ? "#1A1510" : C.creamD, border:`1px solid ${C.gold}33`, borderRadius:10, padding:"11px 14px", marginBottom:13 }}>
-                <div style={{ fontSize:10, color: dark ? C.dMute : C.mute, marginBottom:3 }}>Numéro de commande</div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                  <span style={{ fontFamily:"Georgia,serif", fontSize:18, color:C.gold }}>{orderNum}</span>
-                  <button onClick={copy} style={{ border:"none", background:"none", cursor:"pointer", color:C.gold }}>
+              <div style={{ width:52, height:52, borderRadius:999,
+                background:"#E8F8EF", display:"grid", placeItems:"center",
+                margin:"0 auto 12px" }}>
+                <Check size={24} color={C.success}/>
+              </div>
+              <h3 style={{ fontFamily:"Georgia,serif", fontSize:20,
+                color:text, margin:"0 0 6px" }}>{t.sent}</h3>
+              <p style={{ color: dark?C.dMute:C.mute, fontSize:13,
+                lineHeight:1.5, margin:"0 0 14px" }}>
+                {t.sentMsg}{pay!=="livraison"&&` ${t.capture}`}
+              </p>
+              <div style={{ background: dark?"#1A1510":C.creamD,
+                border:`1px solid ${C.gold}33`, borderRadius:10,
+                padding:"11px 14px", marginBottom:13 }}>
+                <div style={{ fontSize:10, color: dark?C.dMute:C.mute, marginBottom:3 }}>
+                  Numéro de commande
+                </div>
+                <div style={{ display:"flex", alignItems:"center",
+                  justifyContent:"center", gap:8 }}>
+                  <span style={{ fontFamily:"Georgia,serif", fontSize:18, color:C.gold }}>
+                    {orderNum}
+                  </span>
+                  <button onClick={copy}
+                    style={{ border:"none", background:"none", cursor:"pointer", color:C.gold }}>
                     {copied ? <CheckCircle size={16}/> : <Copy size={16}/>}
                   </button>
                 </div>
               </div>
-              <button onClick={onClose} style={{ ...primaryBtn, width:"100%", justifyContent:"center" }}>{t.close}</button>
-            </div>
-          ) : (
-            <>
-              <h3 style={{ fontFamily:"Georgia,serif", fontSize:19, color:text, margin:"0 0 4px" }}>{t.finalize}</h3>
-              <p style={{ color:C.gold, fontWeight:700, fontSize:13, margin:"0 0 12px" }}>{t.total} : {fcfa(total)}</p>
-              <div style={{ background: dark ? "#1A1510" : C.creamD, border:`1px solid ${bord}`, borderRadius:9, padding:"8px 11px", fontSize:11.5, color: dark ? C.dMute : C.mute, marginBottom:12 }}>
-                {t.shippingNote} {fcfa(CFG.freeFrom)}.
-              </div>
-              <Field label={t.name} dark={dark}>
-                <input style={inpStyle(dark)} value={form.nom} onChange={set("nom")} placeholder="Ex : Awa Traoré"/>
-              </Field>
-              <Field label={t.phone} dark={dark}>
-                <input
-                  style={{ ...inpStyle(dark), borderColor: form.tel && !/^[0-9]{8}$/.test(form.tel.replace(/\s/g, "")) ? "#E05030" : undefined }}
-                  value={form.tel}
-                  onChange={e => { const v = e.target.value.replace(/[^0-9\s]/g, ""); if (v.replace(/\s/g, "").length <= 8) set("tel")({ target:{ value:v } }); }}
-                  placeholder="Ex : 70 00 00 00" inputMode="numeric" maxLength={10}
-                />
-                {form.tel && !/^[0-9]{8}$/.test(form.tel.replace(/\s/g, "")) && (
-                  <span style={{ fontSize:11.5, color:"#E05030", marginTop:4, display:"block" }}>⚠️ Numéro valide à 8 chiffres requis</span>
-                )}
-              </Field>
-              <div style={{ display:"flex", gap:8 }}>
-                <Field label={t.city} dark={dark} flex><input style={inpStyle(dark)} value={form.ville} onChange={set("ville")}/></Field>
-                <Field label={t.district} dark={dark} flex><input style={inpStyle(dark)} value={form.adresse} onChange={set("adresse")} placeholder="Ex : Karpala"/></Field>
-              </div>
-              <div style={{ fontSize:11.5, color:C.gold, fontWeight:600, marginBottom:10 }}>{t.locMsg}</div>
-              <div style={{ fontSize:12.5, fontWeight:700, color:text, margin:"6px 0 7px" }}>{t.payment}</div>
-              {[
-                { key:"orange", icon:<Smartphone size={15} color="#FF6A00"/>, title:t.orange, sub:CFG.orangeMoney },
-                { key:"moov",   icon:<Smartphone size={15} color="#0066B3"/>, title:t.moov,   sub:CFG.moovMoney },
-                { key:"wave",   icon:<Smartphone size={15} color="#1DC0D4"/>, title:t.wave,   sub:CFG.wave },
-                { key:"livraison", icon:<Truck size={15} color={C.gold}/>, title:t.delivery, sub:t.deliverySub },
-              ].map(({ key, icon, title, sub }) => (
-                <button key={key} onClick={() => setPay(key)} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 11px", marginBottom:6, borderRadius:10, cursor:"pointer", textAlign:"left", border:`1.5px solid ${pay===key ? C.gold : bord}`, background: pay===key ? (dark ? "#1A1510" : C.creamD) : (dark ? C.dCard : "#fff") }}>
-                  <span style={{ width:30, height:30, borderRadius:7, background: dark ? C.dBorder : C.creamD, display:"grid", placeItems:"center" }}>{icon}</span>
-                  <span style={{ flex:1 }}>
-                    <span style={{ display:"block", fontWeight:700, fontSize:13, color:text }}>{title}</span>
-                    <span style={{ display:"block", fontSize:11, color: dark ? C.dMute : C.mute }}>{sub}</span>
-                  </span>
-                  <span style={{ width:16, height:16, borderRadius:999, border:`2px solid ${pay===key ? C.gold : bord}`, display:"grid", placeItems:"center" }}>
-                    {pay === key && <span style={{ width:8, height:8, borderRadius:999, background:C.gold }}/>}
-                  </span>
-                </button>
-              ))}
-              <button onClick={send} disabled={!valid || saving}
-                style={{ width:"100%", marginTop:12, justifyContent:"center", background:"#25D366", color:"#fff", border:"none", borderRadius:10, padding:"12px", fontWeight:700, fontSize:14, cursor: valid && !saving ? "pointer" : "not-allowed", display:"flex", alignItems:"center", gap:7, opacity: valid && !saving ? 1 : .5 }}>
-                <MessageCircle size={16}/> {saving ? "Enregistrement…" : t.send}
+              <button onClick={onClose} style={{ ...primaryBtn, width:"100%", justifyContent:"center" }}>
+                {t.close}
               </button>
-            </>
-          )}
+            </div>
+          ) : (<>
+            <h3 style={{ fontFamily:"Georgia,serif", fontSize:19,
+              color:text, margin:"0 0 4px" }}>{t.finalize}</h3>
+            <div style={{ display:"flex", justifyContent:"space-between",
+              alignItems:"center", marginBottom:12 }}>
+              <span style={{ color:C.gold, fontWeight:700, fontSize:13 }}>
+                {t.total} : {fcfa(finalTotal)}
+              </span>
+              {promoApplied && (
+                <span style={{ fontSize:12, background:`${C.success}15`,
+                  color:C.success, padding:"3px 8px", borderRadius:999,
+                  fontWeight:600 }}>
+                  -{promoApplied.discount}% appliqué ✓
+                </span>
+              )}
+            </div>
+
+            {/* Infos livraison */}
+            <div style={{ background: dark?"#1A1510":C.creamD,
+              border:`1px solid ${bord}`, borderRadius:9,
+              padding:"8px 11px", fontSize:11.5, color: dark?C.dMute:C.mute, marginBottom:12 }}>
+              {t.shippingNote} {fcfa(DEFAULT_CFG.freeFrom)}.
+            </div>
+
+            <Field label={t.name} dark={dark}>
+              <input style={inpStyle(dark)} value={form.nom}
+                onChange={set("nom")} placeholder="Ex : Awa Traoré"/>
+            </Field>
+            <Field label={t.phone} dark={dark}>
+              <input
+                style={{ ...inpStyle(dark), borderColor: form.tel &&
+                  !/^[0-9]{8}$/.test(form.tel.replace(/\s/g,"")) ? "#E05030" : undefined }}
+                value={form.tel}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9\s]/g,"");
+                  if (v.replace(/\s/g,"").length <= 8) set("tel")({target:{value:v}});
+                }}
+                placeholder="Ex : 70 00 00 00" inputMode="numeric" maxLength={10}
+              />
+              {form.tel && !/^[0-9]{8}$/.test(form.tel.replace(/\s/g,"")) && (
+                <span style={{ fontSize:11.5, color:"#E05030", marginTop:4, display:"block" }}>
+                  ⚠️ Numéro valide à 8 chiffres requis
+                </span>
+              )}
+            </Field>
+            <div style={{ display:"flex", gap:8 }}>
+              <Field label={t.city} dark={dark} flex>
+                <input style={inpStyle(dark)} value={form.ville} onChange={set("ville")}/>
+              </Field>
+              <Field label={t.district} dark={dark} flex>
+                <input style={inpStyle(dark)} value={form.adresse}
+                  onChange={set("adresse")} placeholder="Ex : Karpala"/>
+              </Field>
+            </div>
+            <div style={{ fontSize:11.5, color:C.gold, fontWeight:600, marginBottom:12 }}>
+              {t.locMsg}
+            </div>
+
+            {/* Code promo */}
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:12, fontWeight:600, color: dark?C.dMute:C.mute,
+                marginBottom:6 }}>{t.promoCode}</div>
+              <div style={{ display:"flex", gap:7 }}>
+                <input value={promoCode}
+                  onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoErr(false); }}
+                  placeholder="Ex : DADA10"
+                  style={{ ...inpStyle(dark), flex:1, marginBottom:0,
+                    borderColor: promoErr?"#E05030": promoApplied?C.success:undefined }}/>
+                <button onClick={applyPromo}
+                  style={{ background: promoApplied?C.success:C.ink,
+                    color: promoApplied?"#fff":C.gold,
+                    border:`1px solid ${promoApplied?C.success:C.gold}44`,
+                    borderRadius:10, padding:"0 14px", cursor:"pointer",
+                    fontSize:13, fontWeight:700, display:"flex",
+                    alignItems:"center", gap:5, whiteSpace:"nowrap" }}>
+                  {promoApplied ? <><CheckCircle size={13}/> OK</> : t.promoApply}
+                </button>
+              </div>
+              {promoErr && <p style={{ color:"#E05030", fontSize:12, margin:"4px 0 0" }}>{t.promoInvalid}</p>}
+              {promoApplied && <p style={{ color:C.success, fontSize:12, margin:"4px 0 0" }}>{t.promoApplied} -{promoApplied.discount}%</p>}
+            </div>
+
+            {/* Mode paiement */}
+            <div style={{ fontSize:12.5, fontWeight:700, color:text, margin:"6px 0 7px" }}>
+              {t.payment}
+            </div>
+            {[
+              { key:"orange", icon:<Smartphone size={15} color="#FF6A00"/>, title:t.orange, sub:cfg?.orangeMoney||DEFAULT_CFG.orangeMoney },
+              { key:"moov",   icon:<Smartphone size={15} color="#0066B3"/>, title:t.moov,   sub:cfg?.moovMoney||DEFAULT_CFG.moovMoney },
+              { key:"wave",   icon:<Smartphone size={15} color="#1DC0D4"/>, title:t.wave,   sub:cfg?.wave||DEFAULT_CFG.wave },
+              { key:"livraison", icon:<Truck size={15} color={C.gold}/>, title:t.delivery, sub:t.deliverySub },
+            ].map(({ key, icon, title, sub }) => (
+              <button key={key} onClick={() => setPay(key)}
+                style={{ width:"100%", display:"flex", alignItems:"center",
+                  gap:10, padding:"9px 11px", marginBottom:6, borderRadius:10,
+                  cursor:"pointer", textAlign:"left",
+                  border:`1.5px solid ${pay===key?C.gold:bord}`,
+                  background: pay===key ? (dark?"#1A1510":C.creamD) : (dark?C.dCard:"#fff") }}>
+                <span style={{ width:30, height:30, borderRadius:7,
+                  background: dark?C.dBorder:C.creamD,
+                  display:"grid", placeItems:"center" }}>{icon}</span>
+                <span style={{ flex:1 }}>
+                  <span style={{ display:"block", fontWeight:700, fontSize:13, color:text }}>{title}</span>
+                  <span style={{ display:"block", fontSize:11, color: dark?C.dMute:C.mute }}>{sub}</span>
+                </span>
+                <span style={{ width:16, height:16, borderRadius:999,
+                  border:`2px solid ${pay===key?C.gold:bord}`,
+                  display:"grid", placeItems:"center" }}>
+                  {pay===key && <span style={{ width:8, height:8,
+                    borderRadius:999, background:C.gold }}/>}
+                </span>
+              </button>
+            ))}
+
+            <button onClick={send} disabled={!valid||saving}
+              style={{ width:"100%", marginTop:12, justifyContent:"center",
+                background:"#25D366", color:"#fff", border:"none", borderRadius:10,
+                padding:"12px", fontWeight:700, fontSize:14,
+                cursor: valid&&!saving?"pointer":"not-allowed",
+                display:"flex", alignItems:"center", gap:7,
+                opacity: valid&&!saving?1:.5 }}>
+              <MessageCircle size={16}/> {saving?"Enregistrement…":t.send}
+            </button>
+          </>)}
         </div>
       </div>
     </Overlay>
   );
 }
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    📦 SUIVI COMMANDE
-   ═══════════════════════════════════════ */
+════════════════════════════════════════════ */
 function TrackModal({ open, onClose, t, dark }) {
-  const [num, setNum] = useState("");
-  const [result, setResult] = useState(null);
-  const [notFound, setNotFound] = useState(false);
+  const [num, setNum]         = useState("");
+  const [tel, setTel]         = useState("");
+  const [searchMode, setMode] = useState("id"); // "id" ou "phone"
+  const [result, setResult]   = useState(null);
+  const [results, setResults] = useState([]); // recherche par téléphone
   const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [comment, setComment] = useState("");
   const [commentSent, setCommentSent] = useState(false);
+
   if (!open) return null;
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
   const steps = [t.statusPrep, t.statusShip, t.statusDeliv];
   const icons = [<Package size={13}/>, <Truck size={13}/>, <MapPin size={13}/>];
 
-  const track = async () => {
-    setLoading(true);
-    setResult(null);
-    setNotFound(false);
+  const trackById = async () => {
+    setLoading(true); setResult(null); setResults([]); setNotFound(false);
     const upper = num.toUpperCase().trim();
-    // 1. Chercher dans Supabase
     try {
       const rows = await sb.get("orders", `?id=eq.${upper}&select=*`);
-      if (rows && rows.length > 0) {
-        setResult(rows[0]);
-        setLoading(false);
-        return;
-      }
-    } catch (err) {
-      console.warn("Supabase track error:", err.message);
-    }
-    // 2. Fallback démo
+      if (rows?.length > 0) { setResult(rows[0]); setLoading(false); return; }
+    } catch(e) { console.warn(e.message); }
     const demo = DEMO_ORDERS_TRACK[upper];
-    if (demo) { setResult(demo); } else { setNotFound(true); }
+    if (demo) setResult(demo); else setNotFound(true);
     setLoading(false);
   };
 
+  const trackByPhone = async () => {
+    setLoading(true); setResult(null); setResults([]); setNotFound(false);
+    const cleaned = tel.replace(/\s/g,"");
+    try {
+      const rows = await sb.get("orders", `?phone=eq.${cleaned}&select=*&order=date.desc`);
+      if (rows?.length > 0) { setResults(rows); setLoading(false); return; }
+    } catch(e) { console.warn(e.message); }
+    // Fallback démo
+    const demos = Object.entries(DEMO_ORDERS_TRACK)
+      .filter(([,o]) => o.phone === cleaned)
+      .map(([id,o]) => ({...o, id}));
+    if (demos.length > 0) setResults(demos); else setNotFound(true);
+    setLoading(false);
+  };
+
+  const renderTimeline = (o) => (
+    <div style={{ display:"flex", justifyContent:"space-between",
+      position:"relative", marginBottom:14 }}>
+      <div style={{ position:"absolute", top:14, left:"10%", right:"10%",
+        height:2, background: dark?C.dBorder:C.border, zIndex:0 }}>
+        <div style={{ height:"100%", width:`${((o.status-1)/2)*100}%`,
+          background:GRAD, borderRadius:99, transition:"width .6s" }}/>
+      </div>
+      {steps.map((s,i) => {
+        const done = i < o.status, active = i === o.status-1;
+        return (
+          <div key={i} style={{ display:"flex", flexDirection:"column",
+            alignItems:"center", gap:5, zIndex:1, flex:1 }}>
+            <div style={{ width:28, height:28, borderRadius:999,
+              background: done?C.ink:(dark?C.dBorder:C.border),
+              display:"grid", placeItems:"center",
+              border: done?`2px solid ${C.gold}`:"none",
+              boxShadow: active?`0 0 0 4px ${C.gold}33`:"none" }}>
+              <span style={{ color: done?C.gold:"#bbb" }}>{icons[i]}</span>
+            </div>
+            <span style={{ fontSize:10, fontWeight:active?700:400,
+              color: done?text:"#bbb", textAlign:"center" }}>{s}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <Overlay onClose={onClose}>
-      <div style={{ maxWidth:420, width:"100%" }} onClick={e => e.stopPropagation()}>
+      <div style={{ maxWidth:420, width:"100%" }} onClick={e=>e.stopPropagation()}>
         <div style={{ ...sheetStyle(dark), maxHeight:"88vh", overflowY:"auto" }}>
           <button onClick={onClose} style={closeBtnStyle(dark)}><X size={16}/></button>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:19, color:text, margin:"0 0 14px" }}>{t.trackTitle}</h3>
-          <div style={{ display:"flex", gap:7 }}>
-            <input value={num} onChange={e => setNum(e.target.value)} placeholder="Ex : DD-001"
-              style={{ ...inpStyle(dark), flex:1 }} onKeyDown={e => e.key === "Enter" && track()}/>
-            <button onClick={track} style={{ ...primaryBtn, padding:"9px 14px" }}>
-              {loading ? "…" : t.trackBtn}
-            </button>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:19,
+            color:text, margin:"0 0 14px" }}>{t.trackTitle}</h3>
+
+          {/* Toggle mode */}
+          <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+            {[["id","N° commande"],["phone","Téléphone"]].map(([m,l]) => (
+              <button key={m} onClick={() => { setMode(m); setResult(null); setResults([]); setNotFound(false); }}
+                style={{ flex:1, padding:"8px", borderRadius:9,
+                  border:`1.5px solid ${searchMode===m?C.gold:bord}`,
+                  background: searchMode===m?C.ink:"none",
+                  color: searchMode===m?C.gold:text,
+                  cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                {l}
+              </button>
+            ))}
           </div>
-          {notFound && <p style={{ color:C.danger, fontSize:12.5, marginTop:8 }}>{t.trackNotFound}</p>}
-          {result && (
-            <div style={{ marginTop:16 }}>
-              <div style={{ background: dark ? "#1A1510" : C.creamD, border:`1px solid ${C.gold}33`, borderRadius:11, padding:"11px 13px", marginBottom:14 }}>
-                <div style={{ fontFamily:"Georgia,serif", fontWeight:700, color:text, marginBottom:3 }}>#{num.toUpperCase()}</div>
-                {(result.items || []).map((item, i) => (
-                  <div key={i} style={{ fontSize:12.5, color: dark ? C.dMute : C.mute }}>• {item}</div>
-                ))}
-                <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:5 }}>{fcfa(result.total)}</div>
-              </div>
-              <div style={{ display:"flex", justifyContent:"space-between", position:"relative", marginBottom:14 }}>
-                <div style={{ position:"absolute", top:14, left:"10%", right:"10%", height:2, background: dark ? C.dBorder : C.border, zIndex:0 }}>
-                  <div style={{ height:"100%", width:`${((result.status - 1) / 2) * 100}%`, background:GRAD, borderRadius:99, transition:"width .6s" }}/>
-                </div>
-                {steps.map((s, i) => {
-                  const done = i < result.status, active = i === result.status - 1;
-                  return (
-                    <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:5, zIndex:1, flex:1 }}>
-                      <div style={{ width:28, height:28, borderRadius:999, background: done ? C.ink : (dark ? C.dBorder : C.border), display:"grid", placeItems:"center", border: done ? `2px solid ${C.gold}` : "none", boxShadow: active ? `0 0 0 4px ${C.gold}33` : "none" }}>
-                        <span style={{ color: done ? C.gold : "#bbb" }}>{icons[i]}</span>
-                      </div>
-                      <span style={{ fontSize:10, fontWeight: active ? 700 : 400, color: done ? text : "#bbb", textAlign:"center" }}>{s}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              {result.status === 3 && (
-                commentSent ? (
-                  <div style={{ display:"flex", alignItems:"center", gap:7, color:C.success, fontSize:13, fontWeight:600 }}><CheckCircle size={16}/> Merci pour votre avis ✦</div>
-                ) : (
-                  <>
-                    <div style={{ fontSize:12.5, fontWeight:700, color:text, marginBottom:5 }}>{t.comment}</div>
-                    <textarea value={comment} onChange={e => setComment(e.target.value)} rows={3} style={{ ...inpStyle(dark), resize:"vertical" }}/>
-                    <button onClick={() => setCommentSent(true)} disabled={!comment.trim()}
-                      style={{ ...primaryBtn, marginTop:7, width:"100%", justifyContent:"center", opacity: comment.trim() ? 1 : .5 }}>
-                      <Star size={14}/> {t.commentSend}
-                    </button>
-                  </>
-                )
-              )}
-              <p style={{ fontSize:11, color: dark ? C.dMute : "#bbb", marginTop:12, textAlign:"center" }}>Essayez DD-001, DD-002 ou DD-003 pour la démo</p>
+
+          {searchMode === "id" ? (
+            <div style={{ display:"flex", gap:7 }}>
+              <input value={num} onChange={e=>setNum(e.target.value)}
+                placeholder="Ex : DD-001" style={{ ...inpStyle(dark), flex:1 }}
+                onKeyDown={e=>e.key==="Enter"&&trackById()}/>
+              <button onClick={trackById}
+                style={{ ...primaryBtn, padding:"9px 14px" }}>
+                {loading?"…":t.trackBtn}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display:"flex", gap:7 }}>
+              <input value={tel} onChange={e=>setTel(e.target.value)}
+                placeholder="Ex : 70 00 00 00" inputMode="numeric"
+                style={{ ...inpStyle(dark), flex:1 }}
+                onKeyDown={e=>e.key==="Enter"&&trackByPhone()}/>
+              <button onClick={trackByPhone}
+                style={{ ...primaryBtn, padding:"9px 14px" }}>
+                {loading?"…":t.trackBtn}
+              </button>
             </div>
           )}
+
+          {notFound && (
+            <p style={{ color:C.danger, fontSize:12.5, marginTop:8 }}>
+              {t.trackNotFound}
+            </p>
+          )}
+
+          {/* Résultat par ID */}
+          {result && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ background: dark?"#1A1510":C.creamD,
+                border:`1px solid ${C.gold}33`, borderRadius:11,
+                padding:"11px 13px", marginBottom:14 }}>
+                <div style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                  color:text, marginBottom:3 }}>
+                  #{result.id || num.toUpperCase()}
+                </div>
+                {(result.items||[]).map((item,i) => (
+                  <div key={i} style={{ fontSize:12.5, color: dark?C.dMute:C.mute }}>
+                    • {item}
+                  </div>
+                ))}
+                <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:5 }}>
+                  {fcfa(result.total)}
+                </div>
+              </div>
+              {renderTimeline(result)}
+              {result.status === 3 && (
+                commentSent ? (
+                  <div style={{ display:"flex", alignItems:"center", gap:7,
+                    color:C.success, fontSize:13, fontWeight:600 }}>
+                    <CheckCircle size={16}/> Merci pour votre avis ✦
+                  </div>
+                ) : (<>
+                  <div style={{ fontSize:12.5, fontWeight:700, color:text, marginBottom:5 }}>
+                    {t.comment}
+                  </div>
+                  <textarea value={comment} onChange={e=>setComment(e.target.value)}
+                    rows={3} style={{ ...inpStyle(dark), resize:"vertical" }}/>
+                  <button onClick={()=>setCommentSent(true)} disabled={!comment.trim()}
+                    style={{ ...primaryBtn, marginTop:7, width:"100%",
+                      justifyContent:"center", opacity:comment.trim()?1:.5 }}>
+                    <Star size={14}/> {t.commentSend}
+                  </button>
+                </>)
+              )}
+            </div>
+          )}
+
+          {/* Résultats par téléphone */}
+          {results.length > 0 && (
+            <div style={{ marginTop:16 }}>
+              <p style={{ fontSize:12.5, color: dark?C.dMute:C.mute, marginBottom:10 }}>
+                {results.length} commande{results.length>1?"s":""} trouvée{results.length>1?"s":""}
+              </p>
+              {results.map((o,i) => (
+                <div key={i} style={{ background: dark?"#1A1510":C.creamD,
+                  border:`1px solid ${bord}`, borderRadius:11,
+                  padding:"12px", marginBottom:10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between",
+                    marginBottom:8 }}>
+                    <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                      color:text }}>#{o.id}</span>
+                    <span style={{ fontSize:11, color:STATUS_COLORS[o.status],
+                      fontWeight:600 }}>{STATUS_LABELS[o.status]}</span>
+                  </div>
+                  {renderTimeline(o)}
+                  <div style={{ fontSize:13, color:C.gold, fontWeight:700 }}>
+                    {fcfa(o.total)} · {o.date}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={{ fontSize:11, color: dark?C.dMute:"#bbb",
+            marginTop:12, textAlign:"center" }}>
+            Démo : DD-001, DD-002, DD-003
+          </p>
         </div>
       </div>
     </Overlay>
   );
 }
 
-/* ═══════════════════════════════════════
-   🔍 FILTRE (Bottom Sheet Mobile)
-   ═══════════════════════════════════════ */
-function FilterPanel({ CATS, cat, setCat, sort, setSort, inStock, setInStock, minPrice, setMinPrice, maxPrice, setMaxPrice, lang, dark, text, bord }) {
+/* ════════════════════════════════════════════
+   📋 FILTRE (Bottom Sheet)
+════════════════════════════════════════════ */
+function FilterPanel({ cats, cat, setCat, sort, setSort, inStock, setInStock,
+  minPrice, setMinPrice, maxPrice, setMaxPrice, lang, dark, text, bord }) {
   const [open, setOpen] = useState(false);
-  const activeFilters = (cat > 0 ? 1 : 0) + (inStock ? 1 : 0) + (minPrice || maxPrice ? 1 : 0) + (sort !== "new" ? 1 : 0);
+  const active = (cat>0?1:0)+(inStock?1:0)+(minPrice||maxPrice?1:0)+(sort!=="new"?1:0);
 
-  // Scroll lock quand filtre ouvert
   useEffect(() => {
-    if (open) {
-      document.body.classList.add("filter-open");
-    } else {
-      document.body.classList.remove("filter-open");
-    }
+    document.body.classList.toggle("filter-open", open);
     return () => document.body.classList.remove("filter-open");
   }, [open]);
 
-  const closeFilter = () => setOpen(false);
+  const close = () => setOpen(false);
+  const allCats = [{ id:"all", label:"Tout", labelEn:"All", soon:false }, ...cats];
 
-  return (
-    <>
-      <div style={{ display:"flex", gap:8, marginBottom:16, alignItems:"center" }}>
-        <button onClick={() => setOpen(true)} style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"9px 16px", borderRadius:10, border:`1.5px solid ${activeFilters > 0 ? C.gold : bord}`, background: activeFilters > 0 ? C.ink : (dark ? C.dCard : "#fff"), color: activeFilters > 0 ? C.gold : text, cursor:"pointer", fontSize:13.5, fontWeight:600 }}>
-          <Filter size={15}/> {lang === "fr" ? "Filtrer" : "Filter"}
-          {activeFilters > 0 && <span style={{ background:C.gold, color:C.ink, fontSize:10, fontWeight:800, width:18, height:18, borderRadius:999, display:"grid", placeItems:"center" }}>{activeFilters}</span>}
-        </button>
-        {cat > 0 && (
-          <div style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"7px 12px", borderRadius:999, background:`${C.gold}18`, border:`1px solid ${C.gold}44`, fontSize:12.5, color:C.gold, fontWeight:600 }}>
-            {CATS[cat]}
-            <button onClick={() => setCat(0)} style={{ border:"none", background:"none", cursor:"pointer", color:C.gold, padding:0, lineHeight:1 }}><X size={12}/></button>
-          </div>
-        )}
-        {(minPrice || maxPrice) && (
-          <div style={{ display:"inline-flex", alignItems:"center", gap:5, padding:"7px 12px", borderRadius:999, background:`${C.gold}18`, border:`1px solid ${C.gold}44`, fontSize:12.5, color:C.gold, fontWeight:600 }}>
-            Budget
-            <button onClick={() => { setMinPrice(""); setMaxPrice(""); }} style={{ border:"none", background:"none", cursor:"pointer", color:C.gold, padding:0 }}><X size={12}/></button>
-          </div>
-        )}
+  return (<>
+    <div style={{ display:"flex", gap:8, marginBottom:16, alignItems:"center", flexWrap:"wrap" }}>
+      <button onClick={() => setOpen(true)}
+        style={{ display:"inline-flex", alignItems:"center", gap:7,
+          padding:"9px 16px", borderRadius:10,
+          border:`1.5px solid ${active>0?C.gold:bord}`,
+          background: active>0?C.ink:(dark?C.dCard:"#fff"),
+          color: active>0?C.gold:text, cursor:"pointer",
+          fontSize:13.5, fontWeight:600 }}>
+        <Filter size={15}/> {lang==="fr"?"Filtrer":"Filter"}
+        {active>0 && <span style={{ background:C.gold, color:C.ink,
+          fontSize:10, fontWeight:800, width:18, height:18,
+          borderRadius:999, display:"grid", placeItems:"center" }}>{active}</span>}
+      </button>
+      {cat>0 && (
+        <div style={{ display:"inline-flex", alignItems:"center", gap:5,
+          padding:"7px 12px", borderRadius:999,
+          background:`${C.gold}18`, border:`1px solid ${C.gold}44`,
+          fontSize:12.5, color:C.gold, fontWeight:600 }}>
+          {allCats.find(c=>c.id===cat)?.[lang==="fr"?"label":"labelEn"]||cat}
+          <button onClick={() => setCat(0)}
+            style={{ border:"none", background:"none", cursor:"pointer",
+              color:C.gold, padding:0 }}><X size={12}/></button>
+        </div>
+      )}
+    </div>
+
+    {open && <div onClick={close}
+      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)",
+        zIndex:60, animation:"ddFade .2s ease" }}/>}
+
+    <div style={{ position:"fixed", bottom:0, left:0, right:0,
+      background: dark?C.dCard:"#fff", zIndex:61,
+      borderRadius:"20px 20px 0 0", padding:"0 0 env(safe-area-inset-bottom,20px)",
+      transform: open?"translateY(0)":"translateY(105%)",
+      transition:"transform .35s cubic-bezier(.2,.8,.2,1)",
+      maxHeight:"82vh", overflowY:"auto",
+      boxShadow:"0 -8px 32px rgba(0,0,0,.2)" }}>
+      <div style={{ display:"flex", justifyContent:"center", padding:"12px 0 0" }}>
+        <div style={{ width:40, height:4, borderRadius:99,
+          background: dark?C.dBorder:C.border }}/>
       </div>
-      {open && <div onClick={closeFilter} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:60, animation:"ddFade .2s ease" }}/>}
-      <div style={{ position:"fixed", bottom:0, left:0, right:0, background: dark ? C.dCard : "#fff", zIndex:61, borderRadius:"20px 20px 0 0", padding:"0 0 40px", transform: open ? "translateY(0)" : "translateY(105%)", transition:"transform .35s cubic-bezier(.2,.8,.2,1)", maxHeight:"80vh", overflowY:"auto", boxShadow:"0 -8px 32px rgba(0,0,0,.2)" }}>
-        <div style={{ display:"flex", justifyContent:"center", padding:"12px 0 0" }}>
-          <div style={{ width:40, height:4, borderRadius:99, background: dark ? C.dBorder : C.border }}/>
+      <div style={{ padding:"14px 20px 0", display:"flex",
+        justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>
+          {lang==="fr"?"Filtres":"Filters"}
+        </span>
+        <div style={{ display:"flex", gap:8 }}>
+          {active>0 && <button onClick={() => { setCat(0);setSort("new");setInStock(false);setMinPrice("");setMaxPrice(""); }}
+            style={{ fontSize:12.5, color:C.gold, background:"none", border:"none", cursor:"pointer" }}>
+            {lang==="fr"?"Tout effacer":"Clear all"}
+          </button>}
+          <button onClick={close}
+            style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
+            <X size={20}/>
+          </button>
         </div>
-        <div style={{ padding:"14px 20px 0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>{lang === "fr" ? "Filtres" : "Filters"}</span>
-          <div style={{ display:"flex", gap:8 }}>
-            {activeFilters > 0 && <button onClick={() => { setCat(0); setSort("new"); setInStock(false); setMinPrice(""); setMaxPrice(""); }} style={{ fontSize:12.5, color:C.gold, background:"none", border:"none", cursor:"pointer" }}>{lang === "fr" ? "Tout effacer" : "Clear all"}</button>}
-            <button onClick={closeFilter} style={{ border:"none", background:"none", cursor:"pointer", color:text }}><X size={20}/></button>
+      </div>
+      <div style={{ padding:"16px 20px" }}>
+        {/* Catégories */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color: dark?C.dMute:C.mute,
+            letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>
+            {lang==="fr"?"Catégorie":"Category"}
           </div>
-        </div>
-        <div style={{ padding:"16px 20px" }}>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, color: dark ? C.dMute : C.mute, letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>{lang === "fr" ? "Catégorie" : "Category"}</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
-              {CATS.map((c, i) => {
-                const soon = i >= 4, active = cat === i;
-                return (
-                  <button key={c} onClick={() => setCat(i)} style={{ padding:"8px 14px", borderRadius:999, fontSize:13, fontWeight:600, cursor:"pointer", border:`1.5px solid ${active ? C.gold : bord}`, background: active ? C.ink : (dark ? C.dCard : "#fff"), color: active ? C.gold : text, opacity: soon ? .6 : 1 }}>
-                    {c}{soon && <span style={{ fontSize:9, marginLeft:4, opacity:.6 }}>· {lang === "fr" ? "bientôt" : "soon"}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, color: dark ? C.dMute : C.mute, letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>{lang === "fr" ? "Trier par" : "Sort by"}</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
-              {[["new", lang === "fr" ? "Nouveautés" : "New arrivals"], ["asc", lang === "fr" ? "Prix croissant" : "Price: low to high"], ["desc", lang === "fr" ? "Prix décroissant" : "Price: high to low"]].map(([val, label]) => (
-                <button key={val} onClick={() => setSort(val)} style={{ padding:"8px 14px", borderRadius:999, fontSize:13, fontWeight:600, cursor:"pointer", border:`1.5px solid ${sort === val ? C.gold : bord}`, background: sort === val ? C.ink : (dark ? C.dCard : "#fff"), color: sort === val ? C.gold : text }}>
-                  {label}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+            {allCats.map((c,i) => {
+              const label = lang==="fr" ? c.label : c.labelEn;
+              const active = cat===(i===0?"all":c.id) || (i===0&&cat===0);
+              return (
+                <button key={c.id} onClick={() => setCat(i===0?0:c.id)}
+                  style={{ padding:"8px 14px", borderRadius:999, fontSize:13,
+                    fontWeight:600, cursor:"pointer",
+                    border:`1.5px solid ${active?C.gold:bord}`,
+                    background: active?C.ink:(dark?C.dCard:"#fff"),
+                    color: active?C.gold:text,
+                    opacity: c.soon?.5:1 }}>
+                  {label}{c.soon && <span style={{ fontSize:9, marginLeft:4, opacity:.6 }}>
+                    · {lang==="fr"?"bientôt":"soon"}
+                  </span>}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
-          <div style={{ marginBottom:20 }}>
-            <button onClick={() => setInStock(v => !v)} style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"10px 16px", borderRadius:10, cursor:"pointer", fontSize:13.5, fontWeight:600, border:`1.5px solid ${inStock ? C.gold : bord}`, background: inStock ? (dark ? "#1A1510" : C.creamD) : (dark ? C.dCard : "#fff"), color:text, width:"100%" }}>
-              <span style={{ width:20, height:20, borderRadius:5, border:`2px solid ${inStock ? C.gold : (dark ? C.dBorder : "#ddd")}`, background: inStock ? C.gold : "transparent", display:"grid", placeItems:"center", flexShrink:0 }}>
-                {inStock && <Check size={12} color={C.ink}/>}
-              </span>
-              {lang === "fr" ? "En stock uniquement" : "In stock only"}
-            </button>
+        </div>
+        {/* Tri */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color: dark?C.dMute:C.mute,
+            letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>
+            {lang==="fr"?"Trier par":"Sort by"}
           </div>
-          <div style={{ marginBottom:20 }}>
-            <div style={{ fontSize:11, fontWeight:700, color: dark ? C.dMute : C.mute, letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>Budget (FCFA)</div>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-              <input type="number" value={minPrice} onChange={e => setMinPrice(e.target.value)} placeholder="Min" style={{ flex:1, padding:"10px 12px", borderRadius:9, border:`1.5px solid ${minPrice ? C.gold : bord}`, background: dark ? C.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
-              <span style={{ color: dark ? C.dMute : C.mute }}>—</span>
-              <input type="number" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder="Max" style={{ flex:1, padding:"10px 12px", borderRadius:9, border:`1.5px solid ${maxPrice ? C.gold : bord}`, background: dark ? C.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
-            </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+            {[
+              ["new",  lang==="fr"?"Nouveautés":"New arrivals"],
+              ["asc",  lang==="fr"?"Prix croissant":"Price ↑"],
+              ["desc", lang==="fr"?"Prix décroissant":"Price ↓"],
+            ].map(([val,label]) => (
+              <button key={val} onClick={() => setSort(val)}
+                style={{ padding:"8px 14px", borderRadius:999, fontSize:13,
+                  fontWeight:600, cursor:"pointer",
+                  border:`1.5px solid ${sort===val?C.gold:bord}`,
+                  background: sort===val?C.ink:(dark?C.dCard:"#fff"),
+                  color: sort===val?C.gold:text }}>
+                {label}
+              </button>
+            ))}
           </div>
-          <button onClick={closeFilter} style={{ width:"100%", padding:"14px", background:C.ink, color:C.gold, border:`1px solid ${C.gold}44`, borderRadius:12, fontWeight:700, fontSize:15, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
-            <Check size={16}/> {lang === "fr" ? "Appliquer les filtres" : "Apply filters"}
-            {activeFilters > 0 && <span style={{ background:C.gold, color:C.ink, fontSize:11, fontWeight:800, padding:"2px 8px", borderRadius:999 }}>{activeFilters}</span>}
+        </div>
+        {/* En stock */}
+        <div style={{ marginBottom:20 }}>
+          <button onClick={() => setInStock(v=>!v)}
+            style={{ display:"inline-flex", alignItems:"center", gap:8,
+              padding:"10px 16px", borderRadius:10, cursor:"pointer",
+              fontSize:13.5, fontWeight:600,
+              border:`1.5px solid ${inStock?C.gold:bord}`,
+              background: inStock?(dark?"#1A1510":C.creamD):(dark?C.dCard:"#fff"),
+              color:text, width:"100%" }}>
+            <span style={{ width:20, height:20, borderRadius:5,
+              border:`2px solid ${inStock?C.gold:(dark?C.dBorder:"#ddd")}`,
+              background: inStock?C.gold:"transparent",
+              display:"grid", placeItems:"center", flexShrink:0 }}>
+              {inStock && <Check size={12} color={C.ink}/>}
+            </span>
+            {lang==="fr"?"En stock uniquement":"In stock only"}
           </button>
         </div>
+        {/* Budget */}
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:11, fontWeight:700, color: dark?C.dMute:C.mute,
+            letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>
+            Budget (FCFA)
+          </div>
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            <input type="number" value={minPrice} onChange={e=>setMinPrice(e.target.value)}
+              placeholder="Min" style={{ flex:1, padding:"10px 12px", borderRadius:9,
+                border:`1.5px solid ${minPrice?C.gold:bord}`,
+                background: dark?C.dCard:"#fff", fontSize:"16px",
+                color:text, fontFamily:"inherit" }}/>
+            <span style={{ color: dark?C.dMute:C.mute }}>—</span>
+            <input type="number" value={maxPrice} onChange={e=>setMaxPrice(e.target.value)}
+              placeholder="Max" style={{ flex:1, padding:"10px 12px", borderRadius:9,
+                border:`1.5px solid ${maxPrice?C.gold:bord}`,
+                background: dark?C.dCard:"#fff", fontSize:"16px",
+                color:text, fontFamily:"inherit" }}/>
+          </div>
+        </div>
+        <button onClick={close}
+          style={{ width:"100%", padding:"14px", background:C.ink, color:C.gold,
+            border:`1px solid ${C.gold}44`, borderRadius:12, fontWeight:700,
+            fontSize:15, cursor:"pointer", display:"flex", alignItems:"center",
+            justifyContent:"center", gap:7 }}>
+          <Check size={16}/> {lang==="fr"?"Appliquer":"Apply"}
+          {active>0 && <span style={{ background:C.gold, color:C.ink,
+            fontSize:11, fontWeight:800, padding:"2px 8px", borderRadius:999 }}>
+            {active}
+          </span>}
+        </button>
       </div>
-    </>
-  );
+    </div>
+  </>);
 }
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    📜 MENU LATÉRAL
-   ═══════════════════════════════════════ */
-function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat }) {
+════════════════════════════════════════════ */
+function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats }) {
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
-  const CATS_MENU = lang === "fr" ? CATS_FR : CATS_EN;
-  return (
-    <>
-      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:60, opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
-      <div style={{ position:"fixed", top:0, left:0, height:"100%", width:"min(320px,82vw)", background: dark ? C.dCard : "#fff", zIndex:61, transform: open ? "translateX(0)" : "translateX(-105%)", transition:"transform .35s cubic-bezier(.2,.8,.2,1)", display:"flex", flexDirection:"column", overflowY:"auto" }}>
-        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${bord}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
-          <span style={{ fontFamily:"Georgia,serif", fontSize:13, fontWeight:700, color: dark ? C.dMute : C.mute, letterSpacing:1 }}>MENU</span>
-          <button onClick={onClose} style={{ border:"none", background:"none", cursor:"pointer", color:text }}><X size={20}/></button>
+  return (<>
+    <div onClick={onClose}
+      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.4)", zIndex:60,
+        opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
+    <div style={{ position:"fixed", top:0, left:0, height:"100%",
+      width:"min(320px,82vw)", background: dark?C.dCard:"#fff", zIndex:61,
+      transform: open?"translateX(0)":"translateX(-105%)",
+      transition:"transform .35s cubic-bezier(.2,.8,.2,1)",
+      display:"flex", flexDirection:"column", overflowY:"auto" }}>
+      <div style={{ padding:"18px 20px", borderBottom:`1px solid ${bord}`,
+        display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:13, fontWeight:700,
+          color: dark?C.dMute:C.mute, letterSpacing:1 }}>MENU</span>
+        <button onClick={onClose}
+          style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
+          <X size={20}/>
+        </button>
+      </div>
+      <div style={{ flex:1, padding:"20px 24px" }}>
+        {[{ label:t.home, page:"home" },{ label:t.catalogue, page:"catalogue" }].map((item,i) => (
+          <button key={i} onClick={() => { setPage(item.page); onClose(); }}
+            style={{ display:"block", width:"100%", textAlign:"left",
+              padding:"9px 0", border:"none", background:"none", cursor:"pointer",
+              fontFamily:"Georgia,serif", fontSize:17, color:text }}>
+            {item.label}
+          </button>
+        ))}
+        <div style={{ marginTop:16, marginBottom:8 }}>
+          <span style={{ fontSize:10, fontWeight:700, color: dark?C.dMute:C.mute,
+            letterSpacing:2, textTransform:"uppercase" }}>Collections</span>
         </div>
-        <div style={{ flex:1, padding:"20px 24px" }}>
-          {[{ label:t.home, page:"home" }, { label:t.catalogue, page:"catalogue" }].map((item, i) => (
-            <button key={i} onClick={() => { setPage(item.page); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:17, color:text, letterSpacing:.3 }}>
-              {item.label}
+        {cats.map(c => {
+          const label = lang==="fr" ? c.label : c.labelEn;
+          return (
+            <button key={c.id} onClick={() => { setPage("catalogue"); setCat(c.id); onClose(); }}
+              style={{ display:"block", width:"100%", textAlign:"left",
+                padding:"8px 0", border:"none", background:"none", cursor:"pointer",
+                fontFamily:"Georgia,serif", fontSize:16, color:text }}>
+              {label}
+              {c.soon && <span style={{ fontSize:10, color: dark?C.dMute:C.mute,
+                marginLeft:6 }}>· bientôt</span>}
             </button>
-          ))}
-          <div style={{ marginTop:16, marginBottom:8 }}>
-            <span style={{ fontSize:10, fontWeight:700, color: dark ? C.dMute : C.mute, letterSpacing:2, textTransform:"uppercase" }}>Collections</span>
-          </div>
-          {CATS_MENU.slice(1).map((c, i) => (
-            <button key={c} onClick={() => { setPage("catalogue"); setCat(i + 1); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"8px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:16, color:text, letterSpacing:.3 }}>
-              {c}{i >= 3 && <span style={{ fontSize:10, color: dark ? C.dMute : C.mute, marginLeft:6 }}>· bientôt</span>}
-            </button>
-          ))}
-          <div style={{ marginTop:16 }}>
-            <button onClick={() => { setPage("about"); onClose(); }} style={{ display:"block", width:"100%", textAlign:"left", padding:"9px 0", border:"none", background:"none", cursor:"pointer", fontFamily:"Georgia,serif", fontSize:17, color:text }}>
-              {t.about}
-            </button>
-          </div>
-        </div>
-        <div style={{ padding:"16px 24px", borderTop:`1px solid ${bord}`, flexShrink:0 }}>
-          <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} style={{ display:"flex", alignItems:"center", gap:8, background:"none", border:`1px solid ${bord}`, borderRadius:8, padding:"8px 12px", cursor:"pointer", color:text, fontSize:13, fontWeight:600 }}>
-            <Globe size={14}/> {lang === "fr" ? "Passer en anglais" : "Switch to French"}
+          );
+        })}
+        <div style={{ marginTop:16 }}>
+          <button onClick={() => { setPage("about"); onClose(); }}
+            style={{ display:"block", width:"100%", textAlign:"left",
+              padding:"9px 0", border:"none", background:"none", cursor:"pointer",
+              fontFamily:"Georgia,serif", fontSize:17, color:text }}>
+            {t.about}
           </button>
         </div>
       </div>
-    </>
-  );
+      <div style={{ padding:"16px 24px", borderTop:`1px solid ${bord}` }}>
+        <button onClick={() => setLang(l=>l==="fr"?"en":"fr")}
+          style={{ display:"flex", alignItems:"center", gap:8, background:"none",
+            border:`1px solid ${bord}`, borderRadius:8, padding:"8px 12px",
+            cursor:"pointer", color:text, fontSize:13, fontWeight:600 }}>
+          <Globe size={14}/> {lang==="fr"?"Passer en anglais":"Switch to French"}
+        </button>
+      </div>
+    </div>
+  </>);
 }
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    📄 PAGE À PROPOS
-   ═══════════════════════════════════════ */
-function AboutPage({ dark }) {
+════════════════════════════════════════════ */
+function AboutPage({ dark, cfg }) {
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
+  const whatsapp = cfg?.whatsapp || DEFAULT_CFG.whatsapp;
   return (
     <div style={{ maxWidth:680, margin:"0 auto", padding:"40px 20px" }}>
       <div style={{ textAlign:"center", marginBottom:32 }}>
         <LogoDD size={64}/>
-        <h1 style={{ fontFamily:"Georgia,serif", fontSize:28, color:text, margin:"16px 0 8px" }}>Dada's Drop</h1>
-        <p style={{ fontSize:14, color: dark ? C.dMute : C.mute, lineHeight:1.7 }}>Collection Premium · Ouagadougou, Burkina Faso</p>
+        <h1 style={{ fontFamily:"Georgia,serif", fontSize:28, color:text, margin:"16px 0 8px" }}>
+          Dada's Drop
+        </h1>
+        <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.7 }}>
+          Collection Premium · Ouagadougou, Burkina Faso
+        </p>
       </div>
-      <div style={{ background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderRadius:16, padding:"24px 28px", marginBottom:16 }}>
-        <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:"0 0 12px" }}>Notre histoire</h2>
-        <p style={{ fontSize:14, color: dark ? C.dMute : C.mute, lineHeight:1.8 }}>Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou.</p>
+      <div style={{ background: dark?C.dCard:"#fff", border:`1px solid ${bord}`,
+        borderRadius:16, padding:"24px 28px", marginBottom:16 }}>
+        <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:"0 0 12px" }}>
+          Notre histoire
+        </h2>
+        <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8 }}>
+          Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou.
+        </p>
       </div>
-      <div style={{ background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderRadius:16, padding:"24px 28px" }}>
-        <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:"0 0 12px" }}>Nous contacter</h2>
+      <div style={{ background: dark?C.dCard:"#fff", border:`1px solid ${bord}`,
+        borderRadius:16, padding:"24px 28px" }}>
+        <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:"0 0 12px" }}>
+          Nous contacter
+        </h2>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          <a href={`https://wa.me/${CFG.whatsapp}`} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:10, color:"#25D366", textDecoration:"none", fontWeight:600, fontSize:14 }}>
-            <MessageCircle size={18}/> WhatsApp — +{CFG.whatsapp}
+          <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer"
+            style={{ display:"flex", alignItems:"center", gap:10,
+              color:"#25D366", textDecoration:"none", fontWeight:600, fontSize:14 }}>
+            <MessageCircle size={18}/> WhatsApp — +{whatsapp}
           </a>
           {[
-            { label:"Orange Money", val:CFG.orangeMoney },
-            { label:"Moov Money",   val:CFG.moovMoney },
-            { label:"Wave",         val:CFG.wave },
-          ].map(({ label, val }) => (
-            <div key={label} style={{ display:"flex", alignItems:"center", gap:10, color: dark ? C.dMute : C.mute, fontSize:14 }}>
+            ["Orange Money", cfg?.orangeMoney||DEFAULT_CFG.orangeMoney],
+            ["Moov Money",   cfg?.moovMoney||DEFAULT_CFG.moovMoney],
+            ["Wave",         cfg?.wave||DEFAULT_CFG.wave],
+          ].map(([label,val]) => (
+            <div key={label}
+              style={{ display:"flex", alignItems:"center", gap:10,
+                color: dark?C.dMute:C.mute, fontSize:14 }}>
               <Smartphone size={18}/> {label} — {val}
             </div>
           ))}
@@ -976,985 +1504,96 @@ function AboutPage({ dark }) {
   );
 }
 
-/* ═══════════════════════════════════════
+/* ════════════════════════════════════════════
    📜 PAGES LÉGALES
-   ═══════════════════════════════════════ */
-const LEGAL_CONTENT = {
-  legal: { title:"Mentions légales", content:[
-    { h:"Éditeur du site", p:"Dada's Drop est une boutique en ligne de vente de sacs et accessoires de mode, basée à Ouagadougou, Burkina Faso. Responsable de publication : David Amah." },
-    { h:"Hébergement", p:"Le site est hébergé par Vercel Inc., 340 Pine Street, Suite 700, San Francisco, CA 94104, États-Unis." },
-    { h:"Propriété intellectuelle", p:"Tout le contenu de ce site (textes, images, logo) est la propriété exclusive de Dada's Drop. Toute reproduction est interdite sans autorisation préalable." },
-    { h:"Contact", p:"Pour toute question : contactez-nous via WhatsApp au numéro indiqué sur le site." },
+════════════════════════════════════════════ */
+const LEGAL = {
+  legal:{ title:"Mentions légales", content:[
+    { h:"Éditeur", p:"Dada's Drop — boutique en ligne de sacs et accessoires de mode, Ouagadougou, Burkina Faso. Responsable : David Amah." },
+    { h:"Hébergement", p:"Vercel Inc., 340 Pine Street, Suite 700, San Francisco, CA 94104, États-Unis." },
+    { h:"Propriété intellectuelle", p:"Tout le contenu (textes, images, logo) est la propriété exclusive de Dada's Drop. Toute reproduction est interdite sans autorisation." },
   ]},
-  cgv: { title:"Conditions Générales de Vente", content:[
+  cgv:{ title:"Conditions Générales de Vente", content:[
     { h:"1. Objet", p:"Les présentes CGV régissent les ventes effectuées via le site Dada's Drop." },
-    { h:"2. Produits", p:"Les produits proposés sont des sacs et accessoires de mode. Dada's Drop s'engage à livrer des articles conformes à la description." },
-    { h:"3. Prix", p:"Les prix sont indiqués en Francs CFA (FCFA). Dada's Drop se réserve le droit de modifier ses prix à tout moment." },
-    { h:"4. Commande", p:"La commande est finalisée via WhatsApp. Elle devient effective après confirmation de notre part et réception du paiement." },
-    { h:"5. Paiement", p:"Nous acceptons : Orange Money, Moov Money, Wave, et le paiement à la livraison." },
-    { h:"6. Livraison", p:"Livraison assurée à Ouagadougou. Les frais de livraison sont à la charge du client selon la zone. Livraison offerte dès 20 000 FCFA d'achat." },
-    { h:"7. Retours", p:"En cas de problème avec votre commande, contactez-nous dans les 24h suivant la livraison via WhatsApp." },
+    { h:"2. Produits", p:"Sacs et accessoires de mode de qualité premium. Dada's Drop s'engage à livrer des articles conformes à la description." },
+    { h:"3. Prix", p:"Prix en FCFA. Susceptibles d'être modifiés à tout moment." },
+    { h:"4. Commande", p:"Finalisée via WhatsApp. Effective après confirmation et paiement." },
+    { h:"5. Paiement", p:"Orange Money, Moov Money, Wave, ou paiement à la livraison." },
+    { h:"6. Livraison", p:"À Ouagadougou. Frais selon zone. Livraison offerte dès 20 000 FCFA." },
+    { h:"7. Retours", p:"Contactez-nous dans les 24h suivant la livraison via WhatsApp." },
   ]},
-  rgpd: { title:"Politique de confidentialité", content:[
-    { h:"Données collectées", p:"Lors de votre commande, nous collectons : votre nom, numéro de téléphone, adresse de livraison. Ces données sont utilisées uniquement pour traiter votre commande." },
-    { h:"Conservation des données", p:"Vos données sont conservées pendant la durée nécessaire au traitement de votre commande et au maximum 1 an." },
-    { h:"Partage des données", p:"Vos données ne sont jamais vendues ou partagées avec des tiers, sauf aux livreurs pour assurer la livraison." },
-    { h:"Vos droits", p:"Vous disposez d'un droit d'accès, de rectification et de suppression de vos données. Contactez-nous via WhatsApp pour exercer ces droits." },
-    { h:"Cookies", p:"Ce site utilise uniquement des cookies techniques nécessaires au bon fonctionnement (panier d'achat). Aucun cookie publicitaire n'est utilisé." },
+  rgpd:{ title:"Politique de confidentialité", content:[
+    { h:"Données collectées", p:"Nom, téléphone, adresse de livraison — uniquement pour traiter votre commande." },
+    { h:"Conservation", p:"Durée nécessaire au traitement + 1 an maximum." },
+    { h:"Partage", p:"Données jamais vendues. Partagées uniquement avec les livreurs." },
+    { h:"Vos droits", p:"Accès, rectification, suppression via WhatsApp." },
+    { h:"Cookies", p:"Uniquement cookies techniques (panier). Aucun cookie publicitaire." },
   ]},
-  sav: { title:"Service Après-Vente (SAV)", content:[
-    { h:"Comment nous contacter ?", p:"Notre SAV est disponible via WhatsApp 7j/7 de 8h à 20h (heure de Ouagadougou). Réponse garantie sous 2h en journée." },
-    { h:"Article non conforme", p:"Si votre article ne correspond pas à la description, contactez-nous dans les 24h suivant la livraison avec des photos. Nous vous proposerons un échange ou un remboursement." },
-    { h:"Retard de livraison", p:"En cas de retard, contactez-nous via WhatsApp avec votre numéro de commande. Nous vous informerons en temps réel." },
-    { h:"Remboursement", p:"Les remboursements sont effectués par le même moyen de paiement utilisé lors de la commande, dans un délai de 48h." },
-    { h:"Suivi de commande", p:"Utilisez le bouton 'Suivre ma commande' sur le site en entrant votre numéro de commande (format DD-XXXX)." },
+  sav:{ title:"Service Après-Vente", content:[
+    { h:"Contact", p:"WhatsApp 7j/7, 8h–20h (Ouagadougou). Réponse sous 2h en journée." },
+    { h:"Article non conforme", p:"Contactez-nous dans les 24h avec photos. Échange ou remboursement." },
+    { h:"Retard", p:"Contactez-nous avec votre numéro de commande." },
+    { h:"Remboursement", p:"Par le même moyen de paiement, sous 48h." },
   ]},
 };
 
 function LegalPage({ type, dark, setPage }) {
-  const content = LEGAL_CONTENT[type];
+  const content = LEGAL[type];
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
   return (
     <div style={{ maxWidth:720, margin:"0 auto", padding:"32px 20px 60px" }}>
-      <button onClick={() => setPage("home")} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", color: dark ? C.dMute : C.mute, fontSize:13, marginBottom:24, padding:0 }}>
+      <button onClick={() => setPage("home")}
+        style={{ display:"flex", alignItems:"center", gap:6, background:"none",
+          border:"none", cursor:"pointer", color: dark?C.dMute:C.mute,
+          fontSize:13, marginBottom:24, padding:0 }}>
         <ArrowLeft size={14}/> Retour
       </button>
-      <h1 style={{ fontFamily:"Georgia,serif", fontSize:26, color:text, margin:"0 0 24px", fontWeight:400 }}>{content.title}</h1>
-      {content.content.map((section, i) => (
-        <div key={i} style={{ background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderRadius:14, padding:"20px 24px", marginBottom:14 }}>
-          <h2 style={{ fontFamily:"Georgia,serif", fontSize:17, color:text, margin:"0 0 10px" }}>{section.h}</h2>
-          <p style={{ fontSize:14, color: dark ? C.dMute : C.mute, lineHeight:1.8, margin:0 }}>{section.p}</p>
+      <h1 style={{ fontFamily:"Georgia,serif", fontSize:26, color:text,
+        margin:"0 0 24px", fontWeight:400 }}>{content.title}</h1>
+      {content.content.map((s,i) => (
+        <div key={i} style={{ background: dark?C.dCard:"#fff",
+          border:`1px solid ${bord}`, borderRadius:14,
+          padding:"20px 24px", marginBottom:14 }}>
+          <h2 style={{ fontFamily:"Georgia,serif", fontSize:17, color:text, margin:"0 0 10px" }}>
+            {s.h}
+          </h2>
+          <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8, margin:0 }}>
+            {s.p}
+          </p>
         </div>
       ))}
-      <div style={{ background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderRadius:14, padding:"20px 24px", marginTop:14 }}>
-        <p style={{ fontSize:13, color: dark ? C.dMute : C.mute, margin:0 }}>
-          Dernière mise à jour : {new Date().toLocaleDateString("fr-FR")} · Dada's Drop — Ouagadougou, Burkina Faso
-        </p>
-      </div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET COMMANDES V14
-   ═══════════════════════════════════════ */
-function OrdersTab({ orders, setOrders, users, auth, dark, text, bord, cardBg }) {
-  const [search, setSearch]           = useState("");
-  const [filterStatus, setFilterStatus] = useState(0);
-  const [printOrder, setPrintOrder]   = useState(null);
-
-  const filtered = orders.filter(o => {
-    if (filterStatus > 0 && o.status !== filterStatus) return false;
-    if (search && !o.name?.toLowerCase().includes(search.toLowerCase()) && !o.id?.includes(search)) return false;
-    return true;
-  });
-
-  const updateStatus = async (id, status) => {
-    setOrders(os => os.map(o => o.id === id ? { ...o, status } : o));
-    try { await sb.patch("orders", id, { status }); } catch (e) { console.warn(e.message); }
-  };
-
-  const assignDelivery = async (id, userId) => {
-    const val = userId ? parseInt(userId) : null;
-    setOrders(os => os.map(o => o.id === id ? { ...o, assignedTo:val } : o));
-    try { await sb.patch("orders", id, { assigned_to:val }); } catch (e) { console.warn(e.message); }
-  };
-
-  // Export Excel CSV
-  const exportExcel = () => {
-    const rows = [
-      ["ID","Client","Téléphone","Ville","Quartier","Articles","Total (FCFA)","Paiement","Statut","Date"],
-      ...orders.map(o => [
-        o.id, o.name, o.phone, o.ville, o.quartier||"",
-        (o.items||[]).join(" | "),
-        o.total,
-        PAYMENT_LABELS[o.payment]||o.payment,
-        STATUS_LABELS[o.status]||"",
-        o.date
-      ])
-    ];
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(";")).join("\n");
-    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href = url; a.download = `commandes-dadas-drop-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click(); URL.revokeObjectURL(url);
-  };
-
-  // Impression bon de commande
-  const printBon = (o) => {
-    const w = window.open("","_blank","width=600,height=800");
-    w.document.write(`
-      <!DOCTYPE html><html><head><meta charset="utf-8"/>
-      <title>Bon de commande ${o.id}</title>
-      <style>
-        body{font-family:Georgia,serif;padding:32px;color:#1A1A1A;max-width:520px;margin:0 auto}
-        .logo{font-size:28px;font-weight:700;letter-spacing:3px;margin-bottom:4px}
-        .sub{font-size:11px;color:#8A7A6A;letter-spacing:4px;margin-bottom:24px}
-        .divider{border:none;border-top:1px solid #E0D8CC;margin:16px 0}
-        .row{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
-        .label{color:#8A7A6A}
-        .item{padding:6px 0;border-bottom:1px solid #E0D8CC;font-size:14px}
-        .total{font-size:20px;font-weight:700;color:#C9A84C;margin-top:16px}
-        .status{display:inline-block;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;background:#E08030;color:#fff}
-        @media print{button{display:none}}
-      </style></head><body>
-      <div class="logo">DADA'S DROP</div>
-      <div class="sub">✦ BON DE COMMANDE ✦</div>
-      <hr class="divider"/>
-      <div class="row"><span class="label">N° commande</span><strong>#${o.id}</strong></div>
-      <div class="row"><span class="label">Date</span><span>${o.date||new Date().toLocaleDateString("fr-FR")}</span></div>
-      <div class="row"><span class="label">Statut</span><span class="status">${STATUS_LABELS[o.status]||""}</span></div>
-      <hr class="divider"/>
-      <div class="row"><span class="label">Client</span><strong>${o.name}</strong></div>
-      <div class="row"><span class="label">Téléphone</span><span>${o.phone}</span></div>
-      <div class="row"><span class="label">Adresse</span><span>${o.quartier?o.quartier+", ":""}${o.ville}</span></div>
-      <div class="row"><span class="label">Paiement</span><span>${PAYMENT_LABELS[o.payment]||o.payment}</span></div>
-      <hr class="divider"/>
-      <strong style="font-size:13px;color:#8A7A6A">ARTICLES</strong>
-      ${(o.items||[]).map(i=>`<div class="item">${i}</div>`).join("")}
-      <div class="total">Total : ${(o.total||0).toLocaleString("fr-FR")} FCFA</div>
-      <hr class="divider"/>
-      <p style="font-size:11px;color:#8A7A6A;text-align:center;margin-top:24px">Dada's Drop · Ouagadougou, Burkina Faso<br/>WhatsApp : +${CFG.whatsapp}</p>
-      <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Imprimer</button>
-      </body></html>
-    `);
-    w.document.close();
-  };
-
-  const deliverers = users.filter(u => u.role === "delivery" && u.active);
-
+/* ════════════════════════════════════════════
+   🔒 PAGE 404
+════════════════════════════════════════════ */
+function Page404({ dark, setPage }) {
+  const text = dark ? C.dText : C.ink;
   return (
-    <div>
-      <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
-        <div style={{ position:"relative", flex:"1 1 200px", minWidth:0 }}>
-          <Search size={14} color={dark ? CA.dMute : CA.mute} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher une commande…"
-            style={{ width:"100%", padding:"8px 12px 8px 32px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}/>
-        </div>
-        <button onClick={exportExcel} style={{ background:"#1A9E5E", color:"#fff", border:"none", borderRadius:9, padding:"8px 14px", cursor:"pointer", fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
-          📊 Export Excel
-        </button>
-      </div>
-      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
-        {[0,1,2,3].map(s => (
-          <button key={s} onClick={() => setFilterStatus(s)} style={{ padding:"7px 13px", borderRadius:9, border:`1.5px solid ${filterStatus===s ? CA.gold : bord}`, background: filterStatus===s ? CA.ink : cardBg, color: filterStatus===s ? CA.gold : text, cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
-            {s === 0 ? "Toutes" : STATUS_LABELS[s]}
-          </button>
-        ))}
-      </div>
-      <div style={{ display:"grid", gap:10 }}>
-        {filtered.map(o => (
-          <div key={o.id} style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:13, padding:"14px 16px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-              <div>
-                <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:text, fontSize:15 }}>#{o.id}</span>
-                <span style={{ marginLeft:10, fontSize:13, color: dark ? CA.dMute : CA.mute }}>{o.date}</span>
-              </div>
-              <Badge color={STATUS_COLORS[o.status]}>{STATUS_LABELS[o.status]}</Badge>
-            </div>
-            <div style={{ fontSize:14, color:text, fontWeight:600 }}>{o.name}</div>
-            <div style={{ fontSize:12.5, color: dark ? CA.dMute : CA.mute, marginBottom:4 }}>📞 {o.phone} · 📍 {o.quartier ? `${o.quartier}, ` : ""}{o.ville}</div>
-            <div style={{ fontSize:12.5, color: dark ? CA.dMute : CA.mute, marginBottom:8 }}>💳 {PAYMENT_LABELS[o.payment] || o.payment}</div>
-            {(o.items || []).map((item, i) => <div key={i} style={{ fontSize:13, color:text }}>• {item}</div>)}
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10, flexWrap:"wrap", gap:8 }}>
-              <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:CA.gold, fontSize:15 }}>{fcfa_a(o.total)}</span>
-              <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-                {/* Impression */}
-                <button onClick={() => printBon(o)} style={{ background:"none", color: dark ? CA.dMute : CA.mute, border:`1px solid ${bord}`, borderRadius:8, padding:"6px 10px", cursor:"pointer", fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
-                  🖨️ Imprimer
-                </button>
-                {auth.role !== "delivery" && o.status < 3 && (
-                  <button onClick={() => updateStatus(o.id, o.status + 1)} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:8, padding:"6px 12px", cursor:"pointer", fontSize:12.5, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
-                    <ChevronUp size={13}/> {o.status === 1 ? "Marquer expédiée" : "Marquer livrée"}
-                  </button>
-                )}
-                {auth.role !== "delivery" && deliverers.length > 0 && (
-                  <select value={o.assignedTo || ""} onChange={e => assignDelivery(o.id, e.target.value)}
-                    style={{ padding:"6px 10px", borderRadius:8, border:`1px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit", cursor:"pointer" }}>
-                    <option value="">Assigner un livreur</option>
-                    {deliverers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                )}
-                {o.assignedTo && <Badge color={CA.success}>🚴 {users.find(u => u.id === o.assignedTo)?.name || "Livreur"}</Badge>}
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
-          <div style={{ textAlign:"center", padding:"40px 20px", color: dark ? CA.dMute : "#bbb" }}>
-            <ShoppingCart size={36} strokeWidth={1.2}/>
-            <p style={{ marginTop:10, fontSize:14 }}>Aucune commande trouvée.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET PRODUITS V14
-   ═══════════════════════════════════════ */
-function ProductsTab({ products, setProducts, dark, text, bord, cardBg }) {
-  const [editP, setEditP]     = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving]   = useState(false);
-  const emptyForm = { name:"", brand:"Coach", price:"", cat:"Sacs à main", stock:"", isNew:false, isBest:false, isPinned:false, isHidden:false, discount:0, desc:"", imgs:["","","",""], accent:["#C9A84C","#1A1A1A"] };
-  const [form, setForm] = useState(emptyForm);
-  const setF = k => e => setForm(f => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
-  const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
-
-  const save = async () => {
-    setSaving(true);
-    const catIdx = CATS_ADMIN.indexOf(form.cat);
-    const catEn  = catIdx >= 0 ? CATS_EN[catIdx + 1] : form.cat;
-    const imgs   = (form.imgs || []).filter(u => u.trim() !== "");
-    const p = {
-      ...form,
-      id:       editP ? editP.id : Date.now(),
-      price:    parseInt(form.price)    || 0,
-      stock:    parseInt(form.stock)    || 0,
-      discount: parseInt(form.discount) || 0,
-      imgs, catEn, nameEn: form.name,
-    };
-    if (editP) {
-      setProducts(ps => ps.map(x => x.id === editP.id ? p : x));
-      try { await sb.patch("products", editP.id, p); } catch (e) { console.warn(e.message); }
-    } else {
-      setProducts(ps => [...ps, p]);
-      try { await sb.post("products", p); } catch (e) { console.warn(e.message); }
-    }
-    setSaving(false); setEditP(null); setShowForm(false);
-  };
-
-  const del = async id => {
-    if (!window.confirm("Supprimer cet article ?")) return;
-    setProducts(ps => ps.filter(p => p.id !== id));
-    try { await sb.delete("products", id); } catch (e) { console.warn(e.message); }
-  };
-
-  // Épingler / masquer
-  const toggleProp = async (id, prop) => {
-    setProducts(ps => ps.map(p => p.id === id ? { ...p, [prop]:!p[prop] } : p));
-    const product = products.find(p => p.id === id);
-    try { await sb.patch("products", id, { [prop]:!product[prop] }); } catch (e) { console.warn(e.message); }
-  };
-
-  // Monter / descendre dans la liste
-  const move = (idx, dir) => {
-    setProducts(ps => {
-      const arr = [...ps];
-      const swap = idx + dir;
-      if (swap < 0 || swap >= arr.length) return arr;
-      [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
-      return arr;
-    });
-  };
-
-  const startEdit = p => {
-    const imgs = p.imgs || [];
-    setForm({ ...p, price:String(p.price), stock:String(p.stock), discount:String(p.discount||0), imgs:[imgs[0]||"", imgs[1]||"", imgs[2]||"", imgs[3]||""] });
-    setEditP(p); setShowForm(true);
-  };
-  const startNew = () => { setForm(emptyForm); setEditP(null); setShowForm(true); };
-
-  const visible  = products.filter(p => !p.isHidden);
-  const hidden   = products.filter(p => p.isHidden);
-  const pinned   = products.filter(p => p.isPinned && !p.isHidden);
-
-  return (
-    <div>
-      {/* Header */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <div style={{ fontSize:13, color: dark ? CA.dMute : CA.mute }}>
-          <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>{products.length} articles</span>
-          {pinned.length > 0 && <span style={{ marginLeft:10 }}>📌 {pinned.length} épinglé{pinned.length > 1 ? "s" : ""}</span>}
-          {hidden.length > 0 && <span style={{ marginLeft:10 }}>👁️ {hidden.length} masqué{hidden.length > 1 ? "s" : ""}</span>}
-        </div>
-        <button onClick={startNew} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"9px 16px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-          <PlusCircle size={15}/> Ajouter un article
-        </button>
-      </div>
-
-      {/* Formulaire */}
-      {showForm && (
-        <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`, borderRadius:14, padding:"20px", marginBottom:16 }}>
-          <h4 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>{editP ? "Modifier l'article" : "Nouvel article"}</h4>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-            {/* Nom */}
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Nom *</span>
-              <input style={inp} value={form.name||""} onChange={setF("name")} placeholder="Ex : Mini Boston Rose"/>
-            </label>
-            {/* Marque */}
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Marque *</span>
-              <input style={inp} value={form.brand||""} onChange={setF("brand")} placeholder="Ex : Coach"/>
-            </label>
-            {/* Prix */}
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Prix (FCFA) *</span>
-              <input style={inp} type="number" value={form.price||""} onChange={setF("price")} placeholder="Ex : 25000"/>
-            </label>
-            {/* Réduction */}
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>
-                Réduction (%) <span style={{ color:CA.gold }}>{form.discount > 0 ? `→ ${fcfa_a(Math.round((parseInt(form.price)||0)*(1-(parseInt(form.discount)||0)/100)))}` : ""}</span>
-              </span>
-              <input style={inp} type="number" min="0" max="90" value={form.discount||0} onChange={setF("discount")} placeholder="0"/>
-            </label>
-            {/* Stock */}
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Stock *</span>
-              <input style={inp} type="number" value={form.stock||""} onChange={setF("stock")} placeholder="Ex : 5"/>
-            </label>
-            {/* Catégorie */}
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Catégorie *</span>
-              <select style={inp} value={form.cat||"Sacs à main"} onChange={setF("cat")}>
-                {CATS_ADMIN.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </label>
-          </div>
-
-          {/* 3 URLs photos */}
-          <div style={{ marginBottom:10 }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:6 }}>Photos (jusqu'à 4 URLs)</span>
-            <div style={{ display:"grid", gap:7 }}>
-              {[0,1,2,3].map(i => (
-                <div key={i} style={{ display:"flex", gap:8, alignItems:"center" }}>
-                  <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, width:60, flexShrink:0 }}>Photo {i+1}{i===0?" *":""}</span>
-                  <input style={{ ...inp, marginBottom:0 }} value={form.imgs?.[i]||""} onChange={e => setForm(f => { const imgs=[...(f.imgs||["","",""])]; imgs[i]=e.target.value; return {...f,imgs}; })} placeholder="https://i.ibb.co/…"/>
-                  {form.imgs?.[i] && <div style={{ width:36, height:36, borderRadius:6, overflow:"hidden", flexShrink:0 }}><img src={form.imgs[i]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={e=>e.target.style.opacity=".2"}/></div>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Description */}
-          <label style={{ display:"block", marginBottom:10 }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Description</span>
-            <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={form.desc||""} onChange={setF("desc")}/>
-          </label>
-
-          {/* Checkboxes */}
-          <div style={{ display:"flex", flexWrap:"wrap", gap:16, margin:"10px 0 14px" }}>
-            {[
-              { k:"isNew",    label:"🆕 Nouveauté" },
-              { k:"isBest",   label:"⭐ Best-seller" },
-              { k:"isPinned", label:"📌 Épingler en haut" },
-              { k:"isHidden", label:"👁️ Masquer du catalogue" },
-            ].map(({ k, label }) => (
-              <label key={k} style={{ display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13, color:text }}>
-                <input type="checkbox" checked={!!form[k]} onChange={setF(k)}/> {label}
-              </label>
-            ))}
-          </div>
-
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={save} disabled={saving} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"10px 18px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-              <Save size={14}/> {saving ? "Enregistrement…" : "Enregistrer"}
-            </button>
-            <button onClick={() => { setShowForm(false); setEditP(null); }} style={{ background:"none", color:text, border:`1px solid ${bord}`, borderRadius:10, padding:"10px 16px", cursor:"pointer", fontSize:13.5, fontWeight:600, display:"flex", alignItems:"center", gap:6 }}>
-              <X size={14}/> Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Liste produits */}
-      <div style={{ display:"grid", gap:8 }}>
-        {products.map((p, idx) => (
-          <div key={p.id} style={{ background:cardBg, border:`1px solid ${p.isPinned ? CA.gold+"88" : p.isHidden ? bord : bord}`, borderRadius:12, padding:"11px 13px", display:"flex", gap:11, alignItems:"center", opacity: p.isHidden ? .5 : 1 }}>
-            {/* Ordre */}
-            <div style={{ display:"flex", flexDirection:"column", gap:2, flexShrink:0 }}>
-              <button onClick={() => move(idx, -1)} disabled={idx===0} style={{ border:"none", background:"none", cursor:"pointer", color: idx===0 ? bord : dark ? CA.dMute : CA.mute, padding:2 }}><ChevronUp size={13}/></button>
-              <button onClick={() => move(idx, 1)}  disabled={idx===products.length-1} style={{ border:"none", background:"none", cursor:"pointer", color: idx===products.length-1 ? bord : dark ? CA.dMute : CA.mute, padding:2 }}><ChevronDown size={13}/></button>
-            </div>
-            {/* Vignette */}
-            <div style={{ width:52, height:52, borderRadius:9, overflow:"hidden", flexShrink:0, background: p.accent ? `linear-gradient(135deg,${p.accent[0]},${p.accent[1]})` : "#eee", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:20 }}>👜</span>}
-            </div>
-            {/* Infos */}
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontFamily:"Georgia,serif", fontSize:13.5, color:text, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                {p.isPinned && "📌 "}{p.name}
-              </div>
-              <div style={{ fontSize:11.5, color: dark ? CA.dMute : CA.mute }}>
-                {p.brand} ·{" "}
-                {p.discount > 0 ? (
-                  <><span style={{ textDecoration:"line-through", marginRight:4 }}>{fcfa_a(p.price)}</span><span style={{ color:CA.danger, fontWeight:700 }}>{fcfa_a(Math.round(p.price*(1-p.discount/100)))}</span><span style={{ background:CA.danger, color:"#fff", fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:999, marginLeft:4 }}>-{p.discount}%</span></>
-                ) : fcfa_a(p.price)}
-              </div>
-              <div style={{ display:"flex", gap:5, marginTop:4, flexWrap:"wrap" }}>
-                <Badge color={p.stock===0 ? CA.danger : p.stock<=2 ? CA.warning : CA.success}>
-                  {p.stock===0 ? "Épuisé" : `Stock : ${p.stock}`}
-                </Badge>
-                {p.isNew    && <Badge color={CA.gold}>Nouveau</Badge>}
-                {p.isBest   && <Badge color="#1DC0D4">Top</Badge>}
-                {p.isHidden && <Badge color={CA.mute}>Masqué</Badge>}
-              </div>
-            </div>
-            {/* Actions */}
-            <div style={{ display:"flex", gap:5, flexShrink:0 }}>
-              <button onClick={() => toggleProp(p.id, "isPinned")} title={p.isPinned?"Désépingler":"Épingler"} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${p.isPinned ? CA.gold : bord}`, background: p.isPinned ? `${CA.gold}22` : "none", cursor:"pointer", display:"grid", placeItems:"center", color:p.isPinned ? CA.gold : dark ? CA.dMute : CA.mute }}>
-                📌
-              </button>
-              <button onClick={() => toggleProp(p.id, "isHidden")} title={p.isHidden?"Afficher":"Masquer"} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color: dark ? CA.dMute : CA.mute, fontSize:15 }}>
-                {p.isHidden ? "👁️" : "🙈"}
-              </button>
-              <button onClick={() => startEdit(p)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:text }}>
-                <Edit size={13}/>
-              </button>
-              <button onClick={() => del(p.id)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
-                <Trash2 size={13}/>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET ÉQUIPE
-   ═══════════════════════════════════════ */
-function UsersTab({ users, setUsers, dark, text, bord, cardBg }) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name:"", email:"", role:"delivery" });
-  const setF = k => e => setForm(f => ({ ...f, [k]:e.target.value }));
-  const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
-
-  const add = async () => {
-    if (!form.name || !form.email) return;
-    const newUser = { id:Date.now(), ...form, active:true };
-    setUsers(us => [...us, newUser]);
-    try { await sb.post("team_users", newUser); } catch (e) { console.warn("Supabase post team_users:", e.message); }
-    setForm({ name:"", email:"", role:"delivery" });
-    setShowForm(false);
-  };
-
-  const toggle = async id => {
-    const user = users.find(u => u.id === id);
-    setUsers(us => us.map(u => u.id === id ? { ...u, active:!u.active } : u));
-    try { await sb.patch("team_users", id, { active:!user.active }); } catch (e) { console.warn("Supabase patch:", e.message); }
-  };
-
-  const del = async id => {
-    if (!window.confirm("Supprimer cet utilisateur ?")) return;
-    setUsers(us => us.filter(u => u.id !== id));
-    try { await sb.delete("team_users", id); } catch (e) { console.warn("Supabase delete:", e.message); }
-  };
-
-  return (
-    <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>{users.length} membres</span>
-        <button onClick={() => setShowForm(v => !v)} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"9px 16px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-          <PlusCircle size={15}/> Ajouter un membre
-        </button>
-      </div>
-      {showForm && (
-        <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`, borderRadius:14, padding:"18px", marginBottom:16 }}>
-          <h4 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 14px" }}>Nouveau membre</h4>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Nom *</span>
-              <input style={inp} value={form.name} onChange={setF("name")} placeholder="Ex : Jean Kaboré"/>
-            </label>
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Email *</span>
-              <input style={inp} value={form.email} onChange={setF("email")} type="email" placeholder="jean@dadasdrop.com"/>
-            </label>
-          </div>
-          <label style={{ display:"block", marginBottom:14 }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Rôle *</span>
-            <select style={inp} value={form.role} onChange={setF("role")}>
-              <option value="manager">👩‍💼 Gestionnaire</option>
-              <option value="delivery">🚴 Livreur</option>
-            </select>
-          </label>
-          <div style={{ display:"flex", gap:8 }}>
-            <button onClick={add} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:10, padding:"10px 18px", cursor:"pointer", fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-              <Check size={14}/> Ajouter
-            </button>
-            <button onClick={() => setShowForm(false)} style={{ background:"none", color:text, border:`1px solid ${bord}`, borderRadius:10, padding:"10px 16px", cursor:"pointer", fontSize:13.5, display:"flex", alignItems:"center", gap:6 }}>
-              <X size={14}/> Annuler
-            </button>
-          </div>
-        </div>
-      )}
-      <div style={{ display:"grid", gap:10 }}>
-        {users.map(u => (
-          <div key={u.id} style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:12, padding:"13px 15px", display:"flex", alignItems:"center", gap:12, opacity:u.active?1:.55 }}>
-            <div style={{ width:42, height:42, borderRadius:999, background:`${CA.gold}22`, display:"grid", placeItems:"center", fontSize:18, flexShrink:0 }}>
-              {ROLES[u.role]?.badge || "👤"}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:600, fontSize:14, color:text }}>{u.name}</div>
-              <div style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>{u.email}</div>
-              <Badge color={u.role === "admin" ? CA.gold : u.role === "manager" ? "#1DC0D4" : CA.success}>{ROLES[u.role]?.label || u.role}</Badge>
-            </div>
-            <div style={{ display:"flex", gap:6 }}>
-              <button onClick={() => toggle(u.id)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:u.active ? CA.success : CA.danger }}>
-                {u.active ? <CheckCircle size={14}/> : <X size={14}/>}
-              </button>
-              {u.role !== "admin" && (
-                <button onClick={() => del(u.id)} style={{ width:32, height:32, borderRadius:8, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
-                  <Trash2 size={14}/>
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════
-   🏢 ADMIN — ONGLET PARAMÈTRES V14
-   ═══════════════════════════════════════ */
-function SettingsTab({ dark, text, bord, cardBg, onSiteUpdate }) {
-  const [cfg, setCfg] = useState({
-    whatsapp:    CFG.whatsapp,
-    orangeMoney: CFG.orangeMoney,
-    moovMoney:   CFG.moovMoney,
-    wave:        CFG.wave,
-    freeFrom:    String(CFG.freeFrom),
-    city:        CFG.city,
-    heroTitle:   "L'élégance, livrée chez vous.",
-    heroSub:     "Sacs & accessoires Coach sélectionnés avec soin, livrés à",
-    waMessage:   "Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?",
-    bannerActive: false,
-    bannerText:  "🔥 Promo spéciale — Livraison offerte dès 15 000 FCFA ce week-end !",
-    bannerColor: "#C9A84C",
-  });
-  const [promos, setPromos] = useState([
-    { code:"DADA10", discount:10, maxUses:50, uses:3, active:true },
-    { code:"BIENVENUE", discount:15, maxUses:100, uses:12, active:true },
-  ]);
-  const [newPromo, setNewPromo] = useState({ code:"", discount:"", maxUses:"" });
-  const [saved, setSaved]    = useState(false);
-  const [tab, setTab]        = useState("contacts");
-  const setC = k => e => setCfg(c => ({ ...c, [k]: e.target.type==="checkbox" ? e.target.checked : e.target.value }));
-  const inp = { width:"100%", padding:"9px 11px", borderRadius:9, border:`1.5px solid ${bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" };
-
-  const save = async () => {
-    try { await sb.post("announcements", { id:"config", data:cfg }); } catch (e) { console.warn(e.message); }
-    if (onSiteUpdate) onSiteUpdate(cfg);
-    setSaved(true); setTimeout(() => setSaved(false), 2500);
-  };
-
-  const addPromo = () => {
-    if (!newPromo.code || !newPromo.discount) return;
-    const p = { code:newPromo.code.toUpperCase(), discount:parseInt(newPromo.discount)||0, maxUses:parseInt(newPromo.maxUses)||999, uses:0, active:true };
-    setPromos(ps => [...ps, p]);
-    setNewPromo({ code:"", discount:"", maxUses:"" });
-  };
-
-  const togglePromo = code => setPromos(ps => ps.map(p => p.code===code ? {...p,active:!p.active} : p));
-  const delPromo    = code => setPromos(ps => ps.filter(p => p.code!==code));
-
-  const settingTabs = [
-    { k:"contacts",  label:"📞 Contacts" },
-    { k:"livraison", label:"🚚 Livraison" },
-    { k:"banniere",  label:"📢 Bannière" },
-    { k:"promos",    label:"🎁 Codes promo" },
-    { k:"apparence", label:"🎨 Apparence" },
-  ];
-
-  return (
-    <div style={{ maxWidth:640 }}>
-      {/* Sous-tabs paramètres */}
-      <div style={{ display:"flex", gap:6, marginBottom:18, flexWrap:"wrap" }}>
-        {settingTabs.map(st => (
-          <button key={st.k} onClick={() => setTab(st.k)} style={{ padding:"7px 12px", borderRadius:9, border:`1.5px solid ${tab===st.k ? CA.gold : bord}`, background: tab===st.k ? CA.ink : cardBg, color: tab===st.k ? CA.gold : text, cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
-            {st.label}
-          </button>
-        ))}
-      </div>
-
-      {/* CONTACTS */}
-      {tab === "contacts" && (
-        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>📞 Contacts & Paiement</h3>
-          <div style={{ display:"grid", gap:12 }}>
-            {[
-              { key:"whatsapp",    label:"Numéro WhatsApp",  placeholder:"226XXXXXXXX" },
-              { key:"orangeMoney", label:"Orange Money",      placeholder:"+226 XX XX XX XX" },
-              { key:"moovMoney",   label:"Moov Money",        placeholder:"+226 XX XX XX XX" },
-              { key:"wave",        label:"Wave",              placeholder:"+226 XX XX XX XX" },
-            ].map(f => (
-              <label key={f.key} style={{ display:"block" }}>
-                <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>{f.label}</span>
-                <input style={inp} value={cfg[f.key]} onChange={setC(f.key)} placeholder={f.placeholder}/>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* LIVRAISON */}
-      {tab === "livraison" && (
-        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🚚 Livraison</h3>
-          <label style={{ display:"block", marginBottom:12 }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Ville principale</span>
-            <input style={inp} value={cfg.city} onChange={setC("city")}/>
-          </label>
-          <label style={{ display:"block" }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Livraison gratuite à partir de (FCFA)</span>
-            <input style={inp} type="number" value={cfg.freeFrom} onChange={setC("freeFrom")}/>
-          </label>
-        </div>
-      )}
-
-      {/* BANNIÈRE */}
-      {tab === "banniere" && (
-        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>📢 Bannière d'annonce</h3>
-          {/* Prévisualisation */}
-          {cfg.bannerActive && (
-            <div style={{ background:cfg.bannerColor, color:CA.ink, padding:"10px 16px", borderRadius:9, fontSize:13, fontWeight:600, textAlign:"center", marginBottom:14 }}>
-              {cfg.bannerText}
-            </div>
-          )}
-          <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", marginBottom:14, fontSize:14, color:text }}>
-            <input type="checkbox" checked={!!cfg.bannerActive} onChange={setC("bannerActive")}/>
-            Activer la bannière sur le site
-          </label>
-          <label style={{ display:"block", marginBottom:12 }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Texte de la bannière</span>
-            <input style={inp} value={cfg.bannerText} onChange={setC("bannerText")} placeholder="🔥 Promo spéciale…"/>
-          </label>
-          <label style={{ display:"block" }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Couleur de fond</span>
-            <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-              <input type="color" value={cfg.bannerColor} onChange={setC("bannerColor")} style={{ width:44, height:36, borderRadius:8, border:`1px solid ${bord}`, cursor:"pointer", padding:2 }}/>
-              <span style={{ fontSize:13, color: dark ? CA.dMute : CA.mute }}>{cfg.bannerColor}</span>
-              {[CA.gold, "#E05030", "#1A9E5E", "#1DC0D4", CA.ink].map(c => (
-                <button key={c} onClick={() => setCfg(cfg => ({...cfg, bannerColor:c}))} style={{ width:24, height:24, borderRadius:999, background:c, border: cfg.bannerColor===c ? "2px solid #fff" : "2px solid transparent", cursor:"pointer", outline: cfg.bannerColor===c ? `2px solid ${CA.gold}` : "none" }}/>
-              ))}
-            </div>
-          </label>
-        </div>
-      )}
-
-      {/* CODES PROMO */}
-      {tab === "promos" && (
-        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🎁 Codes promo</h3>
-          {/* Créer un code */}
-          <div style={{ background: dark ? `${CA.gold}0A` : `${CA.gold}08`, border:`1px solid ${CA.gold}33`, borderRadius:10, padding:"14px", marginBottom:16 }}>
-            <div style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, marginBottom:10 }}>NOUVEAU CODE</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
-              <label style={{ display:"block" }}>
-                <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:3 }}>Code *</span>
-                <input style={inp} value={newPromo.code} onChange={e=>setNewPromo(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="DADA20"/>
-              </label>
-              <label style={{ display:"block" }}>
-                <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:3 }}>Réduction (%) *</span>
-                <input style={inp} type="number" min="1" max="90" value={newPromo.discount} onChange={e=>setNewPromo(p=>({...p,discount:e.target.value}))} placeholder="20"/>
-              </label>
-              <label style={{ display:"block" }}>
-                <span style={{ fontSize:11, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:3 }}>Utilisations max</span>
-                <input style={inp} type="number" value={newPromo.maxUses} onChange={e=>setNewPromo(p=>({...p,maxUses:e.target.value}))} placeholder="100"/>
-              </label>
-            </div>
-            <button onClick={addPromo} style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:9, padding:"8px 16px", cursor:"pointer", fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-              <PlusCircle size={14}/> Créer le code
-            </button>
-          </div>
-          {/* Liste codes */}
-          <div style={{ display:"grid", gap:8 }}>
-            {promos.map(p => (
-              <div key={p.code} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:`1px solid ${p.active ? CA.gold+"44" : bord}`, background: p.active ? `${CA.gold}08` : "none", opacity:p.active?1:.6 }}>
-                <div style={{ fontFamily:"Georgia,serif", fontWeight:700, color:p.active?CA.gold:text, fontSize:15, flex:1 }}>{p.code}</div>
-                <Badge color={p.active ? CA.success : CA.mute}>{p.active ? "Actif" : "Inactif"}</Badge>
-                <span style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>-{p.discount}%</span>
-                <span style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>{p.uses}/{p.maxUses} utilisations</span>
-                <button onClick={() => togglePromo(p.code)} style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color: p.active ? CA.success : CA.mute }}>
-                  {p.active ? <CheckCircle size={13}/> : <X size={13}/>}
-                </button>
-                <button onClick={() => delPromo(p.code)} style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`, background:"none", cursor:"pointer", display:"grid", placeItems:"center", color:CA.danger }}>
-                  <Trash2 size={13}/>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* APPARENCE */}
-      {tab === "apparence" && (
-        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"20px 22px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 16px" }}>🎨 Apparence du site</h3>
-          <label style={{ display:"block", marginBottom:12 }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Titre du hero</span>
-            <input style={inp} value={cfg.heroTitle} onChange={setC("heroTitle")}/>
-          </label>
-          <label style={{ display:"block", marginBottom:12 }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Sous-titre du hero</span>
-            <input style={inp} value={cfg.heroSub} onChange={setC("heroSub")}/>
-          </label>
-          <label style={{ display:"block", marginBottom:12 }}>
-            <span style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:4 }}>Message WhatsApp flottant</span>
-            <textarea style={{ ...inp, resize:"vertical" }} rows={2} value={cfg.waMessage} onChange={setC("waMessage")}/>
-          </label>
-          {/* Prévisualisation hero */}
-          <div style={{ background:CA.ink, borderRadius:12, padding:"20px", marginTop:8, textAlign:"center" }}>
-            <div style={{ fontSize:9, color:CA.gold, letterSpacing:4, marginBottom:8 }}>✦ DADA'S DROP ✦</div>
-            <div style={{ fontFamily:"Georgia,serif", fontSize:18, color:"#fff", marginBottom:6 }}>{cfg.heroTitle}</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,.6)" }}>{cfg.heroSub} {cfg.city}.</div>
-          </div>
-        </div>
-      )}
-
-      {/* Bouton save global */}
-      <button onClick={save} style={{ marginTop:16, background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:11, padding:"12px 22px", cursor:"pointer", fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
-        {saved ? <><CheckCircle size={16}/> Enregistré !</> : <><Save size={16}/> Enregistrer les paramètres</>}
+    <div style={{ minHeight:"60vh", display:"flex", flexDirection:"column",
+      alignItems:"center", justifyContent:"center", padding:32, textAlign:"center" }}>
+      <div style={{ fontFamily:"Georgia,serif", fontSize:80, color:C.gold,
+        lineHeight:1, marginBottom:16 }}>404</div>
+      <h1 style={{ fontFamily:"Georgia,serif", fontSize:24, color:text,
+        margin:"0 0 10px", fontWeight:400 }}>Page introuvable</h1>
+      <p style={{ fontSize:15, color: dark?C.dMute:C.mute,
+        margin:"0 0 28px", maxWidth:340 }}>
+        Cette page n'existe pas ou a été déplacée.
+      </p>
+      <button onClick={() => setPage("home")} style={{ ...primaryBtn, gap:7 }}>
+        <ArrowLeft size={15}/> Retour à l'accueil
       </button>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════
-   🔐 PAGE ADMIN PRINCIPALE
-   ═══════════════════════════════════════ */
-function AdminPage({ products, setProducts, dark, setPage }) {
-  const [auth, setAuth] = useState(null);
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [wrong, setWrong] = useState(false);
-  const [tab, setTab] = useState("overview");
-  const [orders, setOrders] = useState([]);
-  const [users, setUsers] = useState(INIT_USERS);
-  const [notifs, setNotifs] = useState([
-    { id:1, msg:"Nouvelle commande reçue", time:"Il y a 5 min", read:false },
-    { id:2, msg:"Stock Mini Boston Bleu Denim : plus que 2 !", time:"Il y a 2h", read:true },
-  ]);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-
-  const bg = dark ? CA.dBg : CA.cream;
-  const text = dark ? CA.dText : CA.ink;
-  const bord = dark ? CA.dBorder : CA.border;
-  const cardBg = dark ? CA.dCard : CA.card;
-  const unread = notifs.filter(n => !n.read).length;
-
-  // Charger les commandes depuis Supabase
-  useEffect(() => {
-    if (!auth) return;
-    setLoadingOrders(true);
-    sb.get("orders", "?order=date.desc&limit=50")
-      .then(rows => {
-        if (rows && rows.length > 0) setOrders(rows);
-        else {
-          // Fallback démo
-          setOrders([
-            { id:"DD-1001", name:"Awa Traoré",    phone:"70 11 22 33", ville:"Ouagadougou", quartier:"Karpala",     items:["Mini Boston Rose x1"],           total:25000, status:1, payment:"orange",   date:"2025-06-10", assignedTo:null },
-            { id:"DD-1002", name:"Fatou Diallo",  phone:"76 44 55 66", ville:"Ouagadougou", quartier:"Pissy",       items:["Mini Boston Bleu Denim x2"],      total:50000, status:2, payment:"wave",     date:"2025-06-12", assignedTo:3 },
-            { id:"DD-1003", name:"Mariam Koné",   phone:"65 77 88 99", ville:"Ouagadougou", quartier:"Gounghin",    items:["Coach Torry Camel x1","Tabby x1"],total:57000, status:3, payment:"moov",     date:"2025-06-08", assignedTo:null },
-            { id:"DD-1004", name:"Aïcha Sawadogo",phone:"71 00 11 22", ville:"Ouagadougou", quartier:"Wemtenga",    items:["Mini Boston Beige & Blanc x1"],   total:24000, status:1, payment:"livraison",date:"2025-06-15", assignedTo:null },
-            { id:"DD-1005", name:"Roukiatou B.",  phone:"78 33 44 55", ville:"Ouagadougou", quartier:"Zone du Bois",items:["Tabby Coach 8 coloris x1"],       total:35000, status:1, payment:"orange",   date:"2025-06-16", assignedTo:null },
-          ]);
-        }
-      })
-      .catch(e => {
-        console.warn("Supabase orders load:", e.message);
-        setOrders([]);
-      })
-      .finally(() => setLoadingOrders(false));
-  }, [auth]);
-
-  const login = () => {
-    const user = users.find(u => u.email === email && u.active);
-    if (user && pass === "dada2025") { setAuth(user); setWrong(false); }
-    else setWrong(true);
-  };
-  const logout = () => { setAuth(null); setEmail(""); setPass(""); setTab("overview"); };
-  const can = action => {
-    if (!auth) return false;
-    if (auth.role === "admin") return true;
-    if (auth.role === "manager") return ["view_orders","edit_orders","add_product","edit_product","view_stats"].includes(action);
-    if (auth.role === "delivery") return ["view_my_orders","update_delivery"].includes(action);
-    return false;
-  };
-
-  /* ── ÉCRAN CONNEXION ── */
-  if (!auth) return (
-    <div style={{ minHeight:"100vh", background:bg, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div style={{ maxWidth:380, width:"100%", background:cardBg, borderRadius:20, padding:32, boxShadow:"0 24px 56px rgba(0,0,0,.15)", border:`1px solid ${bord}` }}>
-        <div style={{ textAlign:"center", marginBottom:28 }}>
-          <LogoDD size={64}/>
-          <h1 style={{ fontFamily:"Georgia,serif", fontSize:20, color:text, margin:"14px 0 4px" }}>Dada's Drop</h1>
-          <p style={{ fontSize:12.5, color: dark ? CA.dMute : CA.mute, margin:0, letterSpacing:.5 }}>ESPACE ADMINISTRATION</p>
-        </div>
-        <div style={{ marginBottom:12 }}>
-          <label style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:5, letterSpacing:.3 }}>ADRESSE EMAIL</label>
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@dadasdrop.com" type="email"
-            style={{ width:"100%", padding:"11px 13px", borderRadius:10, border:`1.5px solid ${wrong ? "#E05030" : bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}
-            onKeyDown={e => e.key === "Enter" && login()}/>
-        </div>
-        <div style={{ marginBottom:8, position:"relative" }}>
-          <label style={{ fontSize:12, fontWeight:600, color: dark ? CA.dMute : CA.mute, display:"block", marginBottom:5, letterSpacing:.3 }}>MOT DE PASSE</label>
-          <input value={pass} onChange={e => setPass(e.target.value)} type={showPass ? "text" : "password"} placeholder="••••••••"
-            style={{ width:"100%", padding:"11px 40px 11px 13px", borderRadius:10, border:`1.5px solid ${wrong ? "#E05030" : bord}`, background: dark ? CA.dCard : "#fff", fontSize:"16px", color:text, fontFamily:"inherit" }}
-            onKeyDown={e => e.key === "Enter" && login()}/>
-          <button onClick={() => setShowPass(v => !v)} style={{ position:"absolute", right:11, bottom:11, border:"none", background:"none", cursor:"pointer", color: dark ? CA.dMute : CA.mute }}>
-            {showPass ? <EyeOff size={17}/> : <Eye size={17}/>}
-          </button>
-        </div>
-        {wrong && (
-          <div style={{ display:"flex", alignItems:"center", gap:6, color:CA.danger, fontSize:12.5, marginBottom:8 }}>
-            <AlertCircle size={14}/> Email ou mot de passe incorrect.
-          </div>
-        )}
-        <button onClick={login} style={{ width:"100%", padding:"13px", background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`, borderRadius:11, fontWeight:700, fontSize:15, cursor:"pointer", marginTop:8, display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-          <Lock size={16}/> Accéder au tableau de bord
-        </button>
-        <button onClick={() => setPage && setPage("home")} style={{ width:"100%", padding:"10px", background:"none", color: dark ? CA.dMute : CA.mute, border:"none", borderRadius:11, fontWeight:500, fontSize:13, cursor:"pointer", marginTop:8, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-          <ArrowLeft size={14}/> Retour au site
-        </button>
-        <p style={{ textAlign:"center", fontSize:11, color: dark ? CA.dMute : "#bbb", marginTop:16 }}>Accès réservé à l'équipe Dada's Drop</p>
-      </div>
-    </div>
-  );
-
-  /* ── TABLEAU DE BORD ── */
-  const myOrders = auth.role === "delivery" ? orders.filter(o => o.assignedTo === auth.id) : orders;
-  const totalRev = orders.reduce((s, o) => s + (o.total || 0), 0);
-  const pendingOrders = orders.filter(o => o.status === 1).length;
-
-  const tabs = [
-    ...(can("view_stats") ? [{ key:"overview", icon:<BarChart2 size={15}/>, label:"Vue d'ensemble" }] : []),
-    { key:"orders", icon:<ShoppingCart size={15}/>, label: auth.role === "delivery" ? "Mes livraisons" : "Commandes" },
-    ...(can("add_product") ? [{ key:"products", icon:<Grid size={15}/>, label:"Produits" }] : []),
-    ...(auth.role === "admin" ? [{ key:"users", icon:<Users size={15}/>, label:"Équipe" }] : []),
-    ...(auth.role === "admin" ? [{ key:"settings", icon:<Settings size={15}/>, label:"Paramètres" }] : []),
-  ];
-
-  return (
-    <div style={{ minHeight:"100vh", background:bg, fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
-      {/* TOPBAR */}
-      <header style={{ background:CA.ink, borderBottom:`1px solid ${CA.gold}33`, padding:"0 12px", height:56, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:50 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
-          <LogoDD size={32}/>
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontFamily:"Georgia,serif", fontSize:13, fontWeight:700, color:"#fff", letterSpacing:.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>DADA'S DROP</div>
-            <div style={{ fontSize:9, color:CA.gold, letterSpacing:1.5 }}>ADMINISTRATION</div>
-          </div>
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-          <div style={{ position:"relative" }}>
-            <button onClick={() => setNotifOpen(v => !v)} style={{ border:"none", background:"none", cursor:"pointer", color:"#fff", position:"relative", padding:4 }}>
-              <Bell size={19}/>
-              {unread > 0 && <span style={{ position:"absolute", top:-2, right:-2, background:CA.danger, color:"#fff", fontSize:9, fontWeight:800, width:16, height:16, borderRadius:999, display:"grid", placeItems:"center" }}>{unread}</span>}
-            </button>
-            {notifOpen && (
-              <div style={{ position:"absolute", right:0, top:36, width:"min(300px, 90vw)", background:cardBg, border:`1px solid ${bord}`, borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.2)", zIndex:100 }}>
-                <div style={{ padding:"12px 14px", borderBottom:`1px solid ${bord}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontWeight:700, fontSize:13.5, color:text }}>Notifications</span>
-                  <button onClick={() => { setNotifs(n => n.map(x => ({ ...x, read:true }))); setNotifOpen(false); }} style={{ border:"none", background:"none", cursor:"pointer", color:CA.mute, fontSize:11.5 }}>Tout lire</button>
-                </div>
-                {notifs.map(n => (
-                  <div key={n.id} style={{ padding:"10px 14px", borderBottom:`1px solid ${bord}`, background: n.read ? "transparent" : `${CA.gold}0A` }}>
-                    <div style={{ fontSize:13, color:text, fontWeight: n.read ? 400 : 600 }}>{n.msg}</div>
-                    <div style={{ fontSize:11, color:CA.mute, marginTop:2 }}>{n.time}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:12, color:"#fff", fontWeight:600, whiteSpace:"nowrap" }}>{auth.name.split(" ")[0]}</div>
-            <div style={{ fontSize:9.5, color:CA.gold, whiteSpace:"nowrap" }}>{ROLES[auth.role].badge} {ROLES[auth.role].label}</div>
-          </div>
-          <button onClick={logout} title="Déconnexion" style={{ border:`1px solid ${CA.gold}44`, background:"none", borderRadius:8, padding:"7px 10px", cursor:"pointer", color:CA.gold, fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-            <LogOut size={14}/>
-          </button>
-        </div>
-      </header>
-
-      <div style={{ maxWidth:1100, margin:"0 auto", padding:"20px 16px 48px" }}>
-        {/* TABS */}
-        <div style={{ display:"flex", gap:6, marginBottom:22, flexWrap:"wrap" }}>
-          {tabs.map(tb => (
-            <button key={tb.key} onClick={() => setTab(tb.key)} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 15px", borderRadius:9, border:`1.5px solid ${tab===tb.key ? CA.gold : bord}`, background: tab===tb.key ? CA.ink : cardBg, color: tab===tb.key ? CA.gold : text, cursor:"pointer", fontSize:13, fontWeight:600 }}>
-              {tb.icon} {tb.label}
-            </button>
-          ))}
-        </div>
-
-        {/* VUE D'ENSEMBLE */}
-        {tab === "overview" && (
-          <div>
-            {pendingOrders > 0 && (
-              <div style={{ background:`${CA.warning}15`, border:`1px solid ${CA.warning}44`, borderRadius:12, padding:"12px 16px", marginBottom:18, display:"flex", alignItems:"center", gap:10 }}>
-                <AlertCircle size={18} color={CA.warning}/>
-                <span style={{ fontSize:13.5, color:text, fontWeight:600 }}>{pendingOrders} commande{pendingOrders > 1 ? "s" : ""} en attente de traitement</span>
-                <button onClick={() => setTab("orders")} style={{ marginLeft:"auto", background:CA.warning, color:"#fff", border:"none", borderRadius:7, padding:"5px 12px", cursor:"pointer", fontSize:12.5, fontWeight:700 }}>Voir</button>
-              </div>
-            )}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:24 }}>
-              <StatCard icon={<ShoppingCart size={20} color={CA.gold}/>} value={orders.length} label="Commandes totales" color={CA.gold} dark={dark}/>
-              <StatCard icon={<TrendingUp size={20} color={CA.success}/>} value={fcfa_a(totalRev)} label="Revenus totaux" color={CA.success} dark={dark}/>
-              <StatCard icon={<Grid size={20} color="#1DC0D4"/>} value={products.length} label="Articles en catalogue" color="#1DC0D4" dark={dark}/>
-              <StatCard icon={<Package size={20} color={CA.warning}/>} value={pendingOrders} label="En attente" color={CA.warning} dark={dark}/>
-            </div>
-            {loadingOrders ? (
-              <div style={{ textAlign:"center", padding:32, color:text }}>Chargement des commandes…</div>
-            ) : (
-              <>
-                <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"16px 18px", marginBottom:18 }}>
-                  <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>Commandes récentes</h3>
-                  {orders.slice(0, 5).map((o, i) => (
-                    <div key={o.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0", borderBottom: i < 4 ? `1px solid ${bord}` : "none" }}>
-                      <div>
-                        <div style={{ fontWeight:600, fontSize:13.5, color:text }}>#{o.id} — {o.name}</div>
-                        <div style={{ fontSize:12, color: dark ? CA.dMute : CA.mute }}>{(o.items || []).join(", ")} · {o.date}</div>
-                      </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <Badge color={STATUS_COLORS[o.status]}>{STATUS_LABELS[o.status]}</Badge>
-                        <span style={{ fontFamily:"Georgia,serif", fontWeight:700, color:CA.gold, fontSize:13.5 }}>{fcfa_a(o.total)}</span>
-                      </div>
-                    </div>
-                  ))}
-                  {orders.length === 0 && <p style={{ color: dark ? CA.dMute : CA.mute, fontSize:13.5 }}>Aucune commande pour l'instant.</p>}
-                </div>
-                <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"16px 18px" }}>
-                  <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>⚠️ Stock faible</h3>
-                  {products.filter(p => p.stock <= 2).length === 0 ? (
-                    <p style={{ color: dark ? CA.dMute : CA.mute, fontSize:13.5 }}>Tous les stocks sont corrects ✅</p>
-                  ) : products.filter(p => p.stock <= 2).map((p, i) => (
-                    <div key={p.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${bord}` }}>
-                      <span style={{ fontSize:13.5, color:text }}>{p.name}</span>
-                      <Badge color={p.stock === 0 ? CA.danger : CA.warning}>{p.stock === 0 ? "Épuisé" : `${p.stock} restant${p.stock > 1 ? "s" : ""}`}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {tab === "orders" && <OrdersTab orders={myOrders} setOrders={setOrders} users={users} auth={auth} dark={dark} text={text} bord={bord} cardBg={cardBg}/>}
-        {tab === "products" && can("add_product") && <ProductsTab products={products} setProducts={setProducts} dark={dark} text={text} bord={bord} cardBg={cardBg}/>}
-        {tab === "users" && auth.role === "admin" && <UsersTab users={users} setUsers={setUsers} dark={dark} text={text} bord={bord} cardBg={cardBg}/>}
-        {tab === "settings" && auth.role === "admin" && <SettingsTab dark={dark} text={text} bord={bord} cardBg={cardBg}/>}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════
-   🚀 APP PRINCIPALE
-   ═══════════════════════════════════════ */
-function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" }) {
+/* ════════════════════════════════════════════
+   🛍 SHOP APP
+════════════════════════════════════════════ */
+function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home" }) {
   const [lang, setLang]         = useState("fr");
   const [page, setPage]         = useState(initialPage);
   const [query, setQuery]       = useState("");
@@ -1963,10 +1602,8 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
   const [inStock, setInStock]   = useState(false);
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
-  const [loadingProducts]       = useState(false);
-  const [siteConfig, setSiteConfig] = useState(null); // config depuis admin
-  const [cart, setCart] = useState(() => {
-    try { const s = localStorage.getItem("dd_cart"); return s ? JSON.parse(s) : []; } catch { return []; }
+  const [cart, setCart]         = useState(() => {
+    try { const s = localStorage.getItem("dd_cart"); return s?JSON.parse(s):[]; } catch { return []; }
   });
   const [selected, setSelected]   = useState(null);
   const [cartOpen, setCartOpen]   = useState(false);
@@ -1976,100 +1613,114 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
   const [searchOpen, setSearchOpen] = useState(false);
   const [mounted, setMounted]     = useState(false);
 
-  // Charger config site depuis Supabase
-  useEffect(() => {
-    sb.get("announcements", "?id=eq.config&select=data")
-      .then(rows => { if (rows?.[0]?.data) setSiteConfig(rows[0].data); })
-      .catch(() => {});
-  }, []);
-
-  // Produits visibles (pas masqués), épinglés en premier
-  const visibleProducts = useMemo(() => {
-    const visible = products.filter(p => !p.isHidden);
-    const pinned  = visible.filter(p => p.isPinned);
-    const rest    = visible.filter(p => !p.isPinned);
-    return [...pinned, ...rest];
-  }, [products]);
-
-  // Sauvegarder panier
+  useEffect(() => { setTimeout(() => setMounted(true), 80); }, []);
   useEffect(() => {
     try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
   }, [cart]);
-
-  useEffect(() => { const id = setTimeout(() => setMounted(true), 80); return () => clearTimeout(id); }, []);
-
   useEffect(() => {
-    const isOpen = menuOpen || cartOpen || checkout || trackOpen || !!selected;
-    document.body.style.overflow = isOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen, cartOpen, checkout, trackOpen, selected]);
+    const isOpen = menuOpen||cartOpen||checkout||trackOpen||!!selected;
+    document.body.style.overflow = isOpen?"hidden":"";
+    return () => { document.body.style.overflow=""; };
+  }, [menuOpen,cartOpen,checkout,trackOpen,selected]);
 
   const t    = T[lang];
-  const CATS = lang === "fr" ? CATS_FR : CATS_EN;
+  const bord = dark ? C.dBorder : C.border;
+  const text = dark ? C.dText : C.ink;
+  const bg   = dark ? C.dBg : C.cream;
+  const hdrBg = dark ? "rgba(15,12,8,.92)" : "rgba(250,246,238,.92)";
+
+  // Produits visibles : épinglés en premier, masqués filtrés
+  const visibleProducts = useMemo(() => {
+    const v = products.filter(p => !p.isHidden);
+    return [...v.filter(p=>p.isPinned), ...v.filter(p=>!p.isPinned)];
+  }, [products]);
 
   const list = useMemo(() => {
     let r = visibleProducts.filter(p => {
       if (query.trim()) {
-        if (inStock && p.stock === 0) return false;
+        if (inStock && p.stock===0) return false;
         const q = query.toLowerCase().trim();
         return (
-          (p.name || "").toLowerCase().includes(q) ||
-          (p.nameEn || "").toLowerCase().includes(q) ||
-          (p.brand || "").toLowerCase().includes(q) ||
-          (p.cat || "").toLowerCase().includes(q) ||
-          (p.catEn || "").toLowerCase().includes(q) ||
-          (p.desc || "").toLowerCase().includes(q) ||
-          String(p.price).includes(q)
+          (p.name||"").toLowerCase().includes(q) ||
+          (p.brand||"").toLowerCase().includes(q) ||
+          (p.cat||"").toLowerCase().includes(q) ||
+          (p.desc||"").toLowerCase().includes(q) ||
+          String(p.price).includes(q) ||
+          (p.variants||[]).some(v=>v.label.toLowerCase().includes(q))
         );
       }
-      if (cat > 0) { const cn = lang === "fr" ? p.cat : p.catEn; if (cn !== CATS[cat]) return false; }
-      if (inStock && p.stock === 0) return false;
-      if (minPrice !== "" && p.price < parseInt(minPrice)) return false;
-      if (maxPrice !== "" && p.price > parseInt(maxPrice)) return false;
+      if (cat && cat!=="all") {
+        if (p.cat !== cat) return false;
+        const catObj = cats.find(c=>c.id===cat);
+        if (catObj?.soon) return false;
+      }
+      if (inStock && p.stock===0) return false;
+      if (minPrice!=="" && p.price<parseInt(minPrice)) return false;
+      if (maxPrice!=="" && p.price>parseInt(maxPrice)) return false;
       return true;
     });
-    if (sort === "asc")  r = [...r].sort((a, b) => a.price - b.price);
-    if (sort === "desc") r = [...r].sort((a, b) => b.price - a.price);
+    if (sort==="asc")  r = [...r].sort((a,b)=>a.price-b.price);
+    if (sort==="desc") r = [...r].sort((a,b)=>b.price-a.price);
     return r;
-  }, [query, cat, sort, inStock, lang, visibleProducts, minPrice, maxPrice, CATS]);
+  }, [query,cat,sort,inStock,visibleProducts,minPrice,maxPrice,cats]);
 
-  const bestSellers = visibleProducts.filter(p => p.isBest && p.stock > 0).slice(0, 4);
+  const bestSellers = visibleProducts.filter(p=>p.isBest&&p.stock>0).slice(0,4);
 
-  const addToCart = useCallback((p, qty = 1) => {
-    setCart(c => { const ex = c.find(i => i.id === p.id); if (ex) return c.map(i => i.id === p.id ? { ...i, qty:Math.min(p.stock, i.qty + qty) } : i); return [...c, { id:p.id, qty }]; });
+  const addToCart = useCallback((p, qty=1, variant=null) => {
+    setCart(c => {
+      const key = `${p.id}-${variant?.label||""}`;
+      const ex  = c.find(i => `${i.id}-${i.variant?.label||""}` === key);
+      if (ex) return c.map(i =>
+        `${i.id}-${i.variant?.label||""}` === key
+          ? { ...i, qty:Math.min(p.stock, i.qty+qty) } : i
+      );
+      return [...c, { id:p.id, qty, variant }];
+    });
     setCartOpen(true);
   }, []);
-  const setQty = (id, qty) => setCart(c => qty <= 0 ? c.filter(i => i.id !== id) : c.map(i => i.id === id ? { ...i, qty } : i));
-  const removeItem = id => setCart(c => c.filter(i => i.id !== id));
-  const lines = cart.map(it => ({ ...products.find(p => p.id === it.id), qty:it.qty })).filter(l => l.id);
-  const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
-  const count = cart.reduce((s, i) => s + i.qty, 0);
 
-  const bg = dark ? C.dBg : C.cream;
-  const text = dark ? C.dText : C.ink;
-  const bord = dark ? C.dBorder : C.border;
-  const hdrBg = dark ? "rgba(15,12,8,.92)" : "rgba(250,246,238,.92)";
+  const setQty = (id, qty, variant) => setCart(c => {
+    const key = `${id}-${variant?.label||""}`;
+    return qty<=0
+      ? c.filter(i=>`${i.id}-${i.variant?.label||""}`!==key)
+      : c.map(i=>`${i.id}-${i.variant?.label||""}`===key?{...i,qty}:i);
+  });
+  const removeItem = (id, variant) => setCart(c =>
+    c.filter(i=>`${i.id}-${i.variant?.label||""}`!==`${id}-${variant?.label||""}`)
+  );
 
-  if (page === "admin") return <AdminPage products={products} setProducts={setProducts} dark={dark} setPage={setPage}/>;
+  const lines = cart.map(it => {
+    const p = products.find(x=>x.id===it.id);
+    return p ? { ...p, qty:it.qty, variant:it.variant } : null;
+  }).filter(Boolean);
+  const total = lines.reduce((s,l) => {
+    const price = l.discount>0?Math.round(l.price*(1-l.discount/100)):l.price;
+    return s + price*l.qty;
+  }, 0);
+  const count = cart.reduce((s,i)=>s+i.qty,0);
+
+  // Catégorie sélectionnée
+  const selectedCat = cats.find(c=>c.id===cat);
+  const heroTitle = cfg?.heroTitle || DEFAULT_CFG.heroTitle;
+  const heroSub   = cfg?.heroSub   || DEFAULT_CFG.heroSub;
+  const waMsg     = cfg?.waMessage || DEFAULT_CFG.waMessage;
+  const whatsapp  = cfg?.whatsapp  || DEFAULT_CFG.whatsapp;
 
   return (
-    <div style={{ background:bg, minHeight:"100vh", color:text, fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+    <div style={{ background:bg, minHeight:"100vh", color:text,
+      fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
       <style>{`
         *{box-sizing:border-box}
-        input,textarea,select{font-family:inherit;font-size:16px}
+        input,textarea,select{font-family:inherit}
+        @supports(-webkit-touch-callout:none){input,textarea,select{font-size:16px!important}}
         input:focus,textarea:focus,select:focus{outline:none;border-color:${C.gold}!important}
-        /* Empêche le zoom auto sur iOS quand on tape dans un input
-           sans bloquer le pinch-to-zoom manuel des clientes */
-        @supports (-webkit-touch-callout: none) {
-          input, textarea, select { font-size: 16px !important; }
-        }
         .dd-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.12);transform:translateY(-2px)!important}
         @keyframes ddFade{from{opacity:0}to{opacity:1}}
         @keyframes ddHero{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         .dd-lang-btn{display:inline-flex}
         @media(max-width:600px){
           .dd-grid{grid-template-columns:repeat(2,1fr)!important}
-          .dd-hero-title{font-size:28px!important}
+          .dd-hero-title{font-size:26px!important}
           .dd-lang-btn{display:none!important}
         }
         body.filter-open{overflow:hidden!important;touch-action:none}
@@ -2077,93 +1728,149 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
         ::-webkit-scrollbar-thumb{background:${C.gold}44;border-radius:99px}
       `}</style>
 
+      {/* ── BANNIÈRE ── */}
+      {cfg?.bannerActive && cfg?.bannerText && (
+        <div style={{ background:cfg.bannerColor||C.gold,
+          color: cfg.bannerColor===C.ink?"#fff":C.ink,
+          padding:"9px 16px", fontSize:13, fontWeight:700,
+          textAlign:"center", letterSpacing:.3 }}>
+          {cfg.bannerText}
+        </div>
+      )}
+
       {/* ── HEADER ── */}
-      <header style={{ position:"sticky", top:0, zIndex:50, background:hdrBg, backdropFilter:"blur(14px)", borderBottom:`1px solid ${bord}` }}>
-        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 16px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:16, flex:1 }}>
-            <button onClick={() => setMenuOpen(true)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
-              <Menu size={18}/>
+      <header style={{ position:"sticky", top:0, zIndex:50,
+        background:hdrBg, backdropFilter:"blur(14px)",
+        borderBottom:`1px solid ${bord}` }}>
+        <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 16px",
+          height:58, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          {/* Gauche */}
+          <div style={{ display:"flex", alignItems:"center", gap:12, flex:1 }}>
+            <button onClick={() => setMenuOpen(true)}
+              style={{ border:"none", background:"none", cursor:"pointer", color:text, padding:4 }}>
+              <Menu size={20}/>
             </button>
-            <button onClick={() => setSearchOpen(v => !v)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
-              <Search size={17}/>
+            <button onClick={() => setSearchOpen(v=>!v)}
+              style={{ border:"none", background:"none", cursor:"pointer", color:text, padding:4 }}>
+              <Search size={18}/>
             </button>
           </div>
-          <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", display:"flex", flexDirection:"column", alignItems:"center", cursor:"pointer" }} onClick={() => setPage("home")}>
-            <span style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, color:text, letterSpacing:3, lineHeight:1, whiteSpace:"nowrap" }}>DADA'S DROP</span>
-            <span style={{ fontSize:8, color:C.gold, letterSpacing:4, marginTop:1, whiteSpace:"nowrap" }}>✦ COLLECTION PREMIUM ✦</span>
+          {/* Centre logo */}
+          <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)",
+            display:"flex", flexDirection:"column", alignItems:"center",
+            cursor:"pointer", userSelect:"none" }}
+            onClick={() => setPage("home")}>
+            <span style={{ fontFamily:"Georgia,serif", fontSize:17, fontWeight:700,
+              color:text, letterSpacing:3, lineHeight:1, whiteSpace:"nowrap" }}>
+              DADA'S DROP
+            </span>
+            <span style={{ fontSize:7.5, color:C.gold, letterSpacing:3.5,
+              marginTop:1, whiteSpace:"nowrap" }}>
+              ✦ COLLECTION PREMIUM ✦
+            </span>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8, flex:1, justifyContent:"flex-end" }}>
-            <button onClick={() => setLang(l => l === "fr" ? "en" : "fr")} className="dd-lang-btn" style={{ border:`1px solid ${bord}`, background: dark ? C.dCard : "#fff", borderRadius:7, padding:"5px 9px", cursor:"pointer", color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5 }}>
+          {/* Droite */}
+          <div style={{ display:"flex", alignItems:"center", gap:8,
+            flex:1, justifyContent:"flex-end" }}>
+            <button className="dd-lang-btn"
+              onClick={() => setLang(l=>l==="fr"?"en":"fr")}
+              style={{ border:`1px solid ${bord}`, background: dark?C.dCard:"#fff",
+                borderRadius:7, padding:"5px 9px", cursor:"pointer",
+                color:text, fontSize:11.5, fontWeight:700, letterSpacing:.5 }}>
               {t.lang}
             </button>
-            <button onClick={() => setDark(v => !v)} style={{ border:"none", background:"none", cursor:"pointer", color:text }}>
-              {dark ? <Sun size={17}/> : <Moon size={17}/>}
+            <button onClick={() => setDark(v=>!v)}
+              style={{ border:"none", background:"none", cursor:"pointer", color:text, padding:4 }}>
+              {dark?<Sun size={18}/>:<Moon size={18}/>}
             </button>
-            <button onClick={() => setCartOpen(true)} style={{ position:"relative", border:"none", background:"none", cursor:"pointer", color:text }}>
-              <ShoppingBag size={19}/>
-              {count > 0 && <span style={{ position:"absolute", top:-7, right:-7, background:C.ink, color:C.gold, fontSize:9.5, fontWeight:800, minWidth:17, height:17, borderRadius:999, display:"grid", placeItems:"center", padding:"0 3px", border:`1.5px solid ${C.gold}` }}>{count}</span>}
+            <button onClick={() => setCartOpen(true)}
+              style={{ position:"relative", border:"none", background:"none",
+                cursor:"pointer", color:text, padding:4 }}>
+              <ShoppingBag size={20}/>
+              {count>0 && <span style={{ position:"absolute", top:-6, right:-6,
+                background:C.ink, color:C.gold, fontSize:9.5, fontWeight:800,
+                minWidth:17, height:17, borderRadius:999,
+                display:"grid", placeItems:"center", padding:"0 3px",
+                border:`1.5px solid ${C.gold}` }}>{count}</span>}
             </button>
           </div>
         </div>
+
+        {/* Barre recherche avec autocomplétion */}
         {searchOpen && (
           <div style={{ borderTop:`1px solid ${bord}`, padding:"10px 16px", background:hdrBg }}>
             <div style={{ maxWidth:600, margin:"0 auto", position:"relative" }}>
-              <Search size={15} color={dark ? C.dMute : C.mute} style={{ position:"absolute", left:11, top:14, zIndex:1 }}/>
+              <Search size={15} color={dark?C.dMute:C.mute}
+                style={{ position:"absolute", left:11, top:14, zIndex:1 }}/>
               <input autoFocus value={query}
                 onChange={e => { setQuery(e.target.value); setPage("catalogue"); setCat(0); }}
-                onKeyDown={e => { if (e.key === "Escape") { setQuery(""); setSearchOpen(false); } }}
+                onKeyDown={e => e.key==="Escape"&&(setQuery("")||setSearchOpen(false))}
                 placeholder={t.search}
-                style={{ width:"100%", padding:"9px 36px 9px 34px", borderRadius: query && products.some(p => p.name.toLowerCase().includes(query.toLowerCase()) && query.trim().length > 0) ? "8px 8px 0 0" : 8, border:`1px solid ${bord}`, background: dark ? C.dCard : "#fff", fontSize:"16px", color:text }}/>
-              {query && (
-                <button onClick={() => { setQuery(""); setSearchOpen(false); }}
-                  style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", border:"none", background:"none", cursor:"pointer", color: dark ? C.dMute : C.mute }}>
-                  <X size={15}/>
-                </button>
-              )}
-              {/* Suggestions autocomplétion */}
-              {query.trim().length >= 1 && (() => {
+                style={{ width:"100%", padding:"9px 36px 9px 34px",
+                  borderRadius: query&&visibleProducts.some(p=>p.name.toLowerCase().includes(query.toLowerCase())&&query.trim())
+                    ? "8px 8px 0 0" : 8,
+                  border:`1px solid ${bord}`,
+                  background: dark?C.dCard:"#fff",
+                  fontSize:"16px", color:text }}/>
+              {query && <button onClick={() => { setQuery(""); setSearchOpen(false); }}
+                style={{ position:"absolute", right:8, top:"50%",
+                  transform:"translateY(-50%)", border:"none",
+                  background:"none", cursor:"pointer", color: dark?C.dMute:C.mute }}>
+                <X size={15}/>
+              </button>}
+              {/* Suggestions */}
+              {query.trim().length>=1 && (() => {
                 const q = query.toLowerCase().trim();
-                const suggestions = products.filter(p =>
-                  p.name.toLowerCase().includes(q) ||
-                  (p.brand || "").toLowerCase().includes(q) ||
-                  (p.cat || "").toLowerCase().includes(q)
-                ).slice(0, 6);
-                if (suggestions.length === 0) return null;
+                const sugg = visibleProducts.filter(p =>
+                  p.name.toLowerCase().includes(q)||
+                  (p.brand||"").toLowerCase().includes(q)||
+                  (p.variants||[]).some(v=>v.label.toLowerCase().includes(q))
+                ).slice(0,6);
+                if (!sugg.length) return null;
                 return (
-                  <div style={{ position:"absolute", top:"100%", left:0, right:0, background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderTop:"none", borderRadius:"0 0 10px 10px", zIndex:200, boxShadow:"0 8px 24px rgba(0,0,0,.12)", overflow:"hidden" }}>
-                    {suggestions.map((p, i) => (
-                      <button key={p.id} onClick={() => {
-                        setQuery(p.name);
-                        setPage("catalogue");
-                        setCat(0);
-                        setSearchOpen(false);
-                      }}
-                        style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 14px", border:"none", borderBottom: i < suggestions.length - 1 ? `1px solid ${dark ? C.dBorder : C.border}` : "none", background:"none", cursor:"pointer", textAlign:"left" }}
-                        onMouseEnter={e => e.currentTarget.style.background = dark ? C.dBorder : C.creamD}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                        {/* Mini vignette */}
-                        <div style={{ width:32, height:32, borderRadius:6, overflow:"hidden", flexShrink:0, background: p.accent ? `linear-gradient(135deg,${p.accent[0]},${p.accent[1]})` : "#eee" }}>
-                          {p.imgs?.[0] && <img src={p.imgs[0]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>}
+                  <div style={{ position:"absolute", top:"100%", left:0, right:0,
+                    background: dark?C.dCard:"#fff",
+                    border:`1px solid ${bord}`, borderTop:"none",
+                    borderRadius:"0 0 10px 10px", zIndex:200,
+                    boxShadow:"0 8px 24px rgba(0,0,0,.12)", overflow:"hidden" }}>
+                    {sugg.map((p,i) => (
+                      <button key={p.id}
+                        onClick={() => { setQuery(p.name); setPage("catalogue"); setCat(0); setSearchOpen(false); }}
+                        style={{ width:"100%", display:"flex", alignItems:"center",
+                          gap:10, padding:"9px 14px", border:"none",
+                          borderBottom:i<sugg.length-1?`1px solid ${dark?C.dBorder:C.border}`:"none",
+                          background:"none", cursor:"pointer", textAlign:"left" }}
+                        onMouseEnter={e=>e.currentTarget.style.background=dark?C.dBorder:C.creamD}
+                        onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                        <div style={{ width:32, height:32, borderRadius:6,
+                          overflow:"hidden", flexShrink:0 }}>
+                          <Thumb p={p}/>
                         </div>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontSize:13, fontWeight:600, color: dark ? C.dText : C.ink, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                            {/* Highlight la partie tapée */}
-                            {p.name.split(new RegExp(`(${query.trim()})`, "gi")).map((part, j) =>
-                              part.toLowerCase() === q
+                          <div style={{ fontSize:13, fontWeight:600, color:text,
+                            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                            {p.name.split(new RegExp(`(${query.trim()})`, "gi")).map((part,j) =>
+                              part.toLowerCase()===q
                                 ? <span key={j} style={{ color:C.gold }}>{part}</span>
                                 : part
                             )}
                           </div>
-                          <div style={{ fontSize:11, color: dark ? C.dMute : C.mute }}>{p.brand} · {fcfa(p.price)}</div>
+                          <div style={{ fontSize:11, color: dark?C.dMute:C.mute }}>
+                            {p.brand} · {fcfa(p.discount>0?Math.round(p.price*(1-p.discount/100)):p.price)}
+                          </div>
                         </div>
-                        {p.stock === 0
-                          ? <span style={{ fontSize:10, color:C.danger, fontWeight:600 }}>Épuisé</span>
-                          : <span style={{ fontSize:10, color:C.success, fontWeight:600 }}>En stock</span>}
+                        <span style={{ fontSize:10, fontWeight:600,
+                          color: p.stock===0?C.danger:C.success }}>
+                          {p.stock===0?"Épuisé":"En stock"}
+                        </span>
                       </button>
                     ))}
-                    {/* Voir tous les résultats */}
                     <button onClick={() => { setPage("catalogue"); setCat(0); setSearchOpen(false); }}
-                      style={{ width:"100%", padding:"9px 14px", border:"none", background: dark ? `${C.gold}11` : `${C.gold}0A`, cursor:"pointer", color:C.gold, fontSize:12.5, fontWeight:700, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+                      style={{ width:"100%", padding:"9px 14px", border:"none",
+                        background: dark?`${C.gold}11`:`${C.gold}0A`,
+                        cursor:"pointer", color:C.gold, fontSize:12.5, fontWeight:700,
+                        textAlign:"center", display:"flex", alignItems:"center",
+                        justifyContent:"center", gap:5 }}>
                       <Search size={13}/> Voir tous les résultats pour "{query}"
                     </button>
                   </div>
@@ -2174,201 +1881,1946 @@ function ShopApp({ products, setProducts, dark, setDark, initialPage = "home" })
         )}
       </header>
 
-      {/* ── BANNIÈRE ADMIN ── */}
-      {siteConfig?.bannerActive && siteConfig?.bannerText && (
-        <div style={{ background:siteConfig.bannerColor||CA.gold, color: siteConfig.bannerColor===CA.ink?"#fff":CA.ink, padding:"9px 16px", fontSize:13, fontWeight:700, textAlign:"center", letterSpacing:.3, zIndex:49 }}>
-          {siteConfig.bannerText}
-        </div>
-      )}
-
       {/* ── PAGES ── */}
-      {page === "home" && (
-        <>
-          {/* HERO */}
-          <section style={{ maxWidth:1200, margin:"0 auto", padding:"24px 16px 0", animation:"ddHero .7s ease both" }}>
-            <div style={{ borderRadius:20, overflow:"hidden", position:"relative", background:C.ink, minHeight:380, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <div style={{ position:"absolute", inset:0, background:"linear-gradient(135deg, #1A1510 0%, #2A2015 50%, #1A1008 100%)" }}/>
-              <div style={{ position:"relative", zIndex:1, textAlign:"center", padding:"48px 24px", color:"#fff" }}>
-                <span style={{ fontSize:10, color:C.gold, letterSpacing:5, fontWeight:600, display:"block", marginBottom:16 }}>✦ DADA'S DROP ✦</span>
-                <h1 className="dd-hero-title" style={{ fontFamily:"Georgia,serif", fontSize:42, fontWeight:400, lineHeight:1.15, margin:"0 0 14px", letterSpacing:.5, maxWidth:560 }}>
-                  {siteConfig?.heroTitle || t.heroTitle}
-                </h1>
-                <p style={{ fontSize:15, color:"rgba(255,255,255,.7)", maxWidth:400, margin:"0 auto 28px", lineHeight:1.6 }}>
-                  {siteConfig?.heroSub || t.heroSub} {siteConfig?.city || CFG.city}.
-                </p>
-                <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
-                  <button onClick={() => setPage("catalogue")} style={{ display:"inline-flex", alignItems:"center", gap:7, background:C.gold, color:C.ink, border:"none", borderRadius:8, padding:"12px 22px", fontWeight:700, fontSize:14, cursor:"pointer" }}>
-                    {t.discover} <ArrowRight size={16}/>
-                  </button>
-                  <button onClick={() => setTrackOpen(true)} style={{ display:"inline-flex", alignItems:"center", gap:7, background:"transparent", color:"rgba(255,255,255,.8)", border:"1px solid rgba(201,168,76,.4)", borderRadius:8, padding:"12px 20px", fontWeight:600, fontSize:14, cursor:"pointer" }}>
-                    <Package size={16}/> {t.trackOrder}
-                  </button>
-                </div>
+      {page==="home" && (<>
+        {/* HERO */}
+        <section style={{ maxWidth:1200, margin:"0 auto", padding:"20px 16px 0",
+          animation:"ddHero .7s ease both" }}>
+          <div style={{ borderRadius:20, overflow:"hidden", position:"relative",
+            background:C.ink, minHeight:360,
+            display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <div style={{ position:"absolute", inset:0,
+              background:"linear-gradient(135deg,#1A1510,#2A2015,#1A1008)" }}/>
+            <div style={{ position:"relative", zIndex:1, textAlign:"center",
+              padding:"48px 20px", color:"#fff" }}>
+              <span style={{ fontSize:10, color:C.gold, letterSpacing:5,
+                fontWeight:600, display:"block", marginBottom:16 }}>
+                ✦ DADA'S DROP ✦
+              </span>
+              <h1 className="dd-hero-title"
+                style={{ fontFamily:"Georgia,serif", fontSize:40, fontWeight:400,
+                  lineHeight:1.2, margin:"0 0 14px", maxWidth:540 }}>
+                {heroTitle}
+              </h1>
+              <p style={{ fontSize:15, color:"rgba(255,255,255,.7)",
+                maxWidth:380, margin:"0 auto 28px", lineHeight:1.6 }}>
+                {heroSub} {cfg?.city||DEFAULT_CFG.city}.
+              </p>
+              <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+                <button onClick={() => setPage("catalogue")}
+                  style={{ display:"inline-flex", alignItems:"center", gap:7,
+                    background:C.gold, color:C.ink, border:"none",
+                    borderRadius:10, padding:"12px 22px", fontWeight:700,
+                    fontSize:14, cursor:"pointer" }}>
+                  {t.discover} <ArrowRight size={16}/>
+                </button>
+                <button onClick={() => setTrackOpen(true)}
+                  style={{ display:"inline-flex", alignItems:"center", gap:7,
+                    background:"transparent", color:"rgba(255,255,255,.8)",
+                    border:"1px solid rgba(201,168,76,.4)", borderRadius:10,
+                    padding:"12px 20px", fontWeight:600, fontSize:14, cursor:"pointer" }}>
+                  <Package size={16}/> {t.trackOrder}
+                </button>
               </div>
             </div>
-          </section>
-
-          {/* SÉLECTION */}
-          <section style={{ maxWidth:1200, margin:"0 auto", padding:"36px 16px 0" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
-              <div style={{ width:2.5, height:18, background:GRAD, borderRadius:99 }}/>
-              <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:0, fontWeight:400 }}>{t.bestSeller}</h2>
-            </div>
-            {loadingProducts ? (
-              <div style={{ textAlign:"center", padding:32, color:text }}>Chargement…</div>
-            ) : (
-              <div className="dd-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
-                {bestSellers.map((p, i) => <ProductCard key={p.id} p={p} t={t} idx={i} mounted={mounted} dark={dark} onOpen={setSelected} onAdd={addToCart}/>)}
-              </div>
-            )}
-            <div style={{ textAlign:"center", marginTop:24 }}>
-              <button onClick={() => setPage("catalogue")} style={{ ...primaryBtn, gap:7 }}>{t.catalogue} <ArrowRight size={14}/></button>
-            </div>
-          </section>
-
-          {/* AVANTAGES */}
-          <section style={{ maxWidth:1200, margin:"36px auto 0", padding:"0 16px 36px" }}>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10 }}>
-              {[
-                { icon:<Truck size={18} color={C.gold}/>,         label:"Livraison Ouagadougou", sub:"Rapide et soigné" },
-                { icon:<Smartphone size={18} color={C.gold}/>,    label:"Mobile Money",           sub:"Orange · Moov · Wave" },
-                { icon:<ShieldCheck size={18} color={C.gold}/>,   label:"Sélection Dada",         sub:"Chaque pièce choisie" },
-                { icon:<MessageCircle size={18} color="#25D366"/>, label:"Commande WhatsApp",      sub:"Réponse rapide" },
-              ].map((f, i) => (
-                <div key={i} style={{ background: dark ? C.dCard : "#fff", border:`1px solid ${bord}`, borderRadius:12, padding:"14px 15px" }}>
-                  <div style={{ width:36, height:36, borderRadius:9, background: dark ? C.dBorder : C.creamD, display:"grid", placeItems:"center", marginBottom:9 }}>{f.icon}</div>
-                  <div style={{ fontFamily:"Georgia,serif", fontSize:13.5, color:text, marginBottom:2 }}>{f.label}</div>
-                  <div style={{ fontSize:12, color: dark ? C.dMute : C.mute }}>{f.sub}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </>
-      )}
-
-      {page === "catalogue" && (
-        <section style={{ maxWidth:1200, margin:"0 auto", padding:"24px 16px 40px" }}>
-          <h1 style={{ fontFamily:"Georgia,serif", fontSize:22, color:text, margin:"0 0 20px", fontWeight:400 }}>{t.catalogue}</h1>
-          <FilterPanel CATS={CATS} cat={cat} setCat={setCat} sort={sort} setSort={setSort} inStock={inStock} setInStock={setInStock} minPrice={minPrice} setMinPrice={setMinPrice} maxPrice={maxPrice} setMaxPrice={setMaxPrice} lang={lang} dark={dark} text={text} bord={bord}/>
-          <div style={{ marginBottom:16 }}>
-            <span style={{ fontSize:13, color: dark ? C.dMute : C.mute }}><strong style={{ color:text }}>{list.length}</strong> {t.itemCount}{list.length > 1 ? "s" : ""}</span>
           </div>
-          {loadingProducts ? (
-            <div style={{ textAlign:"center", padding:48, color:text }}>Chargement des articles…</div>
-          ) : cat >= 4 ? (
+        </section>
+
+        {/* SÉLECTION */}
+        <section style={{ maxWidth:1200, margin:"0 auto", padding:"32px 16px 0" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
+            <div style={{ width:3, height:18, background:GRAD, borderRadius:99 }}/>
+            <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text,
+              margin:0, fontWeight:400 }}>{t.bestSeller}</h2>
+          </div>
+          <div className="dd-grid"
+            style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
+            {bestSellers.map((p,i) => (
+              <ProductCard key={p.id} p={p} t={t} cats={cats}
+                idx={i} mounted={mounted} dark={dark}
+                onOpen={setSelected} onAdd={addToCart}/>
+            ))}
+          </div>
+          <div style={{ textAlign:"center", marginTop:24 }}>
+            <button onClick={() => setPage("catalogue")}
+              style={{ ...primaryBtn, gap:7 }}>
+              {t.catalogue} <ArrowRight size={14}/>
+            </button>
+          </div>
+        </section>
+
+        {/* AVANTAGES */}
+        <section style={{ maxWidth:1200, margin:"28px auto 0", padding:"0 16px 32px" }}>
+          <div style={{ display:"grid",
+            gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
+            {[
+              { icon:<Truck size={18} color={C.gold}/>,         label:"Livraison Ouagadougou", sub:"Rapide et soigné" },
+              { icon:<Smartphone size={18} color={C.gold}/>,    label:"Mobile Money",           sub:"Orange · Moov · Wave" },
+              { icon:<ShieldCheck size={18} color={C.gold}/>,   label:"Sélection Dada",         sub:"Chaque pièce choisie" },
+              { icon:<MessageCircle size={18} color="#25D366"/>, label:"Commande WhatsApp",      sub:"Réponse rapide" },
+            ].map((f,i) => (
+              <div key={i} style={{ background: dark?C.dCard:"#fff",
+                border:`1px solid ${bord}`, borderRadius:12, padding:"14px" }}>
+                <div style={{ width:36, height:36, borderRadius:9,
+                  background: dark?C.dBorder:C.creamD,
+                  display:"grid", placeItems:"center", marginBottom:9 }}>
+                  {f.icon}
+                </div>
+                <div style={{ fontFamily:"Georgia,serif", fontSize:13,
+                  color:text, marginBottom:2 }}>{f.label}</div>
+                <div style={{ fontSize:12, color: dark?C.dMute:C.mute }}>{f.sub}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </>)}
+
+      {page==="catalogue" && (
+        <section style={{ maxWidth:1200, margin:"0 auto", padding:"20px 16px 40px" }}>
+          <h1 style={{ fontFamily:"Georgia,serif", fontSize:22, color:text,
+            margin:"0 0 18px", fontWeight:400 }}>{t.catalogue}</h1>
+          <FilterPanel cats={cats} cat={cat} setCat={setCat}
+            sort={sort} setSort={setSort}
+            inStock={inStock} setInStock={setInStock}
+            minPrice={minPrice} setMinPrice={setMinPrice}
+            maxPrice={maxPrice} setMaxPrice={setMaxPrice}
+            lang={lang} dark={dark} text={text} bord={bord}/>
+          <div style={{ marginBottom:14 }}>
+            <span style={{ fontSize:13, color: dark?C.dMute:C.mute }}>
+              <strong style={{ color:text }}>{list.length}</strong> article{list.length>1?"s":""}
+            </span>
+          </div>
+
+          {/* Catégorie "bientôt" */}
+          {selectedCat?.soon ? (
             <div style={{ textAlign:"center", padding:"60px 16px" }}>
-              <div style={{ fontSize:48 }}>{["👟","💍","🌸","💋","👗"][cat-4]}</div>
-              <h3 style={{ fontFamily:"Georgia,serif", color:text, margin:"12px 0 8px", fontSize:20 }}>{CATS[cat]} — {lang === "fr" ? "Bientôt disponible !" : "Coming soon!"}</h3>
-              <p style={{ color: dark ? C.dMute : C.mute, fontSize:14, maxWidth:320, margin:"0 auto 20px", lineHeight:1.6 }}>{lang === "fr" ? "Cette catégorie arrive très prochainement." : "This category is coming very soon."}</p>
-              <button onClick={() => setCat(0)} style={{ ...primaryBtn, gap:7 }}>{lang === "fr" ? "Voir les articles disponibles" : "See available items"} <ArrowRight size={14}/></button>
+              <div style={{ fontSize:56, marginBottom:12 }}>🔜</div>
+              <h3 style={{ fontFamily:"Georgia,serif", color:text,
+                margin:"0 0 8px", fontSize:22 }}>
+                {lang==="fr"?selectedCat.label:selectedCat.labelEn} — Bientôt disponible !
+              </h3>
+              <p style={{ color: dark?C.dMute:C.mute, fontSize:14,
+                maxWidth:320, margin:"0 auto 24px", lineHeight:1.6 }}>
+                Cette catégorie arrive très prochainement.
+              </p>
+              <button onClick={() => setCat(0)} style={{ ...primaryBtn, gap:7 }}>
+                Voir les articles disponibles <ArrowRight size={14}/>
+              </button>
             </div>
-          ) : list.length === 0 ? (
+          ) : list.length===0 ? (
             <div style={{ textAlign:"center", padding:"60px 16px" }}>
-              <Search size={36} color={dark ? C.dBorder : "#ddd"}/>
-              <p style={{ marginTop:10, color: dark ? C.dMute : "#bbb", fontSize:14 }}>{t.noResult}<br/>{t.noResultHint}</p>
-              <button onClick={() => { setQuery(""); setCat(0); }} style={{ ...primaryBtn, marginTop:16, gap:7 }}>{lang === "fr" ? "Voir tous les articles" : "See all items"} <ArrowRight size={14}/></button>
+              <Search size={40} color={dark?C.dBorder:"#ddd"} strokeWidth={1.2}/>
+              <p style={{ marginTop:12, color: dark?C.dMute:"#bbb",
+                fontSize:14, lineHeight:1.7 }}>
+                {t.noResult}<br/>{t.noResultHint}
+              </p>
+              <button onClick={() => { setQuery(""); setCat(0); }}
+                style={{ ...primaryBtn, marginTop:16, gap:7 }}>
+                Voir tous les articles <ArrowRight size={14}/>
+              </button>
             </div>
           ) : (
-            <div className="dd-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
-              {list.map((p, i) => <ProductCard key={p.id} p={p} t={t} idx={i} mounted={mounted} dark={dark} onOpen={setSelected} onAdd={addToCart}/>)}
+            <div className="dd-grid"
+              style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
+              {list.map((p,i) => (
+                <ProductCard key={p.id} p={p} t={t} cats={cats}
+                  idx={i} mounted={mounted} dark={dark}
+                  onOpen={setSelected} onAdd={addToCart}/>
+              ))}
             </div>
           )}
         </section>
       )}
 
-      {page === "about" && <AboutPage dark={dark}/>}
-      {page === "legal" && <LegalPage type="legal" dark={dark} setPage={setPage}/>}
-      {page === "cgv"   && <LegalPage type="cgv"   dark={dark} setPage={setPage}/>}
-      {page === "rgpd"  && <LegalPage type="rgpd"  dark={dark} setPage={setPage}/>}
-      {page === "sav"   && <LegalPage type="sav"   dark={dark} setPage={setPage}/>}
+      {page==="about"  && <AboutPage dark={dark} cfg={cfg}/>}
+      {page==="legal"  && <LegalPage type="legal" dark={dark} setPage={setPage}/>}
+      {page==="cgv"    && <LegalPage type="cgv"   dark={dark} setPage={setPage}/>}
+      {page==="rgpd"   && <LegalPage type="rgpd"  dark={dark} setPage={setPage}/>}
+      {page==="sav"    && <LegalPage type="sav"   dark={dark} setPage={setPage}/>}
+      {page==="404"    && <Page404   dark={dark}  setPage={setPage}/>}
 
       {/* FOOTER */}
-      <footer style={{ background:C.ink, color:"#fff", padding:"32px 16px", borderTop:`1px solid ${C.gold}22` }}>
-        <div style={{ maxWidth:1200, margin:"0 auto", display:"flex", flexWrap:"wrap", gap:20, justifyContent:"space-between", alignItems:"center" }}>
+      <footer style={{ background:C.ink, color:"#fff",
+        padding:"32px 16px", borderTop:`1px solid ${C.gold}22` }}>
+        <div style={{ maxWidth:1200, margin:"0 auto", display:"flex",
+          flexWrap:"wrap", gap:20, justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontFamily:"Georgia,serif", fontSize:18, fontWeight:700, letterSpacing:2, color:"#fff" }}>DADA'S DROP</div>
-            <div style={{ fontSize:10, color:C.gold, letterSpacing:4, marginTop:2 }}>✦ COLLECTION PREMIUM ✦</div>
-            <p style={{ color:"#5A5040", fontSize:12, margin:"8px 0 0", maxWidth:260 }}>Sacs & accessoires livrés au Burkina Faso.</p>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:18,
+              fontWeight:700, letterSpacing:2, color:"#fff" }}>DADA'S DROP</div>
+            <div style={{ fontSize:10, color:C.gold, letterSpacing:4, marginTop:2 }}>
+              ✦ COLLECTION PREMIUM ✦
+            </div>
+            <p style={{ color:"#5A5040", fontSize:12, margin:"8px 0 0", maxWidth:260 }}>
+              Sacs & accessoires livrés au Burkina Faso.
+            </p>
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <a href={`https://wa.me/${CFG.whatsapp}`} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#25D366", color:"#fff", textDecoration:"none", padding:"9px 14px", borderRadius:9, fontWeight:700, fontSize:13 }}>
+            <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer"
+              style={{ display:"inline-flex", alignItems:"center", gap:6,
+                background:"#25D366", color:"#fff", textDecoration:"none",
+                padding:"9px 14px", borderRadius:9, fontWeight:700, fontSize:13 }}>
               <MessageCircle size={15}/> WhatsApp
             </a>
-            <span style={{ display:"inline-flex", alignItems:"center", gap:6, border:`1px solid ${C.gold}33`, padding:"9px 13px", borderRadius:9, fontSize:12, color:C.gold }}>
-              <Phone size={14}/> {CFG.orangeMoney}
+            <span style={{ display:"inline-flex", alignItems:"center", gap:6,
+              border:`1px solid ${C.gold}33`, padding:"9px 13px",
+              borderRadius:9, fontSize:12, color:C.gold }}>
+              <Phone size={14}/> {cfg?.orangeMoney||DEFAULT_CFG.orangeMoney}
             </span>
           </div>
         </div>
-        <div style={{ maxWidth:1200, margin:"16px auto 0", borderTop:`1px solid ${C.gold}1A`, paddingTop:14, display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8, alignItems:"center" }}>
-          <span style={{ fontSize:11, color:"#3A3020" }}>© {new Date().getFullYear()} Dada's Drop</span>
+        <div style={{ maxWidth:1200, margin:"16px auto 0",
+          borderTop:`1px solid ${C.gold}1A`, paddingTop:14,
+          display:"flex", justifyContent:"space-between",
+          flexWrap:"wrap", gap:8, alignItems:"center" }}>
+          <span style={{ fontSize:11, color:"#3A3020" }}>
+            © {new Date().getFullYear()} Dada's Drop
+          </span>
           <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-            {[["legal","Mentions légales"],["cgv","CGV"],["rgpd","RGPD"],["sav","SAV"]].map(([p, label]) => (
-              <button key={p} onClick={() => setPage(p)} style={{ fontSize:11, color:C.gold, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>{label}</button>
+            {[["legal","Mentions légales"],["cgv","CGV"],["rgpd","RGPD"],["sav","SAV"]].map(([p,l]) => (
+              <button key={p} onClick={() => setPage(p)}
+                style={{ fontSize:11, color:C.gold, background:"none",
+                  border:"none", cursor:"pointer", textDecoration:"underline" }}>
+                {l}
+              </button>
             ))}
           </div>
         </div>
       </footer>
 
       {/* WHATSAPP FLOTTANT */}
-      <a href={`https://wa.me/${siteConfig?.whatsapp||CFG.whatsapp}?text=${encodeURIComponent(siteConfig?.waMessage||"Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?")}`} target="_blank" rel="noreferrer"
-        style={{ position:"fixed", bottom:80, right:18, width:48, height:48, borderRadius:999, background:"#25D366", display:"grid", placeItems:"center", zIndex:49, boxShadow:"0 4px 16px rgba(37,211,102,.4)", textDecoration:"none" }}>
+      <a href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(waMsg)}`}
+        target="_blank" rel="noreferrer"
+        style={{ position:"fixed", bottom:80, right:18, width:50, height:50,
+          borderRadius:999, background:"#25D366",
+          display:"grid", placeItems:"center", zIndex:49,
+          boxShadow:"0 4px 16px rgba(37,211,102,.4)", textDecoration:"none" }}>
         <MessageCircle size={22} color="#fff"/>
       </a>
 
       {/* MODALS */}
-      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)} t={t} lang={lang} setLang={setLang} dark={dark} setPage={setPage} setCat={setCat}/>
-      <ProductModal p={selected} t={t} dark={dark} onClose={() => setSelected(null)} onAdd={addToCart}/>
-      <CartDrawer open={cartOpen} cart={cart} products={products} t={t} dark={dark} onClose={() => setCartOpen(false)} onQty={setQty} onRemove={removeItem} onCheckout={() => { setCartOpen(false); setCheckout(true); }}/>
-      <Checkout open={checkout} lines={lines} total={total} t={t} dark={dark} onClose={() => setCheckout(false)}/>
-      <TrackModal open={trackOpen} t={t} dark={dark} onClose={() => setTrackOpen(false)}/>
+      <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)}
+        t={t} lang={lang} setLang={setLang} dark={dark}
+        setPage={setPage} setCat={setCat} cats={cats}/>
+      <ProductModal p={selected} t={t} dark={dark}
+        onClose={() => setSelected(null)} onAdd={addToCart}/>
+      <CartDrawer open={cartOpen} cart={cart} products={products}
+        t={t} dark={dark} onClose={() => setCartOpen(false)}
+        onQty={setQty} onRemove={removeItem}
+        onCheckout={() => { setCartOpen(false); setCheckout(true); }}/>
+      <Checkout open={checkout} lines={lines} total={total}
+        t={t} dark={dark} promos={promos} cfg={cfg}
+        onClose={() => setCheckout(false)}/>
+      <TrackModal open={trackOpen} t={t} dark={dark}
+        onClose={() => setTrackOpen(false)}/>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════
-   🔒 GUARD ADMIN — redirige si pas connecté
-   ═══════════════════════════════════════ */
-function AdminGuard({ products, setProducts, dark }) {
+/* ════════════════════════════════════════════
+   🎨 CONSTANTES ADMIN
+════════════════════════════════════════════ */
+const CA = {
+  ...C,
+  warning: "#E08030",
+  card: "#FFFFFF",
+};
+
+const ROLES = {
+  admin:    { label:"Administrateur", badge:"👑" },
+  manager:  { label:"Gestionnaire",   badge:"👩‍💼" },
+  delivery: { label:"Livreur",        badge:"🚴" },
+};
+
+const STATUS_ADMIN_LABELS = ["","En préparation","Expédiée","Livrée"];
+const STATUS_ADMIN_COLORS = ["", CA.warning, "#1DC0D4", CA.success];
+
+const INIT_USERS = [
+  { id:1, name:"David Amah",    email:"david@dadasdrop.com",   role:"admin",    active:true  },
+  { id:2, name:"Ma Copine",     email:"copine@dadasdrop.com",  role:"manager",  active:true  },
+  { id:3, name:"Livreur Ouaga", email:"livreur@dadasdrop.com", role:"delivery", active:true  },
+];
+
+/* ════════════════════════════════════════════
+   🔒 ADMIN GUARD — AdminApp défini plus bas dans ce fichier
+════════════════════════════════════════════ */
+function AdminGuard({ products, setProducts, cats, setCats, cfg, setCfg, promos, setPromos, dark }) {
   const navigate = useNavigate();
   return (
-    <AdminPage
-      products={products}
-      setProducts={setProducts}
+    <AdminApp
+      products={products} setProducts={setProducts}
+      cats={cats} setCats={setCats}
+      cfg={cfg} setCfg={setCfg}
+      promos={promos} setPromos={setPromos}
       dark={dark}
-      setPage={(p) => { if (p === "home") navigate("/"); }}
+      onGoHome={() => navigate("/")}
     />
   );
 }
 
-/* ═══════════════════════════════════════
-   🚀 EXPORT DEFAULT — Router racine
-   ═══════════════════════════════════════ */
+/* ════════════════════════════════════════════
+   🚀 APP RACINE
+════════════════════════════════════════════ */
 export default function App() {
-  // Les produits sont partagés entre shop et admin
-  const [products, setProducts] = useState(initProducts);
-  const [dark, setDark] = useState(false);
+  const [products, setProducts] = useState(DEMO_PRODUCTS);
+  const [cats, setCats]         = useState(DEFAULT_CATS);
+  const [cfg, setCfg]           = useState(DEFAULT_CFG);
+  const [promos, setPromos]     = useState(DEMO_PROMOS);
+  const [dark, setDark]         = useState(false);
+  const [loading, setLoading]   = useState(true);
 
-  // Charger produits Supabase une seule fois au niveau racine
+  // Chargement initial depuis Supabase
   useEffect(() => {
-    sb.get("products", "?order=id.asc")
-      .then(rows => { if (rows && rows.length > 0) setProducts(rows); })
-      .catch(e => console.warn("Supabase products (root):", e.message));
+    Promise.allSettled([
+      // Produits
+      sb.get("products", "?order=id.asc")
+        .then(rows => { if(rows?.length>0) setProducts(rows); }),
+      // Config
+      sb.get("announcements", "?id=eq.config&select=data")
+        .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); }),
+      // Catégories (si table existe)
+      sb.get("announcements", "?id=eq.categories&select=data")
+        .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); }),
+      // Promos
+      sb.get("promos", "?select=*")
+        .then(rows => { if(rows?.length>0) setPromos(rows); }),
+    ]).finally(() => setLoading(false));
   }, []);
+
+  if (loading) return (
+    <div style={{ minHeight:"100vh", background:C.cream,
+      display:"grid", placeItems:"center", fontFamily:"Georgia,serif" }}>
+      <div style={{ textAlign:"center" }}>
+        <LogoDD size={56}/>
+        <p style={{ color:C.mute, marginTop:16, letterSpacing:2, fontSize:12 }}>
+          CHARGEMENT…
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* Shop public */}
-        <Route path="/" element={<ShopApp products={products} setProducts={setProducts} dark={dark} setDark={setDark}/>}/>
-        <Route path="/catalogue" element={<ShopApp products={products} setProducts={setProducts} dark={dark} setDark={setDark} initialPage="catalogue"/>}/>
-
-        {/* Admin — URL protégée par login dans AdminPage */}
-        <Route path="/admin" element={<AdminGuard products={products} setProducts={setProducts} dark={dark}/>}/>
-        <Route path="/admin/*" element={<AdminGuard products={products} setProducts={setProducts} dark={dark}/>}/>
-
-        {/* 404 — redirige vers l'accueil */}
+        <Route path="/" element={
+          <ShopApp products={products} cats={cats} cfg={cfg} promos={promos}
+            dark={dark} setDark={setDark}/>
+        }/>
+        <Route path="/catalogue" element={
+          <ShopApp products={products} cats={cats} cfg={cfg} promos={promos}
+            dark={dark} setDark={setDark} initialPage="catalogue"/>
+        }/>
+        <Route path="/admin" element={
+          <AdminGuard products={products} setProducts={setProducts}
+            cats={cats} setCats={setCats}
+            cfg={cfg} setCfg={setCfg}
+            promos={promos} setPromos={setPromos}
+            dark={dark}/>
+        }/>
+        <Route path="/admin/*" element={
+          <AdminGuard products={products} setProducts={setProducts}
+            cats={cats} setCats={setCats}
+            cfg={cfg} setCfg={setCfg}
+            promos={promos} setPromos={setPromos}
+            dark={dark}/>
+        }/>
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
     </BrowserRouter>
+  );
+}
+
+/* ════════════════════════════════════════════
+   🏢 ADMIN APP — layout mobile-first complet
+════════════════════════════════════════════ */
+
+// Palette admin (même que C mais avec quelques extras)
+
+// Badge réutilisable
+function ABadge({ children, color }) {
+  return (
+    <span style={{ background:`${color}22`, color, fontSize:11, fontWeight:700,
+      padding:"3px 9px", borderRadius:999, border:`1px solid ${color}44`,
+      whiteSpace:"nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+// StatCard
+function AStatCard({ icon, value, label, color, dark }) {
+  return (
+    <div style={{ background:dark?CA.dCard:CA.card,
+      border:`1px solid ${dark?CA.dBorder:CA.border}`,
+      borderRadius:14, padding:"16px" }}>
+      <div style={{ width:38, height:38, borderRadius:10,
+        background:`${color}18`, display:"grid", placeItems:"center", marginBottom:10 }}>
+        {icon}
+      </div>
+      <div style={{ fontFamily:"Georgia,serif", fontSize:22,
+        fontWeight:700, color:dark?CA.dText:CA.ink }}>{value}</div>
+      <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginTop:2 }}>{label}</div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET COMMANDES
+────────────────────────────────────────── */
+function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
+  const [search, setSearch]       = useState("");
+  const [filterStatus, setFilter] = useState(0);
+  const text = dark ? CA.dText : CA.ink;
+  const bord = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+
+  const filtered = orders.filter(o => {
+    if (filterStatus>0 && o.status!==filterStatus) return false;
+    if (search && !o.name?.toLowerCase().includes(search.toLowerCase()) && !o.id?.includes(search)) return false;
+    return true;
+  });
+
+  const updateStatus = async (id, status) => {
+    setOrders(os => os.map(o => o.id===id?{...o,status}:o));
+    try { await sb.patch("orders", id, {status}); } catch(e){console.warn(e.message);}
+  };
+
+  const assignDelivery = async (id, userId) => {
+    const val = userId ? parseInt(userId) : null;
+    setOrders(os => os.map(o => o.id===id?{...o,assignedTo:val}:o));
+    try { await sb.patch("orders", id, {assigned_to:val}); } catch(e){console.warn(e.message);}
+  };
+
+  const exportCSV = () => {
+    const rows = [
+      ["ID","Client","Téléphone","Ville","Quartier","Articles","Total FCFA","Paiement","Statut","Date"],
+      ...orders.map(o => [
+        o.id, o.name, o.phone, o.ville, o.quartier||"",
+        (o.items||[]).join(" | "), o.total,
+        PAYMENT_LABELS[o.payment]||o.payment,
+        STATUS_ADMIN_LABELS[o.status]||"", o.date
+      ])
+    ];
+    const csv = rows.map(r => r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF"+csv], {type:"text/csv;charset=utf-8;"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `commandes-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+  };
+
+  const printBon = (o) => {
+    const w = window.open("","_blank","width=620,height=900");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/>
+    <title>Bon #${o.id}</title>
+    <style>
+      body{font-family:Georgia,serif;padding:32px;color:#1A1A1A;max-width:520px;margin:auto}
+      h1{font-size:22px;letter-spacing:3px;margin:0 0 4px}
+      .sub{font-size:10px;color:#8A7A6A;letter-spacing:4px;margin:0 0 24px}
+      hr{border:none;border-top:1px solid #E0D8CC;margin:16px 0}
+      .row{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
+      .lbl{color:#8A7A6A}
+      .item{padding:6px 0;border-bottom:1px solid #eee;font-size:14px}
+      .total{font-size:22px;font-weight:700;color:#C9A84C;margin:16px 0 0}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h1>DADA'S DROP</h1><p class="sub">✦ BON DE COMMANDE ✦</p><hr/>
+    <div class="row"><span class="lbl">N° commande</span><strong>#${o.id}</strong></div>
+    <div class="row"><span class="lbl">Date</span><span>${o.date||new Date().toLocaleDateString("fr-FR")}</span></div>
+    <hr/>
+    <div class="row"><span class="lbl">Client</span><strong>${o.name}</strong></div>
+    <div class="row"><span class="lbl">Téléphone</span><span>${o.phone}</span></div>
+    <div class="row"><span class="lbl">Adresse</span><span>${o.quartier?o.quartier+", ":""}${o.ville}</span></div>
+    <div class="row"><span class="lbl">Paiement</span><span>${PAYMENT_LABELS[o.payment]||o.payment}</span></div>
+    <hr/>
+    ${(o.items||[]).map(i=>`<div class="item">${i}</div>`).join("")}
+    <div class="total">Total : ${(o.total||0).toLocaleString("fr-FR")} FCFA</div>
+    <hr/>
+    <p style="font-size:11px;color:#8A7A6A;text-align:center;margin-top:20px">
+      Dada's Drop · Ouagadougou, Burkina Faso
+    </p>
+    <button onclick="window.print()" style="margin-top:16px;padding:10px 20px;
+      background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:14px">
+      🖨️ Imprimer
+    </button></body></html>`);
+    w.document.close();
+  };
+
+  const deliverers = users.filter(u=>u.role==="delivery"&&u.active);
+
+  return (
+    <div>
+      {/* Recherche + Export sur lignes séparées */}
+      <div style={{ marginBottom:8 }}>
+        <div style={{ position:"relative" }}>
+          <Search size={14} color={dark?CA.dMute:CA.mute}
+            style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Rechercher une commande…"
+            style={{ width:"100%", padding:"10px 12px 10px 32px",
+              borderRadius:10, border:`1.5px solid ${bord}`,
+              background:dark?CA.dCard:"#fff",
+              fontSize:"16px", color:text, fontFamily:"inherit" }}/>
+        </div>
+      </div>
+      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+        {[0,1,2,3].map(s => (
+          <button key={s} onClick={() => setFilter(s)}
+            style={{ padding:"7px 12px", borderRadius:9, fontSize:12.5, fontWeight:600,
+              border:`1.5px solid ${filterStatus===s?CA.gold:bord}`,
+              background:filterStatus===s?CA.ink:cardBg,
+              color:filterStatus===s?CA.gold:text, cursor:"pointer" }}>
+            {s===0?"Toutes":STATUS_ADMIN_LABELS[s]}
+          </button>
+        ))}
+        <button onClick={exportCSV}
+          style={{ marginLeft:"auto", background:CA.success, color:"#fff",
+            border:"none", borderRadius:9, padding:"7px 12px",
+            cursor:"pointer", fontSize:12.5, fontWeight:700,
+            display:"flex", alignItems:"center", gap:5 }}>
+          📊 Excel
+        </button>
+      </div>
+
+      <div style={{ display:"grid", gap:10 }}>
+        {filtered.map(o => (
+          <div key={o.id} style={{ background:cardBg, border:`1px solid ${bord}`,
+            borderRadius:13, padding:"14px 16px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between",
+              alignItems:"flex-start", marginBottom:8 }}>
+              <div>
+                <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                  color:text, fontSize:14 }}>#{o.id}</span>
+                <span style={{ marginLeft:8, fontSize:12,
+                  color:dark?CA.dMute:CA.mute }}>{o.date}</span>
+              </div>
+              <ABadge color={STATUS_ADMIN_COLORS[o.status]}>
+                {STATUS_ADMIN_LABELS[o.status]}
+              </ABadge>
+            </div>
+            <div style={{ fontSize:14, color:text, fontWeight:600, marginBottom:2 }}>
+              {o.name}
+            </div>
+            <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:2 }}>
+              📞 {o.phone} · 📍 {o.quartier?`${o.quartier}, `:""}{o.ville}
+            </div>
+            <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:6 }}>
+              💳 {PAYMENT_LABELS[o.payment]||o.payment}
+            </div>
+            {(o.items||[]).map((item,i) => (
+              <div key={i} style={{ fontSize:12.5, color:text }}>• {item}</div>
+            ))}
+            <div style={{ marginTop:10, display:"flex",
+              justifyContent:"space-between", alignItems:"center",
+              flexWrap:"wrap", gap:8 }}>
+              <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                color:CA.gold, fontSize:14 }}>
+                {(o.total||0).toLocaleString("fr-FR")} FCFA
+              </span>
+              {/* Actions */}
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                <button onClick={() => printBon(o)}
+                  style={{ background:"none", color:dark?CA.dMute:CA.mute,
+                    border:`1px solid ${bord}`, borderRadius:8,
+                    padding:"6px 10px", cursor:"pointer",
+                    fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
+                  🖨️ Imprimer
+                </button>
+                {auth.role!=="delivery" && o.status<3 && (
+                  <button onClick={() => updateStatus(o.id, o.status+1)}
+                    style={{ background:CA.ink, color:CA.gold,
+                      border:`1px solid ${CA.gold}44`, borderRadius:8,
+                      padding:"6px 11px", cursor:"pointer",
+                      fontSize:12, fontWeight:600,
+                      display:"flex", alignItems:"center", gap:4 }}>
+                    <ChevronUp size={12}/> {o.status===1?"Expédiée":"Livrée"}
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Livreur */}
+            {auth.role!=="delivery" && deliverers.length>0 && (
+              <div style={{ marginTop:8 }}>
+                <select value={o.assignedTo||""} onChange={e=>assignDelivery(o.id,e.target.value)}
+                  style={{ width:"100%", padding:"8px 10px", borderRadius:8,
+                    border:`1px solid ${bord}`, background:dark?CA.dCard:"#fff",
+                    fontSize:"16px", color:text, fontFamily:"inherit" }}>
+                  <option value="">Assigner un livreur…</option>
+                  {deliverers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+                {o.assignedTo && (
+                  <div style={{ marginTop:5 }}>
+                    <ABadge color={CA.success}>
+                      🚴 {users.find(u=>u.id===o.assignedTo)?.name||"Livreur assigné"}
+                    </ABadge>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+        {filtered.length===0 && (
+          <div style={{ textAlign:"center", padding:"48px 20px",
+            color:dark?CA.dMute:"#bbb" }}>
+            <ShoppingCart size={36} strokeWidth={1.2}/>
+            <p style={{ marginTop:10, fontSize:14 }}>Aucune commande trouvée.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET PRODUITS
+────────────────────────────────────────── */
+function AdminProductsTab({ products, setProducts, cats, dark }) {
+  const text = dark ? CA.dText : CA.ink;
+  const bord = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+
+  const emptyForm = {
+    name:"", brand:"", price:"", cat: cats[0]?.id||"sacs",
+    stock:"", isNew:false, isBest:false, isPinned:false, isHidden:false,
+    discount:0, desc:"", imgs:["","","",""],
+    variants:[], // [{ type:"color"|"size", label:"", hex:"", stock:0 }]
+  };
+  const [showForm, setShowForm] = useState(false);
+  const [editP, setEditP]       = useState(null);
+  const [saving, setSaving]     = useState(false);
+  const [form, setForm]         = useState(emptyForm);
+  const [newVariant, setNewVariant] = useState({ type:"color", label:"", hex:"#C9A84C", stock:"" });
+
+  const setF = k => e => setForm(f => ({...f, [k]: e.target.type==="checkbox"?e.target.checked:e.target.value}));
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
+    border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
+    fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  const startNew  = () => { setForm(emptyForm); setEditP(null); setShowForm(true); };
+  const startEdit = p => {
+    const imgs = p.imgs||[];
+    setForm({ ...p, price:String(p.price), stock:String(p.stock),
+      discount:String(p.discount||0),
+      imgs:[imgs[0]||"",imgs[1]||"",imgs[2]||"",imgs[3]||""],
+      variants:p.variants||[] });
+    setEditP(p); setShowForm(true);
+  };
+
+  const addVariant = () => {
+    if (!newVariant.label.trim()) return;
+    setForm(f => ({...f, variants:[...f.variants, {
+      ...newVariant, stock:parseInt(newVariant.stock)||0
+    }]}));
+    setNewVariant({ type:newVariant.type, label:"", hex:"#C9A84C", stock:"" });
+  };
+  const removeVariant = idx => setForm(f => ({...f, variants:f.variants.filter((_,i)=>i!==idx)}));
+
+  const save = async () => {
+    if (!form.name||!form.price) return;
+    setSaving(true);
+    const p = { ...form, id:editP?editP.id:Date.now(),
+      price:parseInt(form.price)||0, stock:parseInt(form.stock)||0,
+      discount:parseInt(form.discount)||0,
+      imgs:(form.imgs||[]).filter(u=>u.trim()!=="") };
+    if (editP) {
+      setProducts(ps=>ps.map(x=>x.id===editP.id?p:x));
+      try { await sb.patch("products",editP.id,p); } catch(e){console.warn(e.message);}
+    } else {
+      setProducts(ps=>[...ps,p]);
+      try { await sb.post("products",p); } catch(e){console.warn(e.message);}
+    }
+    setSaving(false); setEditP(null); setShowForm(false);
+  };
+
+  const del = async id => {
+    if (!window.confirm("Supprimer cet article ?")) return;
+    setProducts(ps=>ps.filter(p=>p.id!==id));
+    try { await sb.del("products",id); } catch(e){console.warn(e.message);}
+  };
+
+  const toggleProp = async (id, prop) => {
+    setProducts(ps=>ps.map(p=>p.id===id?{...p,[prop]:!p[prop]}:p));
+    const p = products.find(x=>x.id===id);
+    try { await sb.patch("products",id,{[prop]:!p[prop]}); } catch(e){console.warn(e.message);}
+  };
+
+  const move = (idx, dir) => {
+    setProducts(ps => {
+      const arr=[...ps];
+      const swap=idx+dir;
+      if (swap<0||swap>=arr.length) return arr;
+      [arr[idx],arr[swap]]=[arr[swap],arr[idx]];
+      return arr;
+    });
+  };
+
+  const variantType = form.variants[0]?.type || newVariant.type;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display:"flex", justifyContent:"space-between",
+        alignItems:"center", marginBottom:14 }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>
+          {products.length} articles
+          {products.filter(p=>p.isPinned).length>0 &&
+            <span style={{ fontSize:12, color:CA.gold, marginLeft:8 }}>
+              📌 {products.filter(p=>p.isPinned).length} épinglé{products.filter(p=>p.isPinned).length>1?"s":""}
+            </span>}
+        </span>
+        <button onClick={startNew}
+          style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+            borderRadius:10, padding:"9px 14px", cursor:"pointer",
+            fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          <PlusCircle size={14}/> Ajouter
+        </button>
+      </div>
+
+      {/* Formulaire */}
+      {showForm && (
+        <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`,
+          borderRadius:14, padding:"18px", marginBottom:16 }}>
+          <h4 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text,
+            margin:"0 0 16px" }}>
+            {editP?"Modifier l'article":"Nouvel article"}
+          </h4>
+
+          {/* Grille 2 colonnes */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Nom *</span>
+              <input style={inp} value={form.name||""} onChange={setF("name")}
+                placeholder="Mini Boston Rose"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Marque *</span>
+              <input style={inp} value={form.brand||""} onChange={setF("brand")}
+                placeholder="Coach, Gucci…"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Prix FCFA *</span>
+              <input style={inp} type="number" value={form.price||""} onChange={setF("price")}
+                placeholder="25000"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>
+                Réduction %
+                {form.discount>0 && form.price && (
+                  <span style={{ color:CA.gold, marginLeft:4 }}>
+                    → {Math.round((parseInt(form.price)||0)*(1-(parseInt(form.discount)||0)/100)).toLocaleString("fr-FR")} FCFA
+                  </span>
+                )}
+              </span>
+              <input style={inp} type="number" min="0" max="90"
+                value={form.discount||0} onChange={setF("discount")} placeholder="0"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Stock *</span>
+              <input style={inp} type="number" value={form.stock||""} onChange={setF("stock")}
+                placeholder="5"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Catégorie *</span>
+              <select style={inp} value={form.cat||""} onChange={setF("cat")}>
+                {cats.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          {/* 4 photos */}
+          <div style={{ marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:6 }}>Photos (4 URLs max)</span>
+            <div style={{ display:"grid", gap:7 }}>
+              {[0,1,2,3].map(i => (
+                <div key={i} style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:10, color:dark?CA.dMute:CA.mute,
+                    width:52, flexShrink:0 }}>
+                    Photo {i+1}{i===0?" *":""}
+                  </span>
+                  <input style={{ ...inp, marginBottom:0 }}
+                    value={form.imgs?.[i]||""}
+                    onChange={e=>setForm(f=>{const imgs=[...(f.imgs||["","","",""])];imgs[i]=e.target.value;return{...f,imgs};})}
+                    placeholder="https://i.ibb.co/…"/>
+                  {form.imgs?.[i] && (
+                    <div style={{ width:34,height:34,borderRadius:6,overflow:"hidden",flexShrink:0 }}>
+                      <img src={form.imgs[i]} alt="" style={{ width:"100%",height:"100%",objectFit:"cover" }}
+                        onError={e=>e.target.style.opacity=".2"}/>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Description */}
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:3 }}>Description</span>
+            <textarea style={{ ...inp, resize:"vertical" }} rows={2}
+              value={form.desc||""} onChange={setF("desc")}/>
+          </label>
+
+          {/* Variantes */}
+          <div style={{ marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:6 }}>Variantes (couleurs / tailles / pointures)</span>
+
+            {/* Type de variante */}
+            <div style={{ display:"flex", gap:6, marginBottom:8 }}>
+              {[["color","🎨 Couleurs"],["size","📏 Tailles/Pointures"]].map(([type,label]) => (
+                <button key={type}
+                  onClick={() => setNewVariant(v=>({...v,type}))}
+                  style={{ flex:1, padding:"7px", borderRadius:8, fontSize:12,
+                    fontWeight:600, cursor:"pointer",
+                    border:`1.5px solid ${newVariant.type===type?CA.gold:bord}`,
+                    background:newVariant.type===type?CA.ink:"none",
+                    color:newVariant.type===type?CA.gold:text }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Liste variantes existantes */}
+            {form.variants.length>0 && (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:8 }}>
+                {form.variants.map((v,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:5,
+                    padding:"5px 10px", borderRadius:20,
+                    background:dark?CA.dBorder:CA.creamD,
+                    border:`1px solid ${bord}` }}>
+                    {v.type==="color" && (
+                      <div style={{ width:14,height:14,borderRadius:999,
+                        background:v.hex,border:"1px solid rgba(0,0,0,.15)" }}/>
+                    )}
+                    <span style={{ fontSize:12, color:text }}>{v.label}</span>
+                    <span style={{ fontSize:10, color:CA.mute }}>(stock:{v.stock})</span>
+                    <button onClick={() => removeVariant(i)}
+                      style={{ border:"none",background:"none",
+                        cursor:"pointer",color:CA.danger,padding:0,lineHeight:1 }}>
+                      <X size={11}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Ajouter une variante */}
+            <div style={{ display:"flex", gap:7, alignItems:"flex-end", flexWrap:"wrap" }}>
+              {newVariant.type==="color" && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <input type="color" value={newVariant.hex}
+                    onChange={e=>setNewVariant(v=>({...v,hex:e.target.value}))}
+                    style={{ width:38,height:34,borderRadius:7,
+                      border:`1px solid ${bord}`,cursor:"pointer",padding:2 }}/>
+                </div>
+              )}
+              <input value={newVariant.label}
+                onChange={e=>setNewVariant(v=>({...v,label:e.target.value}))}
+                placeholder={newVariant.type==="color"?"Ex: Rose poudré":"Ex: 38 ou M"}
+                style={{ ...inp, flex:1, minWidth:100, marginBottom:0 }}/>
+              <input type="number" value={newVariant.stock}
+                onChange={e=>setNewVariant(v=>({...v,stock:e.target.value}))}
+                placeholder="Stock"
+                style={{ ...inp, width:72, marginBottom:0 }}/>
+              <button onClick={addVariant}
+                style={{ background:CA.ink, color:CA.gold,
+                  border:`1px solid ${CA.gold}44`, borderRadius:9,
+                  padding:"9px 12px", cursor:"pointer",
+                  fontSize:13, fontWeight:700,
+                  display:"flex", alignItems:"center", gap:5, flexShrink:0 }}>
+                <Plus size={13}/> Ajouter
+              </button>
+            </div>
+          </div>
+
+          {/* Options */}
+          <div style={{ display:"flex", flexWrap:"wrap", gap:12, marginBottom:14 }}>
+            {[
+              { k:"isNew",    label:"🆕 Nouveauté" },
+              { k:"isBest",   label:"⭐ Best-seller" },
+              { k:"isPinned", label:"📌 Épingler" },
+              { k:"isHidden", label:"🙈 Masquer" },
+            ].map(({ k, label }) => (
+              <label key={k} style={{ display:"flex", alignItems:"center",
+                gap:6, cursor:"pointer", fontSize:13, color:text }}>
+                <input type="checkbox" checked={!!form[k]} onChange={setF(k)}/> {label}
+              </label>
+            ))}
+          </div>
+
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={save} disabled={saving}
+              style={{ background:CA.ink, color:CA.gold,
+                border:`1px solid ${CA.gold}44`, borderRadius:10,
+                padding:"10px 16px", cursor:"pointer",
+                fontSize:13.5, fontWeight:700,
+                display:"flex", alignItems:"center", gap:6 }}>
+              <Save size={14}/> {saving?"Enregistrement…":"Enregistrer"}
+            </button>
+            <button onClick={() => { setShowForm(false); setEditP(null); }}
+              style={{ background:"none", color:text, border:`1px solid ${bord}`,
+                borderRadius:10, padding:"10px 14px",
+                cursor:"pointer", fontSize:13.5, fontWeight:600,
+                display:"flex", alignItems:"center", gap:6 }}>
+              <X size={14}/> Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Liste produits */}
+      <div style={{ display:"grid", gap:8 }}>
+        {products.map((p,idx) => (
+          <div key={p.id} style={{ background:cardBg,
+            border:`1px solid ${p.isPinned?CA.gold+"88":bord}`,
+            borderRadius:12, padding:"12px 13px",
+            display:"flex", gap:10, alignItems:"center",
+            opacity:p.isHidden?.5:1 }}>
+            {/* Ordre */}
+            <div style={{ display:"flex", flexDirection:"column", gap:0, flexShrink:0 }}>
+              <button onClick={() => move(idx,-1)} disabled={idx===0}
+                style={{ border:"none", background:"none", cursor:"pointer", padding:"2px",
+                  color:idx===0?bord:dark?CA.dMute:CA.mute }}>
+                <ChevronUp size={13}/>
+              </button>
+              <button onClick={() => move(idx,1)} disabled={idx===products.length-1}
+                style={{ border:"none", background:"none", cursor:"pointer", padding:"2px",
+                  color:idx===products.length-1?bord:dark?CA.dMute:CA.mute }}>
+                <ChevronDown size={13}/>
+              </button>
+            </div>
+            {/* Vignette */}
+            <div style={{ width:50, height:50, borderRadius:8, overflow:"hidden",
+              flexShrink:0, background:p.accent?`linear-gradient(135deg,${p.accent[0]},${p.accent[1]})`:"#eee" }}>
+              {p.imgs?.[0]
+                ? <img src={p.imgs[0]} alt={p.name} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                : <div style={{ width:"100%",height:"100%",display:"grid",placeItems:"center" }}>👜</div>}
+            </div>
+            {/* Infos */}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:"Georgia,serif", fontSize:13, color:text,
+                fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {p.isPinned&&"📌 "}{p.name}
+              </div>
+              <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute }}>
+                {p.brand}
+                {p.discount>0 ? <>
+                  <span style={{ textDecoration:"line-through", marginLeft:6 }}>
+                    {(p.price||0).toLocaleString("fr-FR")}
+                  </span>
+                  <span style={{ color:CA.danger, fontWeight:700, marginLeft:4 }}>
+                    {Math.round(p.price*(1-p.discount/100)).toLocaleString("fr-FR")} FCFA
+                  </span>
+                  <span style={{ background:CA.danger, color:"#fff", fontSize:9,
+                    fontWeight:700, padding:"1px 4px", borderRadius:999, marginLeft:4 }}>
+                    -{p.discount}%
+                  </span>
+                </> : <> · {(p.price||0).toLocaleString("fr-FR")} FCFA</>}
+              </div>
+              <div style={{ display:"flex", gap:5, marginTop:4, flexWrap:"wrap" }}>
+                <ABadge color={p.stock===0?CA.danger:p.stock<=2?CA.warning:CA.success}>
+                  {p.stock===0?"Épuisé":`Stock:${p.stock}`}
+                </ABadge>
+                {(p.variants||[]).length>0 && (
+                  <ABadge color="#1DC0D4">
+                    {(p.variants||[]).length} variante{(p.variants||[]).length>1?"s":""}
+                  </ABadge>
+                )}
+                {p.isNew && <ABadge color={CA.gold}>Nouveau</ABadge>}
+                {p.isHidden && <ABadge color={CA.mute}>Masqué</ABadge>}
+              </div>
+            </div>
+            {/* Actions — 2x2 sur mobile */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:5, flexShrink:0 }}>
+              <button onClick={() => toggleProp(p.id,"isPinned")}
+                title={p.isPinned?"Désépingler":"Épingler"}
+                style={{ width:32,height:32,borderRadius:8,
+                  border:`1px solid ${p.isPinned?CA.gold:bord}`,
+                  background:p.isPinned?`${CA.gold}22`:"none",
+                  cursor:"pointer",display:"grid",placeItems:"center",fontSize:14 }}>
+                📌
+              </button>
+              <button onClick={() => toggleProp(p.id,"isHidden")}
+                title={p.isHidden?"Afficher":"Masquer"}
+                style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
+                  background:"none",cursor:"pointer",
+                  display:"grid",placeItems:"center",fontSize:14 }}>
+                {p.isHidden?"👁️":"🙈"}
+              </button>
+              <button onClick={() => startEdit(p)}
+                style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
+                  background:"none",cursor:"pointer",
+                  display:"grid",placeItems:"center",color:text }}>
+                <Edit size={13}/>
+              </button>
+              <button onClick={() => del(p.id)}
+                style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
+                  background:"none",cursor:"pointer",
+                  display:"grid",placeItems:"center",color:CA.danger }}>
+                <Trash size={13}/>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET CATÉGORIES
+────────────────────────────────────────── */
+function AdminCatsTab({ cats, setCats, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const [form, setForm] = useState({ label:"", labelEn:"", soon:false });
+  const [saving, setSaving] = useState(false);
+
+  const add = async () => {
+    if (!form.label.trim()) return;
+    const newCat = { id: form.label.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""),
+      label:form.label, labelEn:form.labelEn||form.label, soon:form.soon };
+    const updated = [...cats, newCat];
+    setCats(updated);
+    setForm({ label:"", labelEn:"", soon:false });
+    try { await sb.upsert("announcements", { id:"categories", data:updated }); } catch(e){console.warn(e.message);}
+  };
+
+  const toggleSoon = async (id) => {
+    const updated = cats.map(c=>c.id===id?{...c,soon:!c.soon}:c);
+    setCats(updated);
+    try { await sb.upsert("announcements", { id:"categories", data:updated }); } catch(e){console.warn(e.message);}
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Supprimer cette catégorie ?")) return;
+    const updated = cats.filter(c=>c.id!==id);
+    setCats(updated);
+    try { await sb.upsert("announcements", { id:"categories", data:updated }); } catch(e){console.warn(e.message);}
+  };
+
+  const move = async (idx, dir) => {
+    const arr=[...cats]; const swap=idx+dir;
+    if (swap<0||swap>=arr.length) return;
+    [arr[idx],arr[swap]]=[arr[swap],arr[idx]];
+    setCats(arr);
+    try { await sb.upsert("announcements", { id:"categories", data:arr }); } catch(e){console.warn(e.message);}
+  };
+
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
+    border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
+    fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  return (
+    <div>
+      {/* Ajouter une catégorie */}
+      <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
+        borderRadius:14, padding:"16px", marginBottom:16 }}>
+        <h4 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 12px" }}>
+          ➕ Nouvelle catégorie
+        </h4>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+          <label style={{ display:"block" }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:3 }}>Nom français *</span>
+            <input style={inp} value={form.label}
+              onChange={e=>setForm(f=>({...f,label:e.target.value}))}
+              placeholder="Ex : Ceintures"/>
+          </label>
+          <label style={{ display:"block" }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:3 }}>Nom anglais</span>
+            <input style={inp} value={form.labelEn}
+              onChange={e=>setForm(f=>({...f,labelEn:e.target.value}))}
+              placeholder="Ex : Belts"/>
+          </label>
+        </div>
+        <label style={{ display:"flex", alignItems:"center", gap:6,
+          cursor:"pointer", fontSize:13, color:text, marginBottom:12 }}>
+          <input type="checkbox" checked={form.soon}
+            onChange={e=>setForm(f=>({...f,soon:e.target.checked}))}/>
+          Marquer comme "bientôt disponible"
+        </label>
+        <button onClick={add}
+          style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+            borderRadius:10, padding:"9px 16px", cursor:"pointer",
+            fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          <PlusCircle size={14}/> Ajouter la catégorie
+        </button>
+      </div>
+
+      {/* Liste catégories */}
+      <div style={{ display:"grid", gap:8 }}>
+        {cats.map((c,idx) => (
+          <div key={c.id} style={{ background:cardBg, border:`1px solid ${bord}`,
+            borderRadius:11, padding:"12px 14px",
+            display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+              <button onClick={() => move(idx,-1)} disabled={idx===0}
+                style={{ border:"none",background:"none",cursor:"pointer",padding:1,
+                  color:idx===0?bord:dark?CA.dMute:CA.mute }}>
+                <ChevronUp size={12}/>
+              </button>
+              <button onClick={() => move(idx,1)} disabled={idx===cats.length-1}
+                style={{ border:"none",background:"none",cursor:"pointer",padding:1,
+                  color:idx===cats.length-1?bord:dark?CA.dMute:CA.mute }}>
+                <ChevronDown size={12}/>
+              </button>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:600, fontSize:14, color:text }}>{c.label}</div>
+              {c.labelEn && <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{c.labelEn}</div>}
+            </div>
+            <button onClick={() => toggleSoon(c.id)}
+              style={{ padding:"5px 10px", borderRadius:8, fontSize:12, fontWeight:600,
+                border:`1px solid ${c.soon?CA.warning:bord}`,
+                background:c.soon?`${CA.warning}18`:"none",
+                color:c.soon?CA.warning:dark?CA.dMute:CA.mute, cursor:"pointer" }}>
+              {c.soon?"⏳ Bientôt":"✅ Actif"}
+            </button>
+            <button onClick={() => del(c.id)}
+              style={{ width:30,height:30,borderRadius:8,border:`1px solid ${bord}`,
+                background:"none",cursor:"pointer",display:"grid",
+                placeItems:"center",color:CA.danger }}>
+              <Trash size={12}/>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET ÉQUIPE
+────────────────────────────────────────── */
+function AdminTeamTab({ users, setUsers, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name:"", email:"", role:"delivery" });
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
+    border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
+    fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  const add = async () => {
+    if (!form.name||!form.email) return;
+    const u = { id:Date.now(), ...form, active:true };
+    setUsers(us=>[...us,u]);
+    setForm({ name:"", email:"", role:"delivery" }); setShowForm(false);
+    try { await sb.post("team_users",u); } catch(e){console.warn(e.message);}
+  };
+  const toggle = async id => {
+    const u = users.find(x=>x.id===id);
+    setUsers(us=>us.map(x=>x.id===id?{...x,active:!x.active}:x));
+    try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
+  };
+  const del = async id => {
+    if (!window.confirm("Supprimer ce membre ?")) return;
+    setUsers(us=>us.filter(u=>u.id!==id));
+    try { await sb.del("team_users",id); } catch(e){console.warn(e.message);}
+  };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between",
+        alignItems:"center", marginBottom:14 }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>
+          {users.length} membres
+        </span>
+        <button onClick={() => setShowForm(v=>!v)}
+          style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+            borderRadius:10, padding:"9px 14px", cursor:"pointer",
+            fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          <PlusCircle size={14}/> Ajouter
+        </button>
+      </div>
+      {showForm && (
+        <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
+          borderRadius:14, padding:"16px", marginBottom:14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Nom *</span>
+              <input style={inp} value={form.name}
+                onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Email *</span>
+              <input style={inp} type="email" value={form.email}
+                onChange={e=>setForm(f=>({...f,email:e.target.value}))}/>
+            </label>
+          </div>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:3 }}>Rôle *</span>
+            <select style={inp} value={form.role}
+              onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+              <option value="manager">👩‍💼 Gestionnaire</option>
+              <option value="delivery">🚴 Livreur</option>
+            </select>
+          </label>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={add}
+              style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+                borderRadius:10, padding:"9px 14px", cursor:"pointer",
+                fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+              <Check size={13}/> Ajouter
+            </button>
+            <button onClick={() => setShowForm(false)}
+              style={{ background:"none", color:text, border:`1px solid ${bord}`,
+                borderRadius:10, padding:"9px 12px", cursor:"pointer",
+                fontSize:13, display:"flex", alignItems:"center", gap:5 }}>
+              <X size={13}/> Annuler
+            </button>
+          </div>
+        </div>
+      )}
+      <div style={{ display:"grid", gap:8 }}>
+        {users.map(u => (
+          <div key={u.id} style={{ background:cardBg, border:`1px solid ${bord}`,
+            borderRadius:12, padding:"13px 14px",
+            display:"flex", alignItems:"center", gap:10, opacity:u.active?1:.55 }}>
+            <div style={{ width:40,height:40,borderRadius:999,
+              background:`${CA.gold}22`, display:"grid", placeItems:"center",
+              fontSize:18, flexShrink:0 }}>
+              {ROLES[u.role]?.badge||"👤"}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:600, fontSize:14, color:text }}>{u.name}</div>
+              <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute,
+                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {u.email}
+              </div>
+              <ABadge color={u.role==="admin"?CA.gold:u.role==="manager"?"#1DC0D4":CA.success}>
+                {ROLES[u.role]?.label||u.role}
+              </ABadge>
+            </div>
+            <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+              <button onClick={() => toggle(u.id)}
+                style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
+                  background:"none",cursor:"pointer",display:"grid",placeItems:"center",
+                  color:u.active?CA.success:CA.danger }}>
+                {u.active?<CheckCircle size={13}/>:<X size={13}/>}
+              </button>
+              {u.role!=="admin" && (
+                <button onClick={() => del(u.id)}
+                  style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
+                    background:"none",cursor:"pointer",display:"grid",
+                    placeItems:"center",color:CA.danger }}>
+                  <Trash size={13}/>
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET PARAMÈTRES
+────────────────────────────────────────── */
+function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const [tab, setTab]   = useState("contacts");
+  const [saved, setSaved] = useState(false);
+  const [pwd, setPwd] = useState({ old:"", new1:"", new2:"", err:"", ok:false });
+  const [newPromo, setNewPromo] = useState({ code:"", discount:"", maxUses:"" });
+  const setC = k => e => setCfg(c=>({...c,[k]:e.target.type==="checkbox"?e.target.checked:e.target.value}));
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
+    border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
+    fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  const save = async () => {
+    try { await sb.upsert("announcements", {id:"config", data:cfg}); } catch(e){console.warn(e.message);}
+    setSaved(true); setTimeout(()=>setSaved(false),2500);
+  };
+
+  const addPromo = () => {
+    if (!newPromo.code||!newPromo.discount) return;
+    const p = { code:newPromo.code.toUpperCase(), discount:parseInt(newPromo.discount)||0,
+      maxUses:parseInt(newPromo.maxUses)||999, uses:0, active:true };
+    setPromos(ps=>[...ps,p]);
+    setNewPromo({ code:"", discount:"", maxUses:"" });
+  };
+
+  const changePwd = () => {
+    if (pwd.old !== "dada2025") { setPwd(p=>({...p,err:"Ancien mot de passe incorrect."})); return; }
+    if (pwd.new1.length < 6)    { setPwd(p=>({...p,err:"Nouveau mot de passe trop court (min 6 caractères)."})); return; }
+    if (pwd.new1 !== pwd.new2)  { setPwd(p=>({...p,err:"Les mots de passe ne correspondent pas."})); return; }
+    // En vrai il faudrait stocker en Supabase
+    setPwd({ old:"", new1:"", new2:"", err:"", ok:true });
+    setTimeout(() => setPwd(p=>({...p,ok:false})), 3000);
+  };
+
+  const settingsTabs = [
+    { k:"contacts",  label:"📞 Contacts" },
+    { k:"livraison", label:"🚚 Livraison" },
+    { k:"banniere",  label:"📢 Bannière" },
+    { k:"promos",    label:"🎁 Promos" },
+    { k:"apparence", label:"🎨 Apparence" },
+    { k:"securite",  label:"🔐 Sécurité" },
+  ];
+
+  return (
+    <div>
+      {/* Sous-onglets paramètres — scroll horizontal */}
+      <div style={{ display:"flex", gap:6, marginBottom:16, overflowX:"auto",
+        paddingBottom:4, WebkitOverflowScrolling:"touch" }}>
+        {settingsTabs.map(st => (
+          <button key={st.k} onClick={() => setTab(st.k)}
+            style={{ padding:"7px 12px", borderRadius:9, fontSize:12.5, fontWeight:600,
+              border:`1.5px solid ${tab===st.k?CA.gold:bord}`,
+              background:tab===st.k?CA.ink:cardBg,
+              color:tab===st.k?CA.gold:text,
+              cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+            {st.label}
+          </button>
+        ))}
+      </div>
+
+      {/* CONTACTS */}
+      {tab==="contacts" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>📞 Contacts & Paiement</h3>
+          <div style={{ display:"grid", gap:10 }}>
+            {[
+              { key:"whatsapp",    label:"Numéro WhatsApp",  ph:"33768745841" },
+              { key:"orangeMoney", label:"Orange Money",      ph:"+226 XX XX XX XX" },
+              { key:"moovMoney",   label:"Moov Money",        ph:"+226 XX XX XX XX" },
+              { key:"wave",        label:"Wave",              ph:"+226 XX XX XX XX" },
+            ].map(f => (
+              <label key={f.key} style={{ display:"block" }}>
+                <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                  display:"block", marginBottom:3 }}>{f.label}</span>
+                <input style={inp} value={cfg[f.key]||""} onChange={setC(f.key)} placeholder={f.ph}/>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* LIVRAISON */}
+      {tab==="livraison" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🚚 Livraison</h3>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Ville principale</span>
+            <input style={inp} value={cfg.city||""} onChange={setC("city")}/>
+          </label>
+          <label style={{ display:"block" }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Livraison gratuite à partir de (FCFA)</span>
+            <input style={inp} type="number" value={cfg.freeFrom||""} onChange={setC("freeFrom")}/>
+          </label>
+        </div>
+      )}
+
+      {/* BANNIÈRE */}
+      {tab==="banniere" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>📢 Bannière d'annonce</h3>
+          {cfg.bannerActive && cfg.bannerText && (
+            <div style={{ background:cfg.bannerColor||CA.gold,
+              color:cfg.bannerColor===CA.ink?"#fff":CA.ink,
+              padding:"10px 16px", borderRadius:9, fontSize:13,
+              fontWeight:600, textAlign:"center", marginBottom:14 }}>
+              {cfg.bannerText}
+            </div>
+          )}
+          <label style={{ display:"flex", alignItems:"center", gap:8,
+            cursor:"pointer", marginBottom:14, fontSize:14, color:text }}>
+            <input type="checkbox" checked={!!cfg.bannerActive} onChange={setC("bannerActive")}/>
+            Activer la bannière sur le site
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Texte</span>
+            <input style={inp} value={cfg.bannerText||""} onChange={setC("bannerText")}
+              placeholder="🔥 Promo spéciale…"/>
+          </label>
+          <label style={{ display:"block" }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:6 }}>Couleur</span>
+            <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+              <input type="color" value={cfg.bannerColor||"#C9A84C"} onChange={setC("bannerColor")}
+                style={{ width:42, height:36, borderRadius:8,
+                  border:`1px solid ${bord}`, cursor:"pointer", padding:2 }}/>
+              {[CA.gold,"#E05030","#1A9E5E","#1DC0D4",CA.ink].map(c => (
+                <button key={c} onClick={() => setCfg(cfg=>({...cfg,bannerColor:c}))}
+                  style={{ width:26,height:26,borderRadius:999,background:c,
+                    border:`3px solid ${cfg.bannerColor===c?"#fff":"transparent"}`,
+                    outline:cfg.bannerColor===c?`2px solid ${CA.gold}`:"none",
+                    cursor:"pointer" }}/>
+              ))}
+            </div>
+          </label>
+        </div>
+      )}
+
+      {/* CODES PROMO */}
+      {tab==="promos" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🎁 Codes promo</h3>
+          {/* Créer */}
+          <div style={{ background:dark?`${CA.gold}0A`:`${CA.gold}08`,
+            border:`1px solid ${CA.gold}33`, borderRadius:10,
+            padding:"14px", marginBottom:16 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Code *</span>
+                <input style={inp} value={newPromo.code}
+                  onChange={e=>setNewPromo(p=>({...p,code:e.target.value.toUpperCase()}))}
+                  placeholder="DADA20"/>
+              </label>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>% réduction</span>
+                <input style={inp} type="number" min="1" max="90"
+                  value={newPromo.discount}
+                  onChange={e=>setNewPromo(p=>({...p,discount:e.target.value}))}
+                  placeholder="20"/>
+              </label>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Utilisations max</span>
+                <input style={inp} type="number"
+                  value={newPromo.maxUses}
+                  onChange={e=>setNewPromo(p=>({...p,maxUses:e.target.value}))}
+                  placeholder="100"/>
+              </label>
+            </div>
+            <button onClick={addPromo}
+              style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+                borderRadius:9, padding:"8px 14px", cursor:"pointer",
+                fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+              <PlusCircle size={13}/> Créer le code
+            </button>
+          </div>
+          {/* Liste */}
+          <div style={{ display:"grid", gap:8 }}>
+            {promos.map((p,i) => (
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8,
+                padding:"10px 12px", borderRadius:10,
+                border:`1px solid ${p.active?CA.gold+"44":bord}`,
+                background:p.active?`${CA.gold}08`:"none",
+                opacity:p.active?1:.6 }}>
+                <div style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                  color:p.active?CA.gold:text, fontSize:14, flex:1 }}>
+                  {p.code}
+                </div>
+                <ABadge color={p.active?CA.success:CA.mute}>
+                  {p.active?"Actif":"Inactif"}
+                </ABadge>
+                <span style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>-{p.discount}%</span>
+                <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute }}>
+                  {p.uses}/{p.maxUses}
+                </span>
+                <button onClick={() => setPromos(ps=>ps.map(x=>x.code===p.code?{...x,active:!x.active}:x))}
+                  style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
+                    background:"none",cursor:"pointer",display:"grid",placeItems:"center",
+                    color:p.active?CA.success:CA.mute }}>
+                  {p.active?<CheckCircle size={12}/>:<X size={12}/>}
+                </button>
+                <button onClick={() => setPromos(ps=>ps.filter(x=>x.code!==p.code))}
+                  style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
+                    background:"none",cursor:"pointer",display:"grid",
+                    placeItems:"center",color:CA.danger }}>
+                  <Trash size={12}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* APPARENCE */}
+      {tab==="apparence" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🎨 Apparence du site</h3>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Titre hero</span>
+            <input style={inp} value={cfg.heroTitle||""} onChange={setC("heroTitle")}/>
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Sous-titre hero</span>
+            <input style={inp} value={cfg.heroSub||""} onChange={setC("heroSub")}/>
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Message WhatsApp flottant</span>
+            <textarea style={{ ...inp, resize:"vertical" }} rows={2}
+              value={cfg.waMessage||""} onChange={setC("waMessage")}/>
+          </label>
+          {/* Prévisualisation */}
+          <div style={{ background:CA.ink, borderRadius:12, padding:"20px",
+            textAlign:"center", marginTop:8 }}>
+            <div style={{ fontSize:9, color:CA.gold, letterSpacing:4, marginBottom:8 }}>✦ DADA'S DROP ✦</div>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:18, color:"#fff", marginBottom:6 }}>
+              {cfg.heroTitle||"L'élégance, livrée chez vous."}
+            </div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,.6)" }}>
+              {cfg.heroSub||"Sacs & accessoires sélectionnés"} {cfg.city||"Ouagadougou"}.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SÉCURITÉ */}
+      {tab==="securite" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🔐 Changer le mot de passe</h3>
+          <div style={{ display:"grid", gap:10, marginBottom:14 }}>
+            {[
+              { key:"old",  label:"Ancien mot de passe",  ph:"••••••••" },
+              { key:"new1", label:"Nouveau mot de passe",  ph:"••••••••" },
+              { key:"new2", label:"Confirmer le nouveau",  ph:"••••••••" },
+            ].map(f => (
+              <label key={f.key} style={{ display:"block" }}>
+                <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                  display:"block", marginBottom:3 }}>{f.label}</span>
+                <input type="password" style={inp} value={pwd[f.key]}
+                  onChange={e=>setPwd(p=>({...p,[f.key]:e.target.value,err:"",ok:false}))}
+                  placeholder={f.ph}/>
+              </label>
+            ))}
+          </div>
+          {pwd.err && <p style={{ color:CA.danger, fontSize:12.5, margin:"0 0 10px" }}>{pwd.err}</p>}
+          {pwd.ok  && <p style={{ color:CA.success, fontSize:12.5, margin:"0 0 10px" }}>✅ Mot de passe mis à jour !</p>}
+          <button onClick={changePwd}
+            style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+              borderRadius:10, padding:"10px 16px", cursor:"pointer",
+              fontSize:13.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+            <Save size={14}/> Mettre à jour
+          </button>
+        </div>
+      )}
+
+      {/* Bouton Save global */}
+      <button onClick={save}
+        style={{ marginTop:16, background:CA.ink, color:CA.gold,
+          border:`1px solid ${CA.gold}44`, borderRadius:11,
+          padding:"12px 20px", cursor:"pointer", fontSize:14, fontWeight:700,
+          display:"flex", alignItems:"center", gap:8 }}>
+        {saved?<><CheckCircle size={16}/> Enregistré !</>:<><Save size={16}/> Enregistrer</>}
+      </button>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ADMIN APP PRINCIPALE
+────────────────────────────────────────── */
+function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
+  promos, setPromos, dark, onGoHome }) {
+
+  const [auth, setAuth]   = useState(null);
+  const [email, setEmail] = useState("");
+  const [pass, setPass]   = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [wrong, setWrong] = useState(false);
+  const [tab, setTab]     = useState("overview");
+  const [orders, setOrders] = useState([]);
+  const [users, setUsers]   = useState(INIT_USERS);
+  const [notifs, setNotifs] = useState([
+    { id:1, msg:"Bienvenue sur votre tableau de bord Dada's Drop !", time:"Maintenant", read:false },
+  ]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  const bg     = dark ? CA.dBg    : CA.cream;
+  const text   = dark ? CA.dText  : CA.ink;
+  const bord   = dark ? CA.dBorder: CA.border;
+  const cardBg = dark ? CA.dCard  : CA.card;
+  const unread = notifs.filter(n=>!n.read).length;
+
+  // Stock faible → notifs auto
+  useEffect(() => {
+    const lowStock = products.filter(p=>p.stock>0&&p.stock<=2);
+    if (lowStock.length>0) {
+      setNotifs(ns => {
+        const existing = ns.map(n=>n.msg);
+        const newNotifs = lowStock
+          .filter(p=>!existing.some(m=>m.includes(p.name)))
+          .map(p=>({ id:Date.now()+p.id,
+            msg:`⚠️ Stock faible : ${p.name} (${p.stock} restant${p.stock>1?"s":""})`,
+            time:"Maintenant", read:false }));
+        return [...ns, ...newNotifs];
+      });
+    }
+  }, [products]);
+
+  // Charger commandes depuis Supabase
+  useEffect(() => {
+    if (!auth) return;
+    setLoadingOrders(true);
+    sb.get("orders", "?order=date.desc&limit=100")
+      .then(rows => {
+        if (rows?.length>0) {
+          setOrders(rows);
+          // Notifs nouvelles commandes
+          const newOrders = rows.filter(o=>o.status===1);
+          if (newOrders.length>0) {
+            setNotifs(ns=>[{
+              id:Date.now(),
+              msg:`📦 ${newOrders.length} commande${newOrders.length>1?"s":""} en attente de traitement`,
+              time:"Maintenant", read:false
+            }, ...ns]);
+          }
+        } else {
+          // Données démo
+          setOrders([
+            { id:"DD-1001", name:"Awa Traoré",     phone:"70112233", ville:"Ouagadougou", quartier:"Karpala",     items:["Mini Boston Rose x1"],            total:25000, status:1, payment:"orange",   date:"2025-06-10", assignedTo:null },
+            { id:"DD-1002", name:"Fatou Diallo",   phone:"76445566", ville:"Ouagadougou", quartier:"Pissy",       items:["Mini Boston Bleu Denim x2"],       total:50000, status:2, payment:"wave",     date:"2025-06-12", assignedTo:3    },
+            { id:"DD-1003", name:"Mariam Koné",    phone:"65778899", ville:"Ouagadougou", quartier:"Gounghin",    items:["Coach Torry Camel x1","Tabby x1"], total:57000, status:3, payment:"moov",     date:"2025-06-08", assignedTo:null },
+            { id:"DD-1004", name:"Aïcha Sawadogo", phone:"71001122", ville:"Ouagadougou", quartier:"Wemtenga",    items:["Mini Boston Beige x1"],             total:24000, status:1, payment:"livraison",date:"2025-06-15", assignedTo:null },
+            { id:"DD-1005", name:"Roukiatou B.",   phone:"78334455", ville:"Ouagadougou", quartier:"Zone du Bois",items:["Tabby Coach x1"],                  total:35000, status:1, payment:"orange",   date:"2025-06-16", assignedTo:null },
+          ]);
+        }
+      })
+      .catch(e=>console.warn("Supabase orders:",e.message))
+      .finally(()=>setLoadingOrders(false));
+  }, [auth]);
+
+  const login = () => {
+    const u = users.find(x=>x.email===email&&x.active);
+    if (u && pass==="dada2025") { setAuth(u); setWrong(false); }
+    else setWrong(true);
+  };
+  const logout = () => { setAuth(null); setEmail(""); setPass(""); setTab("overview"); };
+
+  const can = action => {
+    if (!auth) return false;
+    if (auth.role==="admin") return true;
+    if (auth.role==="manager") return ["view_orders","edit_orders","add_product","view_stats"].includes(action);
+    if (auth.role==="delivery") return ["view_my_orders"].includes(action);
+    return false;
+  };
+
+  /* ── LOGIN ── */
+  if (!auth) return (
+    <div style={{ minHeight:"100vh", background:bg, display:"flex",
+      alignItems:"center", justifyContent:"center", padding:20 }}>
+      <div style={{ maxWidth:380, width:"100%", background:cardBg,
+        borderRadius:20, padding:28,
+        boxShadow:"0 24px 56px rgba(0,0,0,.15)",
+        border:`1px solid ${bord}` }}>
+        <div style={{ textAlign:"center", marginBottom:24 }}>
+          <LogoDD size={60}/>
+          <h1 style={{ fontFamily:"Georgia,serif", fontSize:20, color:text, margin:"14px 0 4px" }}>
+            Dada's Drop
+          </h1>
+          <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, margin:0, letterSpacing:.5 }}>
+            ESPACE ADMINISTRATION
+          </p>
+        </div>
+        <label style={{ display:"block", marginBottom:12 }}>
+          <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+            display:"block", marginBottom:4, letterSpacing:.3 }}>
+            ADRESSE EMAIL
+          </span>
+          <input value={email} onChange={e=>setEmail(e.target.value)}
+            placeholder="email@dadasdrop.com" type="email"
+            style={{ width:"100%", padding:"11px 13px", borderRadius:10,
+              border:`1.5px solid ${wrong?"#E05030":bord}`,
+              background:dark?CA.dCard:"#fff",
+              fontSize:"16px", color:text, fontFamily:"inherit" }}
+            onKeyDown={e=>e.key==="Enter"&&login()}/>
+        </label>
+        <label style={{ display:"block", marginBottom:8, position:"relative" }}>
+          <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+            display:"block", marginBottom:4, letterSpacing:.3 }}>
+            MOT DE PASSE
+          </span>
+          <input value={pass} onChange={e=>setPass(e.target.value)}
+            type={showPw?"text":"password"} placeholder="••••••••"
+            style={{ width:"100%", padding:"11px 40px 11px 13px", borderRadius:10,
+              border:`1.5px solid ${wrong?"#E05030":bord}`,
+              background:dark?CA.dCard:"#fff",
+              fontSize:"16px", color:text, fontFamily:"inherit" }}
+            onKeyDown={e=>e.key==="Enter"&&login()}/>
+          <button onClick={()=>setShowPw(v=>!v)}
+            style={{ position:"absolute", right:11, bottom:11, border:"none",
+              background:"none", cursor:"pointer", color:dark?CA.dMute:CA.mute }}>
+            {showPw?<EyeOff size={17}/>:<Eye size={17}/>}
+          </button>
+        </label>
+        {wrong && (
+          <div style={{ display:"flex", alignItems:"center", gap:6,
+            color:CA.danger, fontSize:12.5, marginBottom:8 }}>
+            <AlertCircle size={13}/> Email ou mot de passe incorrect.
+          </div>
+        )}
+        <button onClick={login}
+          style={{ width:"100%", padding:"13px", background:CA.ink, color:CA.gold,
+            border:`1px solid ${CA.gold}44`, borderRadius:11, fontWeight:700,
+            fontSize:15, cursor:"pointer", marginTop:8,
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+          <Lock size={16}/> Accéder au tableau de bord
+        </button>
+        <button onClick={onGoHome}
+          style={{ width:"100%", padding:"10px", background:"none",
+            color:dark?CA.dMute:CA.mute, border:"none", borderRadius:11,
+            fontWeight:500, fontSize:13, cursor:"pointer", marginTop:8,
+            display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+          <ArrowLeft size={13}/> Retour au site
+        </button>
+        <p style={{ textAlign:"center", fontSize:11,
+          color:dark?CA.dMute:"#bbb", marginTop:14 }}>
+          Accès réservé à l'équipe Dada's Drop
+        </p>
+      </div>
+    </div>
+  );
+
+  /* ── TABLEAU DE BORD ── */
+  const myOrders = auth.role==="delivery"
+    ? orders.filter(o=>o.assignedTo===auth.id) : orders;
+  const totalRev = orders.reduce((s,o)=>s+(o.total||0),0);
+  const pending  = orders.filter(o=>o.status===1).length;
+  const lowStock = products.filter(p=>p.stock<=2);
+
+  const tabs = [
+    ...(can("view_stats") ? [{ key:"overview",  icon:<BarChart2 size={14}/>, label:"Bilan" }] : []),
+    { key:"orders",   icon:<ShoppingCart size={14}/>, label:auth.role==="delivery"?"Livraisons":"Commandes" },
+    ...(can("add_product") ? [{ key:"products", icon:<ShoppingBag size={14}/>, label:"Produits" }] : []),
+    ...(auth.role==="admin"?[
+      { key:"cats",     icon:<Tag size={14}/>,         label:"Catégories" },
+      { key:"team",     icon:<Users size={14}/>,       label:"Équipe" },
+      { key:"settings", icon:<Settings size={14}/>,    label:"Paramètres" },
+    ]:[]),
+  ];
+
+  return (
+    <div style={{ minHeight:"100vh", background:bg,
+      fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+      <style>{`
+        *{box-sizing:border-box}
+        input,textarea,select{font-family:inherit}
+        @supports(-webkit-touch-callout:none){input,textarea,select{font-size:16px!important}}
+        input:focus,textarea:focus,select:focus{outline:none;border-color:${CA.gold}!important}
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-thumb{background:${CA.gold}44;border-radius:99px}
+      `}</style>
+
+      {/* TOPBAR — compact mobile */}
+      <header style={{ background:CA.ink, borderBottom:`1px solid ${CA.gold}33`,
+        padding:"0 14px", height:54,
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        position:"sticky", top:0, zIndex:50 }}>
+        {/* Gauche — logo */}
+        <div style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
+          <LogoDD size={30}/>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:12, fontWeight:700,
+              color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+              DADA'S DROP
+            </div>
+            <div style={{ fontSize:9, color:CA.gold, letterSpacing:1 }}>ADMINISTRATION</div>
+          </div>
+        </div>
+        {/* Droite — notifs + user + déco */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+          {/* Notifs */}
+          <div style={{ position:"relative" }}>
+            <button onClick={() => setNotifOpen(v=>!v)}
+              style={{ border:"none", background:"none", cursor:"pointer",
+                color:"#fff", padding:4, position:"relative" }}>
+              <Bell size={18}/>
+              {unread>0 && <span style={{ position:"absolute", top:-1, right:-1,
+                background:CA.danger, color:"#fff", fontSize:9, fontWeight:800,
+                width:15, height:15, borderRadius:999,
+                display:"grid", placeItems:"center" }}>{unread}</span>}
+            </button>
+            {notifOpen && (
+              <div style={{ position:"absolute", right:0, top:36,
+                width:"min(300px,86vw)",
+                background:cardBg, border:`1px solid ${bord}`,
+                borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.25)",
+                zIndex:100, overflow:"hidden" }}>
+                <div style={{ padding:"10px 14px",
+                  borderBottom:`1px solid ${bord}`,
+                  display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontWeight:700, fontSize:13, color:text }}>Notifications</span>
+                  <button onClick={() => { setNotifs(n=>n.map(x=>({...x,read:true}))); setNotifOpen(false); }}
+                    style={{ border:"none", background:"none", cursor:"pointer",
+                      color:CA.mute, fontSize:11 }}>Tout lire</button>
+                </div>
+                {notifs.slice(0,5).map(n => (
+                  <div key={n.id} style={{ padding:"10px 14px",
+                    borderBottom:`1px solid ${bord}`,
+                    background:n.read?"transparent":`${CA.gold}0A` }}>
+                    <div style={{ fontSize:12.5, color:text, fontWeight:n.read?400:600 }}>
+                      {n.msg}
+                    </div>
+                    <div style={{ fontSize:10.5, color:CA.mute, marginTop:2 }}>{n.time}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* User */}
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:12, color:"#fff", fontWeight:600,
+              whiteSpace:"nowrap" }}>
+              {auth.name.split(" ")[0]}
+            </div>
+            <div style={{ fontSize:9.5, color:CA.gold, whiteSpace:"nowrap" }}>
+              {ROLES[auth.role]?.badge} {ROLES[auth.role]?.label}
+            </div>
+          </div>
+          {/* Déconnexion */}
+          <button onClick={logout} title="Déconnexion"
+            style={{ border:`1px solid ${CA.gold}44`, background:"none",
+              borderRadius:8, padding:"7px", cursor:"pointer",
+              color:CA.gold, display:"grid", placeItems:"center" }}>
+            <LogOut size={14}/>
+          </button>
+        </div>
+      </header>
+
+      <div style={{ maxWidth:1100, margin:"0 auto", padding:"16px 14px 48px" }}>
+        {/* ONGLETS — scroll horizontal sur mobile */}
+        <div style={{ display:"flex", gap:6, marginBottom:18,
+          overflowX:"auto", paddingBottom:4,
+          WebkitOverflowScrolling:"touch" }}>
+          {tabs.map(tb => (
+            <button key={tb.key} onClick={() => setTab(tb.key)}
+              style={{ display:"flex", alignItems:"center", gap:5,
+                padding:"8px 13px", borderRadius:9, flexShrink:0,
+                border:`1.5px solid ${tab===tb.key?CA.gold:bord}`,
+                background:tab===tb.key?CA.ink:cardBg,
+                color:tab===tb.key?CA.gold:text,
+                cursor:"pointer", fontSize:12.5, fontWeight:600,
+                whiteSpace:"nowrap" }}>
+              {tb.icon} {tb.label}
+            </button>
+          ))}
+        </div>
+
+        {/* VUE D'ENSEMBLE */}
+        {tab==="overview" && (
+          <div>
+            {pending>0 && (
+              <div style={{ background:`${CA.warning}15`,
+                border:`1px solid ${CA.warning}44`, borderRadius:12,
+                padding:"12px 14px", marginBottom:16,
+                display:"flex", alignItems:"center", gap:10 }}>
+                <AlertCircle size={18} color={CA.warning}/>
+                <span style={{ fontSize:13.5, color:text, fontWeight:600, flex:1 }}>
+                  {pending} commande{pending>1?"s":""} en attente
+                </span>
+                <button onClick={() => setTab("orders")}
+                  style={{ background:CA.warning, color:"#fff", border:"none",
+                    borderRadius:7, padding:"5px 12px", cursor:"pointer",
+                    fontSize:12, fontWeight:700 }}>Voir</button>
+              </div>
+            )}
+            <div style={{ display:"grid",
+              gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",
+              gap:10, marginBottom:20 }}>
+              <AStatCard icon={<ShoppingCart size={18} color={CA.gold}/>}
+                value={orders.length} label="Commandes" color={CA.gold} dark={dark}/>
+              <AStatCard icon={<TrendingUp size={18} color={CA.success}/>}
+                value={`${totalRev.toLocaleString("fr-FR")} F`}
+                label="Revenus" color={CA.success} dark={dark}/>
+              <AStatCard icon={<ShoppingBag size={18} color="#1DC0D4"/>}
+                value={products.length} label="Articles" color="#1DC0D4" dark={dark}/>
+              <AStatCard icon={<Package size={18} color={CA.warning}/>}
+                value={pending} label="En attente" color={CA.warning} dark={dark}/>
+            </div>
+
+            {loadingOrders ? (
+              <div style={{ textAlign:"center", padding:32, color:text }}>
+                Chargement des commandes…
+              </div>
+            ) : (<>
+              {/* Commandes récentes */}
+              <div style={{ background:cardBg, border:`1px solid ${bord}`,
+                borderRadius:14, padding:"16px", marginBottom:14 }}>
+                <h3 style={{ fontFamily:"Georgia,serif", fontSize:15,
+                  color:text, margin:"0 0 12px" }}>Commandes récentes</h3>
+                {orders.slice(0,5).map((o,i) => (
+                  <div key={o.id} style={{ display:"flex", justifyContent:"space-between",
+                    alignItems:"center", padding:"9px 0",
+                    borderBottom:i<4?`1px solid ${bord}`:"none" }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:13, color:text }}>
+                        #{o.id} — {o.name}
+                      </div>
+                      <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute }}>
+                        {(o.items||[]).join(", ")}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column",
+                      alignItems:"flex-end", gap:3, flexShrink:0, marginLeft:8 }}>
+                      <ABadge color={STATUS_ADMIN_COLORS[o.status]}>
+                        {STATUS_ADMIN_LABELS[o.status]}
+                      </ABadge>
+                      <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                        color:CA.gold, fontSize:12 }}>
+                        {(o.total||0).toLocaleString("fr-FR")} F
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {orders.length===0 && (
+                  <p style={{ color:dark?CA.dMute:CA.mute, fontSize:13 }}>
+                    Aucune commande pour l'instant.
+                  </p>
+                )}
+              </div>
+
+              {/* Stock faible */}
+              <div style={{ background:cardBg, border:`1px solid ${bord}`,
+                borderRadius:14, padding:"16px" }}>
+                <h3 style={{ fontFamily:"Georgia,serif", fontSize:15,
+                  color:text, margin:"0 0 12px" }}>⚠️ Stock faible</h3>
+                {lowStock.length===0 ? (
+                  <p style={{ color:dark?CA.dMute:CA.mute, fontSize:13 }}>
+                    Tous les stocks sont corrects ✅
+                  </p>
+                ) : lowStock.map(p => (
+                  <div key={p.id} style={{ display:"flex",
+                    justifyContent:"space-between", alignItems:"center",
+                    padding:"8px 0", borderBottom:`1px solid ${bord}` }}>
+                    <span style={{ fontSize:13, color:text }}>{p.name}</span>
+                    <ABadge color={p.stock===0?CA.danger:CA.warning}>
+                      {p.stock===0?"Épuisé":`${p.stock} restant${p.stock>1?"s":""}`}
+                    </ABadge>
+                  </div>
+                ))}
+              </div>
+            </>)}
+          </div>
+        )}
+
+        {tab==="orders" && (
+          <AdminOrdersTab orders={myOrders} setOrders={setOrders}
+            users={users} auth={auth} dark={dark}/>
+        )}
+        {tab==="products" && can("add_product") && (
+          <AdminProductsTab products={products} setProducts={setProducts}
+            cats={cats} dark={dark}/>
+        )}
+        {tab==="cats" && auth.role==="admin" && (
+          <AdminCatsTab cats={cats} setCats={setCats} dark={dark}/>
+        )}
+        {tab==="team" && auth.role==="admin" && (
+          <AdminTeamTab users={users} setUsers={setUsers} dark={dark}/>
+        )}
+        {tab==="settings" && auth.role==="admin" && (
+          <AdminSettingsTab cfg={cfg} setCfg={setCfg}
+            promos={promos} setPromos={setPromos} dark={dark}/>
+        )}
+      </div>
+    </div>
   );
 }
