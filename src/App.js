@@ -1712,9 +1712,6 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
     try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
   }, [cart]);
   useEffect(() => {
-    try { localStorage.setItem("dd_favs", JSON.stringify(favs)); } catch {}
-  }, [favs]);
-  useEffect(() => {
     const isOpen = menuOpen||cartOpen||checkout||trackOpen||!!selected;
     document.body.style.overflow = isOpen?"hidden":"";
     return () => { document.body.style.overflow=""; };
@@ -1762,10 +1759,6 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   }, [query,cat,sort,inStock,visibleProducts,minPrice,maxPrice,cats]);
 
   const bestSellers = visibleProducts.filter(p=>p.isBest&&p.stock>0).slice(0,4);
-
-  const toggleFav = useCallback(id => {
-    setFavs(fs => fs.includes(id) ? fs.filter(x=>x!==id) : [...fs, id]);
-  }, []);
 
   const addToCart = useCallback((p, qty=1, variant=null) => {
     setCart(c => {
