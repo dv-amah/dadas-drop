@@ -1688,9 +1688,6 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   const [cart, setCart]         = useState(() => {
     try { const s = localStorage.getItem("dd_cart"); return s?JSON.parse(s):[]; } catch { return []; }
   });
-  const [favs, setFavs]         = useState(() => {
-    try { const s = localStorage.getItem("dd_favs"); return s?JSON.parse(s):[]; } catch { return []; }
-  });
   const [selected, setSelected]   = useState(null);
   const [cartOpen, setCartOpen]   = useState(false);
   const [checkout, setCheckout]   = useState(false);
