@@ -336,6 +336,37 @@ function Carousel({ p }) {
   );
 }
 
+
+/* ════════════════════════════════════════════
+   ⭐ COMPOSANT ÉTOILES
+════════════════════════════════════════════ */
+function StarRating({ rating=0, count=0, size=12, interactive=false, onRate }) {
+  const [hovered, setHovered] = useState(0);
+  const display = hovered || rating;
+  return (
+    <div style={{ display:"inline-flex", alignItems:"center", gap:3 }}>
+      <div style={{ display:"flex", gap:1 }}>
+        {[1,2,3,4,5].map(i => (
+          <span key={i}
+            onClick={() => interactive && onRate && onRate(i)}
+            onMouseEnter={() => interactive && setHovered(i)}
+            onMouseLeave={() => interactive && setHovered(0)}
+            style={{ cursor:interactive?"pointer":"default",
+              fontSize:size, lineHeight:1,
+              color: i<=display ? "#F5A623" : "#DDD",
+              transition:"color .15s" }}>
+            ★
+          </span>
+        ))}
+      </div>
+      {count>0 && (
+        <span style={{ fontSize:size-1, color:"#8A7A6A", marginLeft:2 }}>
+          {rating.toFixed(1)} ({count})
+        </span>
+      )}
+    </div>
+  );
+}
 /* ════════════════════════════════════════════
    🎨 SÉLECTEUR DE VARIANTES
 ════════════════════════════════════════════ */
@@ -393,10 +424,9 @@ function VariantPicker({ p, selected, onSelect, t, dark }) {
 /* ════════════════════════════════════════════
    🛍 CARTE PRODUIT
 ════════════════════════════════════════════ */
-function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted }) {
-  const [fav, setFav] = useState(false);
+function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted, isFav, onToggleFav }) {
   const out  = p.stock === 0;
-  const low  = p.stock > 0 && p.stock <= 2;
+  const low  = p.stock > 0 && p.stock <= 5;
   const bg   = dark ? C.dCard : C.card;
   const bord = dark ? C.dBorder : C.border;
   const text = dark ? C.dText : C.ink;
@@ -449,11 +479,11 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted }) {
           {t.lowStock} {p.stock}!
         </span>}
         {/* Favoris */}
-        <button onClick={e => { e.stopPropagation(); setFav(v=>!v); }}
+        <button onClick={e => { e.stopPropagation(); onToggleFav(p.id); }}
           style={{ position:"absolute", bottom:8, right:8, width:28, height:28,
             borderRadius:999, border:"none", background:"rgba(255,255,255,.92)",
             display:"grid", placeItems:"center", cursor:"pointer" }}>
-          <Heart size={13} color={fav?C.gold:"#bbb"} fill={fav?C.gold:"none"}/>
+          <Heart size={13} color={isFav?C.gold:"#bbb"} fill={isFav?C.gold:"none"}/>
         </button>
         {/* Variantes couleurs sur la carte */}
         {p.variants?.length > 0 && p.variants[0]?.type === "color" && (
@@ -477,8 +507,15 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted }) {
           {p.brand}
         </div>
         <div style={{ fontFamily:"Georgia,serif", color:text,
-          fontSize:13.5, lineHeight:1.3, marginBottom:6 }}>
+          fontSize:13.5, lineHeight:1.3, marginBottom:4 }}>
           {p.name}
+        </div>
+        {/* Étoiles */}
+        <div style={{ marginBottom:6 }}>
+          <StarRating rating={p.rating||0} count={p.ratingCount||0} size={11}/>
+          {(!p.rating||p.rating===0) && (
+            <span style={{ fontSize:10, color:"#bbb" }}>Pas encore d'avis</span>
+          )}
         </div>
         {/* Prix */}
         <div style={{ display:"flex", alignItems:"center",
@@ -563,6 +600,13 @@ function ProductModal({ p, t, onClose, onAdd, dark }) {
             {/* Nom */}
             <h3 style={{ fontFamily:"Georgia,serif", fontSize:22,
               color:text, margin:"0 0 6px" }}>{p.name}</h3>
+            {/* Étoiles */}
+            <div style={{ marginBottom:8 }}>
+              <StarRating rating={p.rating||0} count={p.ratingCount||0} size={14}/>
+              {(!p.rating||p.rating===0) && (
+                <span style={{ fontSize:11, color:"#bbb" }}>Pas encore d'avis</span>
+              )}
+            </div>
             {/* Prix */}
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
               <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
@@ -767,7 +811,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
 /* ════════════════════════════════════════════
    💳 CHECKOUT
 ════════════════════════════════════════════ */
-function Checkout({ open, lines, total, onClose, t, dark, promos, cfg }) {
+function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, cfg }) {
   const [form, setForm]         = useState({ nom:"", tel:"", ville: cfg?.city||DEFAULT_CFG.city, adresse:"", note:"" });
   const [pay, setPay]           = useState("orange");
   const [promoCode, setPromoCode] = useState("");
@@ -820,6 +864,8 @@ function Checkout({ open, lines, total, onClose, t, dark, promos, cfg }) {
     } catch(e) { console.warn("Supabase order:", e.message); }
     setSaving(false);
     setSent(true);
+    if (typeof onClearCart === "function") onClearCart();
+    if (onClearCart) onClearCart();
   };
 
   const copy = () => {
@@ -1105,8 +1151,13 @@ function TrackModal({ open, onClose, t, dark }) {
             </div>
           ) : (
             <div style={{ display:"flex", gap:7 }}>
-              <input value={tel} onChange={e=>setTel(e.target.value)}
-                placeholder="Ex : 70 00 00 00" inputMode="numeric"
+              <input value={tel}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9]/g,"");
+                  if (v.length <= 8) setTel(v);
+                }}
+                placeholder="Ex : 70000000" inputMode="numeric"
+                maxLength={8}
                 style={{ ...inpStyle(dark), flex:1 }}
                 onKeyDown={e=>e.key==="Enter"&&trackByPhone()}/>
               <button onClick={trackByPhone}
@@ -1149,16 +1200,32 @@ function TrackModal({ open, onClose, t, dark }) {
                     <CheckCircle size={16}/> Merci pour votre avis ✦
                   </div>
                 ) : (<>
-                  <div style={{ fontSize:12.5, fontWeight:700, color:text, marginBottom:5 }}>
+                  <div style={{ fontSize:12.5, fontWeight:700, color:text, marginBottom:8 }}>
                     {t.comment}
                   </div>
-                  <textarea value={comment} onChange={e=>setComment(e.target.value)}
-                    rows={3} style={{ ...inpStyle(dark), resize:"vertical" }}/>
-                  <button onClick={()=>setCommentSent(true)} disabled={!comment.trim()}
+                  {/* Note étoiles */}
+                  <div style={{ marginBottom:10 }}>
+                    <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute, marginBottom:5 }}>
+                      Votre note :
+                    </div>
+                    <StarRating
+                      rating={comment.stars||0} size={28} interactive
+                      onRate={v=>setComment(c=>({...c,stars:v}))}/>
+                  </div>
+                  <textarea value={comment.text||""} onChange={e=>setComment(c=>({...c,text:e.target.value}))}
+                    rows={3} placeholder="Partagez votre expérience…"
+                    style={{ ...inpStyle(dark), resize:"vertical" }}/>
+                  <button onClick={()=>setCommentSent(true)}
+                    disabled={!comment.stars}
                     style={{ ...primaryBtn, marginTop:7, width:"100%",
-                      justifyContent:"center", opacity:comment.trim()?1:.5 }}>
+                      justifyContent:"center", opacity:comment.stars?1:.5 }}>
                     <Star size={14}/> {t.commentSend}
                   </button>
+                  {!comment.stars && (
+                    <p style={{ fontSize:11, color:C.mute, margin:"4px 0 0", textAlign:"center" }}>
+                      Donnez au moins une note pour envoyer votre avis
+                    </p>
+                  )}
                 </>)
               )}
             </div>
@@ -1381,7 +1448,7 @@ function FilterPanel({ cats, cat, setCat, sort, setSort, inStock, setInStock,
 /* ════════════════════════════════════════════
    📜 MENU LATÉRAL
 ════════════════════════════════════════════ */
-function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats }) {
+function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats, favs=[] }) {
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
   return (<>
@@ -1411,6 +1478,22 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats
             {item.label}
           </button>
         ))}
+        {/* Favoris */}
+        <button onClick={() => { setPage("favs"); onClose(); }}
+          style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
+            textAlign:"left", padding:"9px 0", border:"none",
+            background:"none", cursor:"pointer",
+            fontFamily:"Georgia,serif", fontSize:17, color:text }}>
+          <Heart size={16} color={C.gold} fill={C.gold}/> Mes favoris
+          {favs && favs.length>0 && (
+            <span style={{ background:C.gold, color:C.ink, fontSize:10,
+              fontWeight:800, padding:"2px 7px", borderRadius:999 }}>
+              {favs.length}
+            </span>
+          )}
+        </button>
+        {/* Séparateur */}
+        <div style={{ height:1, background:dark?C.dBorder:C.border, margin:"8px 0 12px" }}/>
         <div style={{ marginTop:16, marginBottom:8 }}>
           <span style={{ fontSize:10, fontWeight:700, color: dark?C.dMute:C.mute,
             letterSpacing:2, textTransform:"uppercase" }}>Collections</span>
@@ -1605,6 +1688,9 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   const [cart, setCart]         = useState(() => {
     try { const s = localStorage.getItem("dd_cart"); return s?JSON.parse(s):[]; } catch { return []; }
   });
+  const [favs, setFavs]         = useState(() => {
+    try { const s = localStorage.getItem("dd_favs"); return s?JSON.parse(s):[]; } catch { return []; }
+  });
   const [selected, setSelected]   = useState(null);
   const [cartOpen, setCartOpen]   = useState(false);
   const [checkout, setCheckout]   = useState(false);
@@ -1612,11 +1698,25 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   const [menuOpen, setMenuOpen]   = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mounted, setMounted]     = useState(false);
+  const [favs, setFavs]           = useState(() => {
+    try { const s = localStorage.getItem("dd_favs"); return s?JSON.parse(s):[]; } catch { return []; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("dd_favs", JSON.stringify(favs)); } catch {}
+  }, [favs]);
+
+  const toggleFav = useCallback((id) => {
+    setFavs(fs => fs.includes(id) ? fs.filter(x=>x!==id) : [...fs,id]);
+  }, []);
 
   useEffect(() => { setTimeout(() => setMounted(true), 80); }, []);
   useEffect(() => {
     try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
   }, [cart]);
+  useEffect(() => {
+    try { localStorage.setItem("dd_favs", JSON.stringify(favs)); } catch {}
+  }, [favs]);
   useEffect(() => {
     const isOpen = menuOpen||cartOpen||checkout||trackOpen||!!selected;
     document.body.style.overflow = isOpen?"hidden":"";
@@ -1665,6 +1765,10 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   }, [query,cat,sort,inStock,visibleProducts,minPrice,maxPrice,cats]);
 
   const bestSellers = visibleProducts.filter(p=>p.isBest&&p.stock>0).slice(0,4);
+
+  const toggleFav = useCallback(id => {
+    setFavs(fs => fs.includes(id) ? fs.filter(x=>x!==id) : [...fs, id]);
+  }, []);
 
   const addToCart = useCallback((p, qty=1, variant=null) => {
     setCart(c => {
@@ -1938,6 +2042,7 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
             {bestSellers.map((p,i) => (
               <ProductCard key={p.id} p={p} t={t} cats={cats}
                 idx={i} mounted={mounted} dark={dark}
+                isFav={favs.includes(p.id)} onToggleFav={toggleFav}
                 onOpen={setSelected} onAdd={addToCart}/>
             ))}
           </div>
@@ -2025,6 +2130,7 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
               {list.map((p,i) => (
                 <ProductCard key={p.id} p={p} t={t} cats={cats}
                   idx={i} mounted={mounted} dark={dark}
+                  isFav={favs.includes(p.id)} onToggleFav={toggleFav}
                   onOpen={setSelected} onAdd={addToCart}/>
               ))}
             </div>
@@ -2032,6 +2138,41 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
         </section>
       )}
 
+      {page==="favs" && (
+        <section style={{ maxWidth:1200, margin:"0 auto", padding:"20px 16px 40px" }}>
+          <h1 style={{ fontFamily:"Georgia,serif", fontSize:22, color:text,
+            margin:"0 0 6px", fontWeight:400 }}>❤️ Mes favoris</h1>
+          <p style={{ fontSize:13, color:dark?C.dMute:C.mute, marginBottom:18 }}>
+            {favs.length} article{favs.length>1?"s":""} sauvegardé{favs.length>1?"s":""}
+          </p>
+          {favs.length===0 ? (
+            <div style={{ textAlign:"center", padding:"60px 16px" }}>
+              <Heart size={44} color={dark?C.dBorder:"#ddd"} strokeWidth={1.2}/>
+              <p style={{ marginTop:12, color:dark?C.dMute:"#bbb", fontSize:14 }}>
+                Vous n'avez pas encore de favoris.<br/>
+                Appuyez sur ❤️ sur un article pour l'ajouter ici.
+              </p>
+              <button onClick={()=>setPage("catalogue")}
+                style={{ ...primaryBtn, marginTop:16, gap:7 }}>
+                Voir le catalogue <ArrowRight size={14}/>
+              </button>
+            </div>
+          ) : (<>
+            {/* Séparateur visuel */}
+            <div style={{ height:2, background:GRAD, borderRadius:99,
+              marginBottom:20, maxWidth:60 }}/>
+            <div className="dd-grid"
+              style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
+              {visibleProducts.filter(p=>favs.includes(p.id)).map((p,i) => (
+                <ProductCard key={p.id} p={p} t={t} cats={cats}
+                  idx={i} mounted={mounted} dark={dark}
+                  isFav={true} onToggleFav={toggleFav}
+                  onOpen={setSelected} onAdd={addToCart}/>
+              ))}
+            </div>
+          </>)}
+        </section>
+      )}
       {page==="about"  && <AboutPage dark={dark} cfg={cfg}/>}
       {page==="legal"  && <LegalPage type="legal" dark={dark} setPage={setPage}/>}
       {page==="cgv"    && <LegalPage type="cgv"   dark={dark} setPage={setPage}/>}
@@ -2061,11 +2202,6 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
                 padding:"9px 14px", borderRadius:9, fontWeight:700, fontSize:13 }}>
               <MessageCircle size={15}/> WhatsApp
             </a>
-            <span style={{ display:"inline-flex", alignItems:"center", gap:6,
-              border:`1px solid ${C.gold}33`, padding:"9px 13px",
-              borderRadius:9, fontSize:12, color:C.gold }}>
-              <Phone size={14}/> {cfg?.orangeMoney||DEFAULT_CFG.orangeMoney}
-            </span>
           </div>
         </div>
         <div style={{ maxWidth:1200, margin:"16px auto 0",
@@ -2100,7 +2236,7 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
       {/* MODALS */}
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)}
         t={t} lang={lang} setLang={setLang} dark={dark}
-        setPage={setPage} setCat={setCat} cats={cats}/>
+        setPage={setPage} setCat={setCat} cats={cats} favs={favs}/>
       <ProductModal p={selected} t={t} dark={dark}
         onClose={() => setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products}
@@ -2109,7 +2245,8 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
         onCheckout={() => { setCartOpen(false); setCheckout(true); }}/>
       <Checkout open={checkout} lines={lines} total={total}
         t={t} dark={dark} promos={promos} cfg={cfg}
-        onClose={() => setCheckout(false)}/>
+        onClose={() => setCheckout(false)}
+        onClearCart={() => setCart([])}/>
       <TrackModal open={trackOpen} t={t} dark={dark}
         onClose={() => setTrackOpen(false)}/>
     </div>
@@ -2275,7 +2412,13 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
 
   const filtered = orders.filter(o => {
     if (filterStatus>0 && o.status!==filterStatus) return false;
-    if (search && !o.name?.toLowerCase().includes(search.toLowerCase()) && !o.id?.includes(search)) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const matchId    = o.id?.toLowerCase().includes(q);
+      const matchName  = o.name?.toLowerCase().includes(q);
+      const matchPhone = o.phone?.replace(/\s/g,"").includes(q.replace(/\s/g,""));
+      if (!matchId && !matchName && !matchPhone) return false;
+    }
     return true;
   });
 
@@ -2355,14 +2498,14 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
           <Search size={14} color={dark?CA.dMute:CA.mute}
             style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
           <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Rechercher une commande…"
+            placeholder="Nom, numéro de commande ou téléphone…"
             style={{ width:"100%", padding:"10px 12px 10px 32px",
               borderRadius:10, border:`1.5px solid ${bord}`,
               background:dark?CA.dCard:"#fff",
               fontSize:"16px", color:text, fontFamily:"inherit" }}/>
         </div>
       </div>
-      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+      <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap", alignItems:"center" }}>
         {[0,1,2,3].map(s => (
           <button key={s} onClick={() => setFilter(s)}
             style={{ padding:"7px 12px", borderRadius:9, fontSize:12.5, fontWeight:600,
@@ -2372,14 +2515,15 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
             {s===0?"Toutes":STATUS_ADMIN_LABELS[s]}
           </button>
         ))}
-        <button onClick={exportCSV}
-          style={{ marginLeft:"auto", background:CA.success, color:"#fff",
-            border:"none", borderRadius:9, padding:"7px 12px",
-            cursor:"pointer", fontSize:12.5, fontWeight:700,
-            display:"flex", alignItems:"center", gap:5 }}>
-          📊 Excel
-        </button>
       </div>
+      <button onClick={exportCSV}
+        style={{ width:"100%", marginBottom:14,
+          background:CA.success, color:"#fff",
+          border:"none", borderRadius:9, padding:"9px 12px",
+          cursor:"pointer", fontSize:13, fontWeight:700,
+          display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+        📊 Exporter en Excel (CSV)
+      </button>
 
       <div style={{ display:"grid", gap:10 }}>
         {filtered.map(o => (
@@ -2739,6 +2883,25 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
             </div>
           </div>
 
+          {/* Note manuelle */}
+          <div style={{ marginBottom:14 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:5 }}>
+              Note manuelle (si pas encore d'avis clients)
+            </span>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <StarRating
+                rating={form.rating||0} size={24} interactive
+                onRate={v=>setForm(f=>({...f,rating:v}))}/>
+              {form.rating>0 && (
+                <button onClick={()=>setForm(f=>({...f,rating:0}))}
+                  style={{ fontSize:11, color:CA.mute, background:"none",
+                    border:"none", cursor:"pointer" }}>
+                  Retirer
+                </button>
+              )}
+            </div>
+          </div>
           {/* Options */}
           <div style={{ display:"flex", flexWrap:"wrap", gap:12, marginBottom:14 }}>
             {[
@@ -2824,7 +2987,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
                 </> : <> · {(p.price||0).toLocaleString("fr-FR")} FCFA</>}
               </div>
               <div style={{ display:"flex", gap:5, marginTop:4, flexWrap:"wrap" }}>
-                <ABadge color={p.stock===0?CA.danger:p.stock<=2?CA.warning:CA.success}>
+                <ABadge color={p.stock===0?CA.danger:p.stock<=5?CA.warning:CA.success}>
                   {p.stock===0?"Épuisé":`Stock:${p.stock}`}
                 </ABadge>
                 {(p.variants||[]).length>0 && (
@@ -3443,7 +3606,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
 
   // Stock faible → notifs auto
   useEffect(() => {
-    const lowStock = products.filter(p=>p.stock>0&&p.stock<=2);
+    const lowStock = products.filter(p=>p.stock>0&&p.stock<=5);
     if (lowStock.length>0) {
       setNotifs(ns => {
         const existing = ns.map(n=>n.msg);
@@ -3521,36 +3684,40 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             ESPACE ADMINISTRATION
           </p>
         </div>
-        <label style={{ display:"block", marginBottom:12 }}>
+        <label style={{ display:"block", marginBottom:14 }}>
           <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
-            display:"block", marginBottom:4, letterSpacing:.3 }}>
+            display:"block", marginBottom:6, letterSpacing:.3 }}>
             ADRESSE EMAIL
           </span>
           <input value={email} onChange={e=>setEmail(e.target.value)}
             placeholder="email@dadasdrop.com" type="email"
-            style={{ width:"100%", padding:"11px 13px", borderRadius:10,
+            style={{ width:"100%", padding:"12px 14px", borderRadius:10,
               border:`1.5px solid ${wrong?"#E05030":bord}`,
               background:dark?CA.dCard:"#fff",
               fontSize:"16px", color:text, fontFamily:"inherit" }}
             onKeyDown={e=>e.key==="Enter"&&login()}/>
         </label>
-        <label style={{ display:"block", marginBottom:8, position:"relative" }}>
+        <label style={{ display:"block", marginBottom:14, position:"relative" }}>
           <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
-            display:"block", marginBottom:4, letterSpacing:.3 }}>
+            display:"block", marginBottom:6, letterSpacing:.3 }}>
             MOT DE PASSE
           </span>
-          <input value={pass} onChange={e=>setPass(e.target.value)}
-            type={showPw?"text":"password"} placeholder="••••••••"
-            style={{ width:"100%", padding:"11px 40px 11px 13px", borderRadius:10,
-              border:`1.5px solid ${wrong?"#E05030":bord}`,
-              background:dark?CA.dCard:"#fff",
-              fontSize:"16px", color:text, fontFamily:"inherit" }}
-            onKeyDown={e=>e.key==="Enter"&&login()}/>
-          <button onClick={()=>setShowPw(v=>!v)}
-            style={{ position:"absolute", right:11, bottom:11, border:"none",
-              background:"none", cursor:"pointer", color:dark?CA.dMute:CA.mute }}>
-            {showPw?<EyeOff size={17}/>:<Eye size={17}/>}
-          </button>
+          <div style={{ position:"relative" }}>
+            <input value={pass} onChange={e=>setPass(e.target.value)}
+              type={showPw?"text":"password"} placeholder="••••••••"
+              style={{ width:"100%", padding:"12px 44px 12px 14px", borderRadius:10,
+                border:`1.5px solid ${wrong?"#E05030":bord}`,
+                background:dark?CA.dCard:"#fff",
+                fontSize:"16px", color:text, fontFamily:"inherit" }}
+              onKeyDown={e=>e.key==="Enter"&&login()}/>
+            <button onClick={()=>setShowPw(v=>!v)}
+              style={{ position:"absolute", right:12, top:"50%",
+                transform:"translateY(-50%)", border:"none",
+                background:"none", cursor:"pointer", color:dark?CA.dMute:CA.mute,
+                display:"flex", alignItems:"center" }}>
+              {showPw?<EyeOff size={17}/>:<Eye size={17}/>}
+            </button>
+          </div>
         </label>
         {wrong && (
           <div style={{ display:"flex", alignItems:"center", gap:6,
@@ -3583,9 +3750,9 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   /* ── TABLEAU DE BORD ── */
   const myOrders = auth.role==="delivery"
     ? orders.filter(o=>o.assignedTo===auth.id) : orders;
-  const totalRev = orders.reduce((s,o)=>s+(o.total||0),0);
+  const totalRev = orders.filter(o=>o.status===3).reduce((s,o)=>s+(o.total||0),0);
   const pending  = orders.filter(o=>o.status===1).length;
-  const lowStock = products.filter(p=>p.stock<=2);
+  const lowStock = products.filter(p=>p.stock<=5);
 
   const tabs = [
     ...(can("view_stats") ? [{ key:"overview",  icon:<BarChart2 size={14}/>, label:"Bilan" }] : []),
@@ -3639,11 +3806,15 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                 width:15, height:15, borderRadius:999,
                 display:"grid", placeItems:"center" }}>{unread}</span>}
             </button>
-            {notifOpen && (
-              <div style={{ position:"absolute", right:0, top:36,
-                width:"min(300px,86vw)",
+            {notifOpen && (<>
+              <div onClick={() => setNotifOpen(false)}
+                style={{ position:"fixed", inset:0, zIndex:99 }}/>
+              <div style={{
+                position:"fixed",
+                top:58, right:10,
+                width:"min(300px,calc(100vw - 20px))",
                 background:cardBg, border:`1px solid ${bord}`,
-                borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.25)",
+                borderRadius:14, boxShadow:"0 12px 32px rgba(0,0,0,.3)",
                 zIndex:100, overflow:"hidden" }}>
                 <div style={{ padding:"10px 14px",
                   borderBottom:`1px solid ${bord}`,
@@ -3654,17 +3825,32 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                       color:CA.mute, fontSize:11 }}>Tout lire</button>
                 </div>
                 {notifs.slice(0,5).map(n => (
-                  <div key={n.id} style={{ padding:"10px 14px",
-                    borderBottom:`1px solid ${bord}`,
-                    background:n.read?"transparent":`${CA.gold}0A` }}>
-                    <div style={{ fontSize:12.5, color:text, fontWeight:n.read?400:600 }}>
-                      {n.msg}
+                  <div key={n.id}
+                    onClick={() => setNotifs(ns => ns.map(x => x.id===n.id ? {...x,read:true} : x))}
+                    style={{ padding:"10px 14px",
+                      borderBottom:`1px solid ${bord}`,
+                      background:n.read?"transparent":`${CA.gold}0A`,
+                      cursor:"pointer" }}
+                    onMouseEnter={e=>e.currentTarget.style.background=dark?CA.dBorder:CA.creamD}
+                    onMouseLeave={e=>e.currentTarget.style.background=n.read?"transparent":`${CA.gold}0A`}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                      <div style={{ fontSize:12.5, color:text, fontWeight:n.read?400:600, flex:1 }}>
+                        {n.msg}
+                      </div>
+                      {!n.read && <div style={{ width:7, height:7, borderRadius:999,
+                        background:CA.gold, flexShrink:0, marginTop:4 }}/>}
                     </div>
                     <div style={{ fontSize:10.5, color:CA.mute, marginTop:2 }}>{n.time}</div>
                   </div>
                 ))}
+                {notifs.every(n=>n.read) && (
+                  <div style={{ padding:"16px", textAlign:"center",
+                    color:CA.mute, fontSize:12.5 }}>
+                    ✅ Tout est lu
+                  </div>
+                )}
               </div>
-            )}
+            </>)}
           </div>
           {/* User */}
           <div style={{ textAlign:"right" }}>
