@@ -3174,20 +3174,23 @@ function AdminCatsTab({ cats, setCats, dark }) {
   const [saving, setSaving] = useState(false);
   const [translating, setTranslating] = useState(false);
 
-  // Traduction automatique FR → EN
-  const translateAuto = async (frText) => {
-    if (!frText.trim()) return;
+  // Traduction en direct avec debounce 800ms
+  useEffect(() => {
+    if (!form.label.trim()) { setForm(f=>({...f,labelEn:""})); return; }
     setTranslating(true);
-    try {
-      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(frText)}&langpair=fr|en`);
-      const data = await res.json();
-      const translated = data?.responseData?.translatedText;
-      if (translated && translated !== frText) {
-        setForm(f => ({...f, labelEn: translated}));
-      }
-    } catch(e) { console.warn("Traduction:", e.message); }
-    setTranslating(false);
-  };
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(form.label.trim())}&langpair=fr|en`);
+        const data = await res.json();
+        const translated = data?.responseData?.translatedText;
+        if (translated && translated.toLowerCase() !== form.label.toLowerCase()) {
+          setForm(f => ({...f, labelEn: translated}));
+        }
+      } catch(e) { console.warn("Traduction:", e.message); }
+      setTranslating(false);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [form.label]);
 
   const add = async () => {
     if (!form.label.trim()) return;
@@ -3236,27 +3239,24 @@ function AdminCatsTab({ cats, setCats, dark }) {
           <label style={{ display:"block" }}>
             <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
               display:"block", marginBottom:3 }}>Nom français *</span>
-            <div style={{ display:"flex", gap:7 }}>
-              <input style={{ ...inp, flex:1 }} value={form.label}
-                onChange={e=>setForm(f=>({...f,label:e.target.value}))}
-                placeholder="Ex : Ceintures"/>
-              <button onClick={() => translateAuto(form.label)}
-                disabled={!form.label.trim()||translating}
-                style={{ background:CA.ink, color:CA.gold,
-                  border:`1px solid ${CA.gold}44`, borderRadius:9,
-                  padding:"0 12px", cursor:"pointer", fontSize:12,
-                  fontWeight:700, flexShrink:0, opacity:form.label.trim()?1:.4 }}>
-                {translating?"...":"🌐 Traduire"}
-              </button>
-            </div>
+            <input style={inp} value={form.label}
+              onChange={e=>setForm(f=>({...f,label:e.target.value}))}
+              placeholder="Ex : Ceintures"/>
           </label>
           <label style={{ display:"block" }}>
             <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
               display:"block", marginBottom:3 }}>Nom anglais</span>
-            <input style={{ ...inp, opacity:translating?.6:1 }}
-              value={translating?"Traduction…":form.labelEn}
-              onChange={e=>setForm(f=>({...f,labelEn:e.target.value}))}
-              placeholder="Traduit automatiquement…"/>
+            <div style={{ position:"relative" }}>
+              <input style={{ ...inp, opacity:translating?.7:1,
+                paddingRight:translating?"36px":undefined }}
+                value={form.labelEn}
+                onChange={e=>setForm(f=>({...f,labelEn:e.target.value}))}
+                placeholder={translating?"Traduction en cours…":"Traduit automatiquement"}/>
+              {translating && (
+                <span style={{ position:"absolute", right:10, top:"50%",
+                  transform:"translateY(-50%)", fontSize:14 }}>⏳</span>
+              )}
+            </div>
           </label>
         </div>
         <label style={{ display:"flex", alignItems:"center", gap:6,
@@ -3341,12 +3341,17 @@ function AdminTeamTab({ users, setUsers, dark }) {
     try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
   };
   const changeRole = async (id, role) => {
-    // Seul David (id:1) peut changer les rôles
-    if (auth.id !== 1) {
-      window.alert("⛔ Seul l'administrateur principal peut modifier les rôles.");
+    // Personne ne peut toucher à David (id:1)
+    if (id === 1) {
+      window.alert("⛔ Impossible de modifier le rôle de l'administrateur principal.");
       return;
     }
-    if (role==="admin" && !window.confirm("⚠️ Ce membre aura accès à tout sauf la gestion des rôles. Confirmer ?")) return;
+    // Les non-David ne peuvent pas changer les autres admins
+    if (auth.id !== 1 && users.find(u=>u.id===id)?.role === "admin") {
+      window.alert("⛔ Seul David peut modifier le rôle d'un administrateur.");
+      return;
+    }
+    if (role==="admin" && !window.confirm("⚠️ Ce membre aura accès à l'admin. Confirmer ?")) return;
     setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));
     try { await sb.patch("team_users",id,{role}); } catch(e){console.warn(e.message);}
     window.alert(`✅ Rôle mis à jour. La personne doit se reconnecter pour voir son nouveau rôle.`);
@@ -3446,8 +3451,12 @@ function AdminTeamTab({ users, setUsers, dark }) {
               </ABadge>
             </div>
             <div style={{ display:"flex", gap:5, flexShrink:0 }}>
-              {/* Changer le rôle — UNIQUEMENT David (id:1) peut le faire */}
-              {auth.id === 1 && u.id !== 1 && (
+              {/* Changer le rôle :
+                  - David (id:1) peut changer tout le monde sauf lui-même
+                  - Les autres admins peuvent changer seulement les non-admin
+                  - Personne ne peut destituer David */}
+              {auth.id === 1 && u.id !== 1 ? (
+                // David peut tout changer
                 <select value={u.role}
                   onChange={e => changeRole(u.id, e.target.value)}
                   style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
@@ -3459,7 +3468,20 @@ function AdminTeamTab({ users, setUsers, dark }) {
                   <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
                   <option value="admin">👑 Admin</option>
                 </select>
-              )}
+              ) : auth.id !== 1 && auth.role === "admin" && u.role !== "admin" && u.id !== 1 ? (
+                // Autres admins peuvent changer seulement les non-admin (pas David, pas les autres admins)
+                <select value={u.role}
+                  onChange={e => changeRole(u.id, e.target.value)}
+                  style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
+                    border:`1px solid ${bord}`,
+                    background:dark?CA.dCard:"#fff",
+                    color:text, cursor:"pointer", fontFamily:"inherit",
+                    maxWidth:130, flexShrink:1 }}>
+                  <option value="delivery">🚚 Livreur</option>
+                  <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
+                  <option value="admin">👑 Admin</option>
+                </select>
+              ) : null}
               {/* Activer / désactiver */}
               <button onClick={() => toggle(u.id)}
                 title={u.active?"Désactiver":"Activer"}
