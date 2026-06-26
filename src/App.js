@@ -852,6 +852,11 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
     const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}\n\n💰 Total : ${fcfa(finalTotal)}\n💳 Règlement : ${payLabels[pay]}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${pay!=="livraison"?"\n✅ Je joins la capture du paiement.":""}`;
     window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
     setSaving(true);
+    // Décrémenter le stock de chaque article commandé
+    for (const l of lines) {
+      const newStock = Math.max(0, (l.stock||0) - l.qty);
+      try { await sb.patch("products", l.id, { stock: newStock }); } catch(e){ console.warn(e.message); }
+    }
     try {
       await sb.post("orders", {
         id:orderNum,
@@ -2267,9 +2272,9 @@ const STATUS_ADMIN_LABELS = ["","En préparation","Expédiée","Livrée"];
 const STATUS_ADMIN_COLORS = ["", CA.warning, "#1DC0D4", CA.success];
 
 const INIT_USERS = [
-  { id:1, name:"David Amah",    email:"david@dadasdrop.com",   role:"admin",    active:true  },
-  { id:2, name:"Ma Copine",     email:"copine@dadasdrop.com",  role:"manager",  active:true  },
-  { id:3, name:"Livreur Ouaga", email:"livreur@dadasdrop.com", role:"delivery", active:true  },
+  { id:1, name:"David Amah",       email:"amahdavid33@gmail.com",        role:"admin",    active:true, pwd:"David@dadasdrop"   },
+  { id:2, name:"Celeste Pakodtogo",email:"pakodtogoceleste@gmail.com",    role:"manager",  active:true, pwd:"Celeste@dadasdrop" },
+  { id:3, name:"Erwin Ouili",      email:"erwinouili10@gmail.com",        role:"delivery", active:true, pwd:"Erwin@dadasdrop"   },
 ];
 
 /* ════════════════════════════════════════════
@@ -2438,12 +2443,32 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
   const updateStatus = async (id, status) => {
     setOrders(os => os.map(o => o.id===id?{...o,status}:o));
     try { await sb.patch("orders", id, {status}); } catch(e){console.warn(e.message);}
+    // Notification WhatsApp automatique à la cliente
+    const o = orders.find(x=>x.id===id);
+    if (!o) return;
+    const phone = o.phone || o.customer_phone || "";
+    const name  = o.name  || o.customer_name  || "";
+    if (!phone) return;
+    const msgs = {
+      2: `Bonjour ${name} 👋\n\nVotre commande *#${id}* vient d'être *expédiée* ! 🚚\nElle est en route vers vous.\n\nSuivez votre commande ici : dadas-drop.vercel.app\n\n✦ Dada's Drop`,
+      3: `Bonjour ${name} 👋\n\nVotre commande *#${id}* a été *livrée* ! ✅🎉\nNous espérons que vous êtes satisfaite.\n\nLaissez-nous un avis ici : dadas-drop.vercel.app\n\n✦ Dada's Drop`,
+    };
+    if (msgs[status]) {
+      const waPhone = phone.startsWith("226") ? phone : `226${phone}`;
+      window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msgs[status])}`, "_blank");
+    }
   };
 
   const assignDelivery = async (id, userId) => {
     const val = userId ? parseInt(userId) : null;
     setOrders(os => os.map(o => o.id===id?{...o,assignedTo:val}:o));
     try { await sb.patch("orders", id, {assigned_to:val}); } catch(e){console.warn(e.message);}
+  };
+
+  const deleteOrder = async (id) => {
+    if (!window.confirm("Supprimer définitivement cette commande ?")) return;
+    setOrders(os => os.filter(o => o.id !== id));
+    try { await sb.del("orders", id); } catch(e){ console.warn(e.message); }
   };
 
   const exportCSV = () => {
@@ -2469,41 +2494,66 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/>
     <title>Bon #${o.id}</title>
     <style>
-      body{font-family:Georgia,serif;padding:32px;color:#1A1A1A;max-width:520px;margin:auto}
-      h1{font-size:22px;letter-spacing:3px;margin:0 0 4px}
-      .sub{font-size:10px;color:#8A7A6A;letter-spacing:4px;margin:0 0 24px}
-      hr{border:none;border-top:1px solid #E0D8CC;margin:16px 0}
-      .row{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
-      .lbl{color:#8A7A6A}
-      .item{padding:6px 0;border-bottom:1px solid #eee;font-size:14px}
-      .total{font-size:22px;font-weight:700;color:#C9A84C;margin:16px 0 0}
-      @media print{button{display:none}}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Georgia,serif;padding:40px;color:#1A1A1A;max-width:620px;margin:auto;font-size:16px}
+      .header{text-align:center;margin-bottom:28px}
+      h1{font-size:28px;letter-spacing:4px;margin:0 0 4px;font-weight:700}
+      .sub{font-size:11px;color:#8A7A6A;letter-spacing:5px;margin:0 0 6px}
+      .tagline{font-size:13px;color:#8A7A6A}
+      hr{border:none;border-top:1.5px solid #E0D8CC;margin:20px 0}
+      .section-title{font-size:11px;font-weight:700;color:#8A7A6A;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+      .row{display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:15px;gap:12px}
+      .lbl{color:#8A7A6A;flex-shrink:0}
+      .val{font-weight:600;text-align:right}
+      .items{margin:12px 0}
+      .item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #F0EBE0;font-size:15px}
+      .total-block{background:#FAF6EE;border-radius:10px;padding:16px 20px;margin-top:16px;display:flex;justify-content:space-between;align-items:center}
+      .total-lbl{font-size:14px;color:#8A7A6A}
+      .total-val{font-size:26px;font-weight:700;color:#C9A84C}
+      .footer{font-size:12px;color:#8A7A6A;text-align:center;margin-top:24px;line-height:1.6}
+      .btns{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+      @media print{
+        .btns{display:none}
+        body{padding:24px}
+      }
     </style></head><body>
-    <h1>DADA'S DROP</h1><p class="sub">✦ BON DE COMMANDE ✦</p><hr/>
-    <div class="row"><span class="lbl">N° commande</span><strong>#${o.id}</strong></div>
-    <div class="row"><span class="lbl">Date</span><span>${o.date||new Date().toLocaleDateString("fr-FR")}</span></div>
+    <div class="header">
+      <h1>DADA'S DROP</h1>
+      <p class="sub">✦ BON DE COMMANDE ✦</p>
+      <p class="tagline">Collection Premium · Ouagadougou, Burkina Faso</p>
+    </div>
     <hr/>
-    <div class="row"><span class="lbl">Client</span><strong>${o.name}</strong></div>
-    <div class="row"><span class="lbl">Téléphone</span><span>${o.phone}</span></div>
-    <div class="row"><span class="lbl">Adresse</span><span>${o.quartier?o.quartier+", ":""}${o.ville}</span></div>
-    <div class="row"><span class="lbl">Paiement</span><span>${PAYMENT_LABELS[o.payment]||o.payment}</span></div>
+    <p class="section-title">Référence</p>
+    <div class="row"><span class="lbl">N° commande</span><span class="val" style="color:#C9A84C;font-size:18px">#${o.id}</span></div>
+    <div class="row"><span class="lbl">Date</span><span class="val">${o.date||new Date().toLocaleDateString("fr-FR")}</span></div>
     <hr/>
-    ${(o.items||[]).map(i=>`<div class="item">${i}</div>`).join("")}
-    <div class="total">Total : ${(o.total||0).toLocaleString("fr-FR")} FCFA</div>
+    <p class="section-title">Client</p>
+    <div class="row"><span class="lbl">Nom</span><span class="val">${o.name||o.customer_name}</span></div>
+    <div class="row"><span class="lbl">Téléphone</span><span class="val">${o.phone||o.customer_phone}</span></div>
+    <div class="row"><span class="lbl">Adresse</span><span class="val">${o.quartier?o.quartier+", ":""}${o.ville||""}</span></div>
+    <div class="row"><span class="lbl">Paiement</span><span class="val">${PAYMENT_LABELS[o.payment]||o.payment||""}</span></div>
     <hr/>
-    <p style="font-size:11px;color:#8A7A6A;text-align:center;margin-top:20px">
-      Dada's Drop · Ouagadougou, Burkina Faso
-    </p>
-    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
-      <button onclick="window.print()" style="padding:10px 20px;
-        background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:14px">
+    <p class="section-title">Articles commandés</p>
+    <div class="items">
+      ${(o.items||[]).map(i=>`<div class="item"><span>${i}</span></div>`).join("")}
+    </div>
+    <div class="total-block">
+      <span class="total-lbl">Total à régler</span>
+      <span class="total-val">${(o.total||0).toLocaleString("fr-FR")} FCFA</span>
+    </div>
+    <div class="footer">
+      <p>Merci pour votre commande ✦</p>
+      <p>Dada's Drop · Ouagadougou, Burkina Faso</p>
+    </div>
+    <div class="btns">
+      <button onclick="window.print()" style="padding:12px 24px;background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700">
         🖨️ Imprimer
       </button>
-      <button onclick="window.close()" style="padding:10px 20px;
-        background:#fff;color:#1A1A1A;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:14px">
+      <button onclick="window.close()" style="padding:12px 20px;background:#fff;color:#1A1A1A;border:1.5px solid #ddd;border-radius:8px;cursor:pointer;font-size:15px">
         ✕ Fermer
       </button>
-    </div></body></html>`);
+    </div>
+    </body></html>`);
     w.document.close();
   };
 
@@ -2610,6 +2660,15 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
                       <ChevronUp size={12}/> {o.status===1?"Expédiée":"Livrée"}
                     </button>
                   )}
+                  <button onClick={() => deleteOrder(o.id)}
+                    title="Supprimer cette commande"
+                    style={{ background:"none", color:CA.danger,
+                      border:`1px solid ${bord}`, borderRadius:8,
+                      padding:"6px 10px", cursor:"pointer",
+                      display:"flex", alignItems:"center", gap:4,
+                      fontSize:12 }}>
+                    <Trash size={12}/> Supprimer
+                  </button>
                 </>)}
               </div>
             </div>
@@ -3394,10 +3453,13 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
   };
 
   const changePwd = () => {
-    if (pwd.old !== "dada2025") { setPwd(p=>({...p,err:"Ancien mot de passe incorrect."})); return; }
-    if (pwd.new1.length < 6)    { setPwd(p=>({...p,err:"Nouveau mot de passe trop court (min 6 caractères)."})); return; }
-    if (pwd.new1 !== pwd.new2)  { setPwd(p=>({...p,err:"Les mots de passe ne correspondent pas."})); return; }
-    // En vrai il faudrait stocker en Supabase
+    if (pwd.old !== auth.pwd) { setPwd(p=>({...p,err:"Ancien mot de passe incorrect."})); return; }
+    if (pwd.new1.length < 6)  { setPwd(p=>({...p,err:"Nouveau mot de passe trop court (min 6 caractères)."})); return; }
+    if (pwd.new1 !== pwd.new2){ setPwd(p=>({...p,err:"Les mots de passe ne correspondent pas."})); return; }
+    // Mettre à jour dans la liste locale + Supabase
+    setUsers(us => us.map(u => u.id===auth.id ? {...u, pwd:pwd.new1} : u));
+    setAuth(a => ({...a, pwd:pwd.new1}));
+    sb.patch("team_users", auth.id, { pwd:pwd.new1 }).catch(e=>console.warn(e.message));
     setPwd({ old:"", new1:"", new2:"", err:"", ok:true });
     setTimeout(() => setPwd(p=>({...p,ok:false})), 3000);
   };
@@ -3727,7 +3789,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
 
   const login = () => {
     const u = users.find(x=>x.email===email&&x.active);
-    if (u && pass==="dada2025") { setAuth(u); setWrong(false); }
+    if (u && pass===u.pwd) { setAuth(u); setWrong(false); }
     else setWrong(true);
   };
   const logout = () => { setAuth(null); setEmail(""); setPass(""); setTab("overview"); };
