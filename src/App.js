@@ -854,12 +854,17 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
     setSaving(true);
     try {
       await sb.post("orders", {
-        id:orderNum, name:form.nom, phone:form.tel, ville:form.ville,
-        quartier:form.adresse, note:form.note,
+        id:orderNum,
+        customer_name:form.nom,
+        customer_phone:form.tel,
+        ville:form.ville,
+        quartier:form.adresse,
+        note:form.note,
         items:lines.map(l=>l.name+(l.variant?` (${l.variant.label})`:"")+" x"+l.qty),
-        total:finalTotal, payment:pay, status:1,
-        date:new Date().toISOString().split("T")[0],
-        promo:promoApplied?.code||null,
+        total:finalTotal,
+        payment:pay,
+        status:1,
+        assigned_to:null,
       });
     } catch(e) { console.warn("Supabase order:", e.message); }
     setSaving(false);
@@ -2254,8 +2259,8 @@ const CA = {
 
 const ROLES = {
   admin:    { label:"Administrateur", badge:"👑" },
-  manager:  { label:"Gestionnaire",   badge:"👩‍💼" },
-  delivery: { label:"Livreur",        badge:"🚴" },
+  manager:  { label:"Gestionnaire",   badge:"🤵🏽‍♂️" },
+  delivery: { label:"Livreur",        badge:"🚚" },
 };
 
 const STATUS_ADMIN_LABELS = ["","En préparation","Expédiée","Livrée"];
@@ -2300,7 +2305,25 @@ export default function App() {
     Promise.allSettled([
       // Produits
       sb.get("products", "?order=id.asc")
-        .then(rows => { if(rows?.length>0) setProducts(rows); }),
+        .then(rows => {
+          if(rows?.length>0) {
+            // Normaliser snake_case Supabase → camelCase interne
+            const normalized = rows.map(p => ({
+              ...p,
+              isNew:    p.is_new    ?? p.isNew    ?? false,
+              isBest:   p.is_best   ?? p.isBest   ?? false,
+              isPinned: p.is_pinned ?? p.isPinned ?? false,
+              isHidden: p.is_hidden ?? p.isHidden ?? false,
+              desc:     p.description ?? p.desc   ?? "",
+              imgs:     p.imgs || [],
+              accent:   p.accent || [],
+              variants: p.variants || [],
+              rating:   p.rating   || 0,
+              ratingCount: p.rating_count || 0,
+            }));
+            setProducts(normalized);
+          }
+        }),
       // Config
       sb.get("announcements", "?id=eq.config&select=data")
         .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); }),
@@ -2535,7 +2558,7 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
               {o.name}
             </div>
             <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:2 }}>
-              📞 {o.phone} · 📍 {o.quartier?`${o.quartier}, `:""}{o.ville}
+              📞 {o.phone||o.customer_phone} · 📍 {o.quartier?`${o.quartier}, `:""}{o.ville}
             </div>
             <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:6 }}>
               💳 {PAYMENT_LABELS[o.payment]||o.payment}
@@ -2651,16 +2674,33 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const save = async () => {
     if (!form.name||!form.price) return;
     setSaving(true);
-    const p = { ...form, id:editP?editP.id:Date.now(),
+    const localP = { ...form, id:editP?editP.id:Date.now(),
       price:parseInt(form.price)||0, stock:parseInt(form.stock)||0,
       discount:parseInt(form.discount)||0,
       imgs:(form.imgs||[]).filter(u=>u.trim()!=="") };
+    // Colonnes qui existent dans Supabase
+    const sbP = {
+      name:        localP.name,
+      name_en:     localP.name,
+      brand:       localP.brand,
+      price:       localP.price,
+      cat:         localP.cat,
+      cat_en:      localP.cat,
+      stock:       localP.stock,
+      is_new:      !!localP.isNew,
+      is_best:     !!localP.isBest,
+      description: localP.desc||"",
+      description_en: localP.desc||"",
+      imgs:        localP.imgs||[],
+      accent:      localP.accent||[],
+      discount:    localP.discount||0,
+    };
     if (editP) {
-      setProducts(ps=>ps.map(x=>x.id===editP.id?p:x));
-      try { await sb.patch("products",editP.id,p); } catch(e){console.warn(e.message);}
+      setProducts(ps=>ps.map(x=>x.id===editP.id?localP:x));
+      try { await sb.patch("products",editP.id,sbP); } catch(e){console.warn(e.message);}
     } else {
-      setProducts(ps=>[...ps,p]);
-      try { await sb.post("products",p); } catch(e){console.warn(e.message);}
+      setProducts(ps=>[...ps,localP]);
+      try { await sb.post("products",sbP); } catch(e){console.warn(e.message);}
     }
     setSaving(false); setEditP(null); setShowForm(false);
   };
@@ -3224,8 +3264,8 @@ function AdminTeamTab({ users, setUsers, dark }) {
               display:"block", marginBottom:3 }}>Rôle *</span>
             <select style={inp} value={form.role}
               onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
-              <option value="manager">👩‍💼 Gestionnaire</option>
-              <option value="delivery">🚴 Livreur</option>
+              <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
+              <option value="delivery">🚚 Livreur</option>
             </select>
           </label>
           <div style={{ display:"flex", gap:8 }}>
@@ -3273,8 +3313,8 @@ function AdminTeamTab({ users, setUsers, dark }) {
                     border:`1px solid ${bord}`,
                     background:dark?CA.dCard:"#fff",
                     color:text, cursor:"pointer", fontFamily:"inherit" }}>
-                  <option value="delivery">🚴 Livreur</option>
-                  <option value="manager">👩‍💼 Gestionnaire</option>
+                  <option value="delivery">🚚 Livreur</option>
+                  <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
                   <option value="admin">👑 Admin</option>
                 </select>
               )}
