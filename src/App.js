@@ -1225,7 +1225,33 @@ function TrackModal({ open, onClose, t, dark }) {
                   <textarea value={comment.text||""} onChange={e=>setComment(c=>({...c,text:e.target.value}))}
                     rows={3} placeholder="Partagez votre expérience…"
                     style={{ ...inpStyle(dark), resize:"vertical" }}/>
-                  <button onClick={()=>setCommentSent(true)}
+                  <button onClick={async () => {
+                      // Sauvegarder l'avis dans Supabase
+                      try {
+                        const orderId = result?.id || num.toUpperCase().trim();
+                        const productName = (result?.items||[])[0]?.split(" x")[0] || "";
+                        await sb.post("reviews", {
+                          order_id: orderId,
+                          product: productName,
+                          stars: comment.stars,
+                          text: comment.text || "",
+                          date: new Date().toISOString().split("T")[0],
+                        });
+                        // Mettre à jour la note du produit
+                        const prod = products?.find(p =>
+                          (p.name||"").toLowerCase().includes(productName.toLowerCase())
+                        );
+                        if (prod) {
+                          const newCount = (prod.ratingCount||0) + 1;
+                          const newRating = ((prod.rating||0)*(prod.ratingCount||0) + comment.stars) / newCount;
+                          await sb.patch("products", prod.id, {
+                            rating: Math.round(newRating*10)/10,
+                            rating_count: newCount,
+                          });
+                        }
+                      } catch(e) { console.warn("Avis:", e.message); }
+                      setCommentSent(true);
+                    }}
                     disabled={!comment.stars}
                     style={{ ...primaryBtn, marginTop:7, width:"100%",
                       justifyContent:"center", opacity:comment.stars?1:.5 }}>
@@ -1267,10 +1293,7 @@ function TrackModal({ open, onClose, t, dark }) {
             </div>
           )}
 
-          <p style={{ fontSize:11, color: dark?C.dMute:"#bbb",
-            marginTop:12, textAlign:"center" }}>
-            Démo : DD-001, DD-002, DD-003
-          </p>
+
         </div>
       </div>
     </Overlay>
@@ -2349,7 +2372,17 @@ export default function App() {
         .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); }),
       // Promos
       sb.get("promos", "?select=*")
-        .then(rows => { if(rows?.length>0) setPromos(rows); }),
+        .then(rows => {
+          if (rows?.length > 0) {
+            setPromos(rows.map(p => ({
+              code:     p.code     || p.id     || "",
+              discount: p.discount || 0,
+              maxUses:  p.max_uses || p.maxUses || 999,
+              uses:     p.uses     || 0,
+              active:   p.active   ?? true,
+            })));
+          }
+        }),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -2777,20 +2810,25 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
       imgs:(form.imgs||[]).filter(u=>u.trim()!=="") };
     // Colonnes qui existent dans Supabase
     const sbP = {
-      name:        localP.name,
-      name_en:     localP.name,
-      brand:       localP.brand,
-      price:       localP.price,
-      cat:         localP.cat,
-      cat_en:      localP.cat,
-      stock:       localP.stock,
-      is_new:      !!localP.isNew,
-      is_best:     !!localP.isBest,
-      description: localP.desc||"",
+      name:         localP.name,
+      name_en:      localP.name,
+      brand:        localP.brand,
+      price:        localP.price,
+      cat:          localP.cat,
+      cat_en:       localP.cat,
+      stock:        localP.stock,
+      is_new:       !!localP.isNew,
+      is_best:      !!localP.isBest,
+      is_pinned:    !!localP.isPinned,
+      is_hidden:    !!localP.isHidden,
+      description:  localP.desc||"",
       description_en: localP.desc||"",
-      imgs:        localP.imgs||[],
-      accent:      localP.accent||[],
-      discount:    localP.discount||0,
+      imgs:         localP.imgs||[],
+      accent:       localP.accent||[],
+      discount:     localP.discount||0,
+      variants:     localP.variants||[],
+      rating:       localP.rating||0,
+      rating_count: localP.ratingCount||0,
     };
     if (editP) {
       setProducts(ps=>ps.map(x=>x.id===editP.id?localP:x));
@@ -2811,7 +2849,10 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const toggleProp = async (id, prop) => {
     setProducts(ps=>ps.map(p=>p.id===id?{...p,[prop]:!p[prop]}:p));
     const p = products.find(x=>x.id===id);
-    try { await sb.patch("products",id,{[prop]:!p[prop]}); } catch(e){console.warn(e.message);}
+    // Convertir camelCase → snake_case pour Supabase
+    const sbProp = { isPinned:"is_pinned", isHidden:"is_hidden",
+      isNew:"is_new", isBest:"is_best" }[prop] || prop;
+    try { await sb.patch("products",id,{[sbProp]:!p[prop]}); } catch(e){console.warn(e.message);}
   };
 
   const move = (idx, dir) => {
@@ -3809,9 +3850,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   const [tab, setTab]     = useState("overview");
   const [orders, setOrders] = useState([]);
   const [users, setUsers]   = useState(INIT_USERS);
-  const [notifs, setNotifs] = useState([
-    { id:1, msg:"Bienvenue sur votre tableau de bord Dada's Drop !", time:"Maintenant", read:false },
-  ]);
+  const [notifs, setNotifs] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
 
@@ -3837,6 +3876,65 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
     }
   }, [products]);
 
+  // Charger membres équipe depuis Supabase
+  useEffect(() => {
+    if (!auth) return;
+    sb.get("team_users", "?order=id.asc")
+      .then(rows => {
+        if (rows?.length > 0) {
+          setUsers(rows.map(u => ({
+            ...u,
+            pwd:    u.pwd    || "dada2025",
+            active: u.active ?? true,
+          })));
+        }
+      }).catch(e => console.warn("team_users:", e.message));
+  }, [auth]);
+
+  // REALTIME — surveiller les changements de rôle en temps réel
+  useEffect(() => {
+    if (!auth) return;
+
+    // Polling toutes les 10 secondes pour vérifier si le rôle a changé
+    const checkRole = setInterval(async () => {
+      try {
+        const rows = await sb.get("team_users", `?id=eq.${auth.id}&select=role,active`);
+        if (!rows?.length) return;
+        const current = rows[0];
+
+        // Compte désactivé → déconnexion forcée
+        if (current.active === false) {
+          clearInterval(checkRole);
+          window.alert("⛔ Votre compte a été désactivé. Vous allez être déconnecté.");
+          logout();
+          return;
+        }
+
+        // Rôle rétrogradé → déconnexion forcée immédiate
+        const roleLevel = { delivery:1, manager:2, admin:3 };
+        if (roleLevel[current.role] < roleLevel[auth.role]) {
+          clearInterval(checkRole);
+          window.alert(`⚠️ Votre rôle a été modifié (${auth.role} → ${current.role}). Vous allez être déconnecté.`);
+          logout();
+          return;
+        }
+
+        // Rôle augmenté → notif pour se reconnecter
+        if (roleLevel[current.role] > roleLevel[auth.role]) {
+          setNotifs(ns => {
+            const already = ns.some(n => n.msg.includes("rôle a été mis à jour"));
+            if (already) return ns;
+            return [{ id:Date.now(),
+              msg:"✨ Votre rôle a été mis à jour ! Reconnectez-vous pour accéder à vos nouveaux droits.",
+              time:"Maintenant", read:false }, ...ns];
+          });
+        }
+      } catch(e) { console.warn("Realtime check:", e.message); }
+    }, 10000); // toutes les 10 secondes
+
+    return () => clearInterval(checkRole);
+  }, [auth]);
+
   // Charger commandes depuis Supabase
   useEffect(() => {
     if (!auth) return;
@@ -3855,14 +3953,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             }, ...ns]);
           }
         } else {
-          // Données démo
-          setOrders([
-            { id:"DD-1001", name:"Awa Traoré",     phone:"70112233", ville:"Ouagadougou", quartier:"Karpala",     items:["Mini Boston Rose x1"],            total:25000, status:1, payment:"orange",   date:"2025-06-10", assignedTo:null },
-            { id:"DD-1002", name:"Fatou Diallo",   phone:"76445566", ville:"Ouagadougou", quartier:"Pissy",       items:["Mini Boston Bleu Denim x2"],       total:50000, status:2, payment:"wave",     date:"2025-06-12", assignedTo:3    },
-            { id:"DD-1003", name:"Mariam Koné",    phone:"65778899", ville:"Ouagadougou", quartier:"Gounghin",    items:["Coach Torry Camel x1","Tabby x1"], total:57000, status:3, payment:"moov",     date:"2025-06-08", assignedTo:null },
-            { id:"DD-1004", name:"Aïcha Sawadogo", phone:"71001122", ville:"Ouagadougou", quartier:"Wemtenga",    items:["Mini Boston Beige x1"],             total:24000, status:1, payment:"livraison",date:"2025-06-15", assignedTo:null },
-            { id:"DD-1005", name:"Roukiatou B.",   phone:"78334455", ville:"Ouagadougou", quartier:"Zone du Bois",items:["Tabby Coach x1"],                  total:35000, status:1, payment:"orange",   date:"2025-06-16", assignedTo:null },
-          ]);
+          // Aucune commande pour l'instant
+          setOrders([]);
         }
       })
       .catch(e=>console.warn("Supabase orders:",e.message))
