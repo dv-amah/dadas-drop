@@ -1759,9 +1759,16 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
         );
       }
       if (cat && cat!=="all") {
-        if (p.cat !== cat) return false;
         const catObj = cats.find(c=>c.id===cat);
         if (catObj?.soon) return false;
+        // Comparer avec l'ID court ET le label français (pour compatibilité Supabase)
+        const matchId    = p.cat === cat;
+        const matchLabel = catObj && (
+          p.cat === catObj.label ||
+          p.cat === catObj.labelEn ||
+          (p.cat||"").toLowerCase() === (catObj.label||"").toLowerCase()
+        );
+        if (!matchId && !matchLabel) return false;
       }
       if (inStock && p.stock===0) return false;
       if (minPrice!=="" && p.price<parseInt(minPrice)) return false;
