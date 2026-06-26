@@ -3165,6 +3165,22 @@ function AdminCatsTab({ cats, setCats, dark }) {
   const cardBg = dark ? CA.dCard : CA.card;
   const [form, setForm] = useState({ label:"", labelEn:"", soon:false });
   const [saving, setSaving] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  // Traduction automatique FR → EN
+  const translateAuto = async (frText) => {
+    if (!frText.trim()) return;
+    setTranslating(true);
+    try {
+      const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(frText)}&langpair=fr|en`);
+      const data = await res.json();
+      const translated = data?.responseData?.translatedText;
+      if (translated && translated !== frText) {
+        setForm(f => ({...f, labelEn: translated}));
+      }
+    } catch(e) { console.warn("Traduction:", e.message); }
+    setTranslating(false);
+  };
 
   const add = async () => {
     if (!form.label.trim()) return;
@@ -3215,14 +3231,16 @@ function AdminCatsTab({ cats, setCats, dark }) {
               display:"block", marginBottom:3 }}>Nom français *</span>
             <input style={inp} value={form.label}
               onChange={e=>setForm(f=>({...f,label:e.target.value}))}
+              onBlur={e=>translateAuto(e.target.value)}
               placeholder="Ex : Ceintures"/>
           </label>
           <label style={{ display:"block" }}>
             <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
               display:"block", marginBottom:3 }}>Nom anglais</span>
-            <input style={inp} value={form.labelEn}
+            <input style={{ ...inp, opacity:translating?.6:1 }}
+              value={translating?"Traduction…":form.labelEn}
               onChange={e=>setForm(f=>({...f,labelEn:e.target.value}))}
-              placeholder="Ex : Belts"/>
+              placeholder="Traduit automatiquement…"/>
           </label>
         </div>
         <label style={{ display:"flex", alignItems:"center", gap:6,
@@ -3289,16 +3307,16 @@ function AdminTeamTab({ users, setUsers, dark }) {
   const bord   = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name:"", email:"", role:"delivery" });
+  const [form, setForm] = useState({ name:"", email:"", role:"delivery", pwd:"" });
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
     border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
     fontSize:"16px", color:text, fontFamily:"inherit" };
 
   const add = async () => {
-    if (!form.name||!form.email) return;
+    if (!form.name||!form.email||!form.pwd) return;
     const u = { id:Date.now(), ...form, active:true };
     setUsers(us=>[...us,u]);
-    setForm({ name:"", email:"", role:"delivery" }); setShowForm(false);
+    setForm({ name:"", email:"", role:"delivery", pwd:"" }); setShowForm(false);
     try { await sb.post("team_users",u); } catch(e){console.warn(e.message);}
   };
   const toggle = async id => {
@@ -3310,6 +3328,9 @@ function AdminTeamTab({ users, setUsers, dark }) {
     if (role==="admin" && !window.confirm("⚠️ Élever ce membre au rang Admin lui donnera accès à tout. Confirmer ?")) return;
     setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));
     try { await sb.patch("team_users",id,{role}); } catch(e){console.warn(e.message);}
+    // Si c'est le membre connecté, le déconnecter pour qu'il se reconnecte avec son nouveau rôle
+    // (impossible de changer son propre rôle en admin mais on sécurise)
+    window.alert(`✅ Rôle mis à jour. La personne doit se reconnecter pour voir son nouveau rôle.`);
   };
 
   const del = async id => {
@@ -3357,6 +3378,16 @@ function AdminTeamTab({ users, setUsers, dark }) {
               <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
               <option value="delivery">🚚 Livreur</option>
             </select>
+          </label>
+          <label style={{ display:"block", marginBottom:12 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+              display:"block", marginBottom:3 }}>Mot de passe *</span>
+            <input style={inp} type="password" value={form.pwd}
+              onChange={e=>setForm(f=>({...f,pwd:e.target.value}))}
+              placeholder="Ex: Prenom@dadasdrop"/>
+            <span style={{ fontSize:10, color:dark?CA.dMute:CA.mute, marginTop:3, display:"block" }}>
+              Format recommandé : Prenom@dadasdrop
+            </span>
           </label>
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={add}
@@ -3801,8 +3832,12 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
 
   const login = () => {
     const u = users.find(x=>x.email===email&&x.active);
-    if (u && pass===u.pwd) { setAuth(u); setWrong(false); }
-    else setWrong(true);
+    if (u && pass===u.pwd) {
+      setAuth(u);
+      setWrong(false);
+      // Livreur → aller directement sur ses livraisons
+      if (u.role==="delivery") setTab("orders");
+    } else setWrong(true);
   };
   const logout = () => { setAuth(null); setEmail(""); setPass(""); setTab("overview"); };
 
@@ -3905,13 +3940,13 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   const lowStock = products.filter(p=>p.stock<=5);
 
   const tabs = [
-    ...(can("view_stats") ? [{ key:"overview",  icon:<BarChart2 size={14}/>, label:"Bilan" }] : []),
-    { key:"orders",   icon:<ShoppingCart size={14}/>, label:auth.role==="delivery"?"Livraisons":"Commandes" },
+    ...(auth.role!=="delivery" && can("view_stats") ? [{ key:"overview", icon:<BarChart2 size={14}/>, label:"Bilan" }] : []),
+    { key:"orders", icon:<ShoppingCart size={14}/>, label:auth.role==="delivery"?"Livraisons":"Commandes" },
     ...(can("add_product") ? [{ key:"products", icon:<ShoppingBag size={14}/>, label:"Produits" }] : []),
     ...(auth.role==="admin"?[
-      { key:"cats",     icon:<Tag size={14}/>,         label:"Catégories" },
-      { key:"team",     icon:<Users size={14}/>,       label:"Équipe" },
-      { key:"settings", icon:<Settings size={14}/>,    label:"Paramètres" },
+      { key:"cats",     icon:<Tag size={14}/>,      label:"Catégories" },
+      { key:"team",     icon:<Users size={14}/>,    label:"Équipe" },
+      { key:"settings", icon:<Settings size={14}/>, label:"Paramètres" },
     ]:[]),
   ];
 
