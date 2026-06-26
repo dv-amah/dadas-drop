@@ -3318,7 +3318,7 @@ function AdminCatsTab({ cats, setCats, dark }) {
 /* ──────────────────────────────────────────
    ONGLET ÉQUIPE
 ────────────────────────────────────────── */
-function AdminTeamTab({ users, setUsers, dark }) {
+function AdminTeamTab({ users, setUsers, auth, dark }) {
   const text   = dark ? CA.dText : CA.ink;
   const bord   = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
@@ -4224,7 +4224,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
           <AdminCatsTab cats={cats} setCats={setCats} dark={dark}/>
         )}
         {tab==="team" && auth.role==="admin" && (
-          <AdminTeamTab users={users} setUsers={setUsers} dark={dark}/>
+          <AdminTeamTab users={users} setUsers={setUsers} auth={auth} dark={dark}/>
         )}
         {tab==="settings" && auth.role==="admin" && (
           <AdminSettingsTab cfg={cfg} setCfg={setCfg}
