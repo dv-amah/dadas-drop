@@ -1718,6 +1718,11 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   }, []);
 
   useEffect(() => { setTimeout(() => setMounted(true), 80); }, []);
+
+  // Scroll en haut à chaque changement de page
+  useEffect(() => {
+    window.scrollTo({ top:0, behavior:"instant" });
+  }, [page]);
   useEffect(() => {
     try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
   }, [cart]);
