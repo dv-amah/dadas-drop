@@ -53,7 +53,7 @@ const DEFAULT_CFG = {
   city:        "Ouagadougou",
   freeFrom:    20000,
   heroTitle:   "L'élégance, livrée chez vous.",
-  heroSub:     "Sacs & accessoires sélectionnés avec soin, livrés à",
+  heroSub:     "Sacs & accessoires sélectionnés avec soin, livrés à Ouagadougou.",
   waMessage:   "Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?",
   bannerActive: false,
   bannerText:  "",
@@ -1998,7 +1998,7 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
               </h1>
               <p style={{ fontSize:15, color:"rgba(255,255,255,.7)",
                 maxWidth:380, margin:"0 auto 28px", lineHeight:1.6 }}>
-                {heroSub} {cfg?.city||DEFAULT_CFG.city}.
+                {heroSub}
               </p>
               <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
                 <button onClick={() => setPage("catalogue")}
@@ -3176,6 +3176,12 @@ function AdminTeamTab({ users, setUsers, dark }) {
     setUsers(us=>us.map(x=>x.id===id?{...x,active:!x.active}:x));
     try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
   };
+  const changeRole = async (id, role) => {
+    if (role==="admin" && !window.confirm("⚠️ Élever ce membre au rang Admin lui donnera accès à tout. Confirmer ?")) return;
+    setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));
+    try { await sb.patch("team_users",id,{role}); } catch(e){console.warn(e.message);}
+  };
+
   const del = async id => {
     if (!window.confirm("Supprimer ce membre ?")) return;
     setUsers(us=>us.filter(u=>u.id!==id));
@@ -3259,12 +3265,28 @@ function AdminTeamTab({ users, setUsers, dark }) {
               </ABadge>
             </div>
             <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+              {/* Changer le rôle */}
+              {u.role !== "admin" && (
+                <select value={u.role}
+                  onChange={e => changeRole(u.id, e.target.value)}
+                  style={{ padding:"4px 6px", borderRadius:8, fontSize:12,
+                    border:`1px solid ${bord}`,
+                    background:dark?CA.dCard:"#fff",
+                    color:text, cursor:"pointer", fontFamily:"inherit" }}>
+                  <option value="delivery">🚴 Livreur</option>
+                  <option value="manager">👩‍💼 Gestionnaire</option>
+                  <option value="admin">👑 Admin</option>
+                </select>
+              )}
+              {/* Activer / désactiver */}
               <button onClick={() => toggle(u.id)}
+                title={u.active?"Désactiver":"Activer"}
                 style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
                   background:"none",cursor:"pointer",display:"grid",placeItems:"center",
                   color:u.active?CA.success:CA.danger }}>
                 {u.active?<CheckCircle size={13}/>:<X size={13}/>}
               </button>
+              {/* Supprimer */}
               {u.role!=="admin" && (
                 <button onClick={() => del(u.id)}
                   style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
@@ -3520,7 +3542,7 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
               {cfg.heroTitle||"L'élégance, livrée chez vous."}
             </div>
             <div style={{ fontSize:12, color:"rgba(255,255,255,.6)" }}>
-              {cfg.heroSub||"Sacs & accessoires sélectionnés"} {cfg.city||"Ouagadougou"}.
+              {cfg.heroSub||"Sacs & accessoires sélectionnés avec soin, livrés à Ouagadougou."}
             </div>
           </div>
         </div>
@@ -3660,11 +3682,12 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   /* ── LOGIN ── */
   if (!auth) return (
     <div style={{ minHeight:"100vh", background:bg, display:"flex",
-      alignItems:"center", justifyContent:"center", padding:20 }}>
+      alignItems:"center", justifyContent:"center", padding:"20px 16px" }}>
       <div style={{ maxWidth:380, width:"100%", background:cardBg,
-        borderRadius:20, padding:28,
+        borderRadius:20, padding:"28px 24px",
         boxShadow:"0 24px 56px rgba(0,0,0,.15)",
-        border:`1px solid ${bord}` }}>
+        border:`1px solid ${bord}`,
+        boxSizing:"border-box", overflow:"hidden" }}>
         <div style={{ textAlign:"center", marginBottom:24 }}>
           <LogoDD size={60}/>
           <h1 style={{ fontFamily:"Georgia,serif", fontSize:20, color:text, margin:"14px 0 4px" }}>
@@ -3684,7 +3707,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             style={{ width:"100%", padding:"12px 14px", borderRadius:10,
               border:`1.5px solid ${wrong?"#E05030":bord}`,
               background:dark?CA.dCard:"#fff",
-              fontSize:"16px", color:text, fontFamily:"inherit" }}
+              fontSize:"16px", color:text, fontFamily:"inherit",
+              boxSizing:"border-box" }}
             onKeyDown={e=>e.key==="Enter"&&login()}/>
         </label>
         <label style={{ display:"block", marginBottom:14, position:"relative" }}>
@@ -3698,7 +3722,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
               style={{ width:"100%", padding:"12px 44px 12px 14px", borderRadius:10,
                 border:`1.5px solid ${wrong?"#E05030":bord}`,
                 background:dark?CA.dCard:"#fff",
-                fontSize:"16px", color:text, fontFamily:"inherit" }}
+                fontSize:"16px", color:text, fontFamily:"inherit",
+                boxSizing:"border-box" }}
               onKeyDown={e=>e.key==="Enter"&&login()}/>
             <button onClick={()=>setShowPw(v=>!v)}
               style={{ position:"absolute", right:12, top:"50%",
