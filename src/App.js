@@ -41,6 +41,15 @@ const C = {
 const GRAD = `linear-gradient(135deg,${C.gold},${C.goldL})`;
 const fcfa = n => (n||0).toLocaleString("fr-FR") + " FCFA";
 
+const timeAgo = (timestamp) => {
+  if (!timestamp) return "À l'instant";
+  const diff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
+  if (diff < 60)  return "À l'instant";
+  if (diff < 3600) return `Il y a ${Math.floor(diff/60)} min`;
+  if (diff < 86400) return `Il y a ${Math.floor(diff/3600)}h`;
+  return `Il y a ${Math.floor(diff/86400)}j`;
+};
+
 /* ════════════════════════════════════════════
    ⚙️ CONFIG PAR DÉFAUT
 ════════════════════════════════════════════ */
@@ -3870,7 +3879,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
           .filter(p=>!existing.some(m=>m.includes(p.name)))
           .map(p=>({ id:Date.now()+p.id,
             msg:`⚠️ Stock faible : ${p.name} (${p.stock} restant${p.stock>1?"s":""})`,
-            time:"Maintenant", read:false }));
+            time:new Date().toISOString(), read:false }));
         return [...ns, ...newNotifs];
       });
     }
@@ -3919,14 +3928,15 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
           return;
         }
 
-        // Rôle augmenté → notif pour se reconnecter
+        // Rôle augmenté → mettre à jour auth en direct + notif
         if (roleLevel[current.role] > roleLevel[auth.role]) {
+          setAuth(a => ({...a, role: current.role}));
           setNotifs(ns => {
             const already = ns.some(n => n.msg.includes("rôle a été mis à jour"));
             if (already) return ns;
             return [{ id:Date.now(),
-              msg:"✨ Votre rôle a été mis à jour ! Reconnectez-vous pour accéder à vos nouveaux droits.",
-              time:"Maintenant", read:false }, ...ns];
+              msg:`✨ Votre rôle a été mis à jour → ${current.role}. Vos nouveaux droits sont actifs !`,
+              time:new Date().toISOString(), read:false }, ...ns];
           });
         }
       } catch(e) { console.warn("Realtime check:", e.message); }
@@ -3961,12 +3971,30 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
       .finally(()=>setLoadingOrders(false));
   }, [auth]);
 
-  const login = () => {
+  const login = async () => {
+    // D'abord chercher dans Supabase pour avoir le vrai rôle actuel
+    try {
+      const rows = await sb.get("team_users", `?email=eq.${email}&select=*`);
+      if (rows?.length > 0) {
+        const sbUser = rows[0];
+        const localUser = users.find(x => x.email===email);
+        // Vérifier le mot de passe (local ou Supabase)
+        const pwd = sbUser.pwd || localUser?.pwd || "dada2025";
+        if (pass === pwd && sbUser.active !== false) {
+          const u = { ...localUser, ...sbUser,
+            pwd, active: sbUser.active ?? true };
+          setAuth(u);
+          setWrong(false);
+          if (u.role==="delivery") setTab("orders");
+          return;
+        }
+      }
+    } catch(e) { console.warn("Login Supabase:", e.message); }
+    // Fallback sur les données locales
     const u = users.find(x=>x.email===email&&x.active);
     if (u && pass===u.pwd) {
       setAuth(u);
       setWrong(false);
-      // Livreur → aller directement sur ses livraisons
       if (u.role==="delivery") setTab("orders");
     } else setWrong(true);
   };
@@ -4136,13 +4164,19 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                   borderBottom:`1px solid ${bord}`,
                   display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <span style={{ fontWeight:700, fontSize:13, color:text }}>Notifications</span>
-                  <button onClick={() => { setNotifs(n=>n.map(x=>({...x,read:true}))); setNotifOpen(false); }}
+                  <button onClick={() => {
+                      setNotifs(n=>n.map(x=>({...x,read:true})));
+                      setTimeout(() => { setNotifs([]); setNotifOpen(false); }, 1500);
+                    }}
                     style={{ border:"none", background:"none", cursor:"pointer",
                       color:CA.mute, fontSize:11 }}>Tout lire</button>
                 </div>
                 {notifs.slice(0,5).map(n => (
                   <div key={n.id}
-                    onClick={() => setNotifs(ns => ns.map(x => x.id===n.id ? {...x,read:true} : x))}
+                    onClick={() => {
+                      setNotifs(ns => ns.map(x => x.id===n.id ? {...x,read:true} : x));
+                      setTimeout(() => setNotifs(ns => ns.filter(x => x.id!==n.id)), 1500);
+                    }}
                     style={{ padding:"10px 14px",
                       borderBottom:`1px solid ${bord}`,
                       background:n.read?"transparent":`${CA.gold}0A`,
@@ -4156,7 +4190,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                       {!n.read && <div style={{ width:7, height:7, borderRadius:999,
                         background:CA.gold, flexShrink:0, marginTop:4 }}/>}
                     </div>
-                    <div style={{ fontSize:10.5, color:CA.mute, marginTop:2 }}>{n.time}</div>
+                    <div style={{ fontSize:10.5, color:CA.mute, marginTop:2 }}>{timeAgo(n.time)}</div>
                   </div>
                 ))}
                 {notifs.every(n=>n.read) && (
