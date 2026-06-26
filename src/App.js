@@ -3456,7 +3456,6 @@ function AdminTeamTab({ users, setUsers, dark }) {
                   - Les autres admins peuvent changer seulement les non-admin
                   - Personne ne peut destituer David */}
               {auth.id === 1 && u.id !== 1 ? (
-                // David peut tout changer
                 <select value={u.role}
                   onChange={e => changeRole(u.id, e.target.value)}
                   style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
@@ -3469,7 +3468,6 @@ function AdminTeamTab({ users, setUsers, dark }) {
                   <option value="admin">👑 Admin</option>
                 </select>
               ) : auth.id !== 1 && auth.role === "admin" && u.role !== "admin" && u.id !== 1 ? (
-                // Autres admins peuvent changer seulement les non-admin (pas David, pas les autres admins)
                 <select value={u.role}
                   onChange={e => changeRole(u.id, e.target.value)}
                   style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
