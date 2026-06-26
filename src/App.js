@@ -2650,8 +2650,10 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
                     fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
                   🖨️ Imprimer
                 </button>
-                {auth.role!=="delivery" && (<>
-                  {o.status > 1 && (
+                {/* Livreur peut changer statut de SES commandes, admin/manager peuvent tout faire */}
+              {(auth.role!=="delivery" || o.assignedTo===auth.id) && (<>
+                  {/* Bouton Annuler — seulement admin/manager */}
+                  {auth.role!=="delivery" && o.status > 1 && (
                     <button onClick={() => updateStatus(o.id, o.status-1)}
                       title="Revenir au statut précédent"
                       style={{ background:"none", color:CA.mute,
@@ -2662,6 +2664,7 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
                       <ChevronDown size={12}/> Annuler
                     </button>
                   )}
+                  {/* Bouton avancer statut — tout le monde */}
                   {o.status < 3 && (
                     <button onClick={() => updateStatus(o.id, o.status+1)}
                       style={{ background:CA.ink, color:CA.gold,
@@ -2669,18 +2672,22 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
                         padding:"6px 11px", cursor:"pointer",
                         fontSize:12, fontWeight:600,
                         display:"flex", alignItems:"center", gap:4 }}>
-                      <ChevronUp size={12}/> {o.status===1?"Expédiée":"Livrée"}
+                      <ChevronUp size={12}/>
+                      {o.status===1?"Expédiée":"Livrée ✓"}
                     </button>
                   )}
-                  <button onClick={() => deleteOrder(o.id)}
-                    title="Supprimer cette commande"
-                    style={{ background:"none", color:CA.danger,
-                      border:`1px solid ${bord}`, borderRadius:8,
-                      padding:"6px 10px", cursor:"pointer",
-                      display:"flex", alignItems:"center", gap:4,
-                      fontSize:12 }}>
-                    <Trash size={12}/> Supprimer
-                  </button>
+                  {/* Supprimer — seulement admin/manager */}
+                  {auth.role!=="delivery" && (
+                    <button onClick={() => deleteOrder(o.id)}
+                      title="Supprimer cette commande"
+                      style={{ background:"none", color:CA.danger,
+                        border:`1px solid ${bord}`, borderRadius:8,
+                        padding:"6px 10px", cursor:"pointer",
+                        display:"flex", alignItems:"center", gap:4,
+                        fontSize:12 }}>
+                      <Trash size={12}/> Supprimer
+                    </button>
+                  )}
                 </>)}
               </div>
             </div>
@@ -3229,10 +3236,19 @@ function AdminCatsTab({ cats, setCats, dark }) {
           <label style={{ display:"block" }}>
             <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
               display:"block", marginBottom:3 }}>Nom français *</span>
-            <input style={inp} value={form.label}
-              onChange={e=>setForm(f=>({...f,label:e.target.value}))}
-              onBlur={e=>translateAuto(e.target.value)}
-              placeholder="Ex : Ceintures"/>
+            <div style={{ display:"flex", gap:7 }}>
+              <input style={{ ...inp, flex:1 }} value={form.label}
+                onChange={e=>setForm(f=>({...f,label:e.target.value}))}
+                placeholder="Ex : Ceintures"/>
+              <button onClick={() => translateAuto(form.label)}
+                disabled={!form.label.trim()||translating}
+                style={{ background:CA.ink, color:CA.gold,
+                  border:`1px solid ${CA.gold}44`, borderRadius:9,
+                  padding:"0 12px", cursor:"pointer", fontSize:12,
+                  fontWeight:700, flexShrink:0, opacity:form.label.trim()?1:.4 }}>
+                {translating?"...":"🌐 Traduire"}
+              </button>
+            </div>
           </label>
           <label style={{ display:"block" }}>
             <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
@@ -3325,11 +3341,14 @@ function AdminTeamTab({ users, setUsers, dark }) {
     try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
   };
   const changeRole = async (id, role) => {
-    if (role==="admin" && !window.confirm("⚠️ Élever ce membre au rang Admin lui donnera accès à tout. Confirmer ?")) return;
+    // Seul David (id:1) peut changer les rôles
+    if (auth.id !== 1) {
+      window.alert("⛔ Seul l'administrateur principal peut modifier les rôles.");
+      return;
+    }
+    if (role==="admin" && !window.confirm("⚠️ Ce membre aura accès à tout sauf la gestion des rôles. Confirmer ?")) return;
     setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));
     try { await sb.patch("team_users",id,{role}); } catch(e){console.warn(e.message);}
-    // Si c'est le membre connecté, le déconnecter pour qu'il se reconnecte avec son nouveau rôle
-    // (impossible de changer son propre rôle en admin mais on sécurise)
     window.alert(`✅ Rôle mis à jour. La personne doit se reconnecter pour voir son nouveau rôle.`);
   };
 
@@ -3427,8 +3446,8 @@ function AdminTeamTab({ users, setUsers, dark }) {
               </ABadge>
             </div>
             <div style={{ display:"flex", gap:5, flexShrink:0 }}>
-              {/* Changer le rôle */}
-              {u.role !== "admin" && (
+              {/* Changer le rôle — UNIQUEMENT David (id:1) peut le faire */}
+              {auth.id === 1 && u.id !== 1 && (
                 <select value={u.role}
                   onChange={e => changeRole(u.id, e.target.value)}
                   style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
