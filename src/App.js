@@ -2494,10 +2494,16 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
     <p style="font-size:11px;color:#8A7A6A;text-align:center;margin-top:20px">
       Dada's Drop · Ouagadougou, Burkina Faso
     </p>
-    <button onclick="window.print()" style="margin-top:16px;padding:10px 20px;
-      background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:14px">
-      🖨️ Imprimer
-    </button></body></html>`);
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button onclick="window.print()" style="padding:10px 20px;
+        background:#1A1A1A;color:#C9A84C;border:none;border-radius:8px;cursor:pointer;font-size:14px">
+        🖨️ Imprimer
+      </button>
+      <button onclick="window.close()" style="padding:10px 20px;
+        background:#fff;color:#1A1A1A;border:1px solid #ddd;border-radius:8px;cursor:pointer;font-size:14px">
+        ✕ Fermer
+      </button>
+    </div></body></html>`);
     w.document.close();
   };
 
@@ -2582,16 +2588,29 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
                     fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
                   🖨️ Imprimer
                 </button>
-                {auth.role!=="delivery" && o.status<3 && (
-                  <button onClick={() => updateStatus(o.id, o.status+1)}
-                    style={{ background:CA.ink, color:CA.gold,
-                      border:`1px solid ${CA.gold}44`, borderRadius:8,
-                      padding:"6px 11px", cursor:"pointer",
-                      fontSize:12, fontWeight:600,
-                      display:"flex", alignItems:"center", gap:4 }}>
-                    <ChevronUp size={12}/> {o.status===1?"Expédiée":"Livrée"}
-                  </button>
-                )}
+                {auth.role!=="delivery" && (<>
+                  {o.status > 1 && (
+                    <button onClick={() => updateStatus(o.id, o.status-1)}
+                      title="Revenir au statut précédent"
+                      style={{ background:"none", color:CA.mute,
+                        border:`1px solid ${bord}`, borderRadius:8,
+                        padding:"6px 10px", cursor:"pointer",
+                        fontSize:12, fontWeight:600,
+                        display:"flex", alignItems:"center", gap:4 }}>
+                      <ChevronDown size={12}/> Annuler
+                    </button>
+                  )}
+                  {o.status < 3 && (
+                    <button onClick={() => updateStatus(o.id, o.status+1)}
+                      style={{ background:CA.ink, color:CA.gold,
+                        border:`1px solid ${CA.gold}44`, borderRadius:8,
+                        padding:"6px 11px", cursor:"pointer",
+                        fontSize:12, fontWeight:600,
+                        display:"flex", alignItems:"center", gap:4 }}>
+                      <ChevronUp size={12}/> {o.status===1?"Expédiée":"Livrée"}
+                    </button>
+                  )}
+                </>)}
               </div>
             </div>
             {/* Livreur */}
@@ -3284,11 +3303,12 @@ function AdminTeamTab({ users, setUsers, dark }) {
           </div>
         </div>
       )}
-      <div style={{ display:"grid", gap:8 }}>
+      <div style={{ display:"grid", gap:8, width:"100%", boxSizing:"border-box" }}>
         {users.map(u => (
           <div key={u.id} style={{ background:cardBg, border:`1px solid ${bord}`,
             borderRadius:12, padding:"13px 14px",
-            display:"flex", alignItems:"center", gap:10, opacity:u.active?1:.55 }}>
+            display:"flex", alignItems:"center", gap:8, opacity:u.active?1:.55,
+            boxSizing:"border-box", width:"100%", overflow:"hidden" }}>
             <div style={{ width:40,height:40,borderRadius:999,
               background:`${CA.gold}22`, display:"grid", placeItems:"center",
               fontSize:18, flexShrink:0 }}>
@@ -3309,10 +3329,11 @@ function AdminTeamTab({ users, setUsers, dark }) {
               {u.role !== "admin" && (
                 <select value={u.role}
                   onChange={e => changeRole(u.id, e.target.value)}
-                  style={{ padding:"4px 6px", borderRadius:8, fontSize:12,
+                  style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
                     border:`1px solid ${bord}`,
                     background:dark?CA.dCard:"#fff",
-                    color:text, cursor:"pointer", fontFamily:"inherit" }}>
+                    color:text, cursor:"pointer", fontFamily:"inherit",
+                    maxWidth:130, flexShrink:1 }}>
                   <option value="delivery">🚚 Livreur</option>
                   <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
                   <option value="admin">👑 Admin</option>
