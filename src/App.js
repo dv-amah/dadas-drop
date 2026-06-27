@@ -589,7 +589,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   const [reviews, setReviews]   = useState([]);
 
   useEffect(() => {
-    setVariant(null); setQty(1); setVariantErr(false); setAddedAnim(false); setReviews([]);
+    setVariant(null); setQty(1); setVariantErr(false); setReviews([]);
     if (!p) return;
     // Charger les avis visibles de ce produit
     sb.get("reviews", `?product=eq.${encodeURIComponent(p.name)}&order=date.desc&limit=10`)
