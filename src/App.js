@@ -61,7 +61,7 @@ const DEFAULT_CFG = {
   wave:        "+226 77 00 00 00",
   city:        "Ouagadougou",
   freeFrom:    20000,
-  freeDelivery: true,
+  freeDelivery: false,
   heroTitle:   "L'élégance, livrée chez vous.",
   heroSub:     "Sacs & accessoires sélectionnés avec soin, livrés à Ouagadougou.",
   waMessage:   "Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?",
@@ -930,7 +930,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onClearCar
           </>)}
         </div>
       )}
-      {cfg?.freeDelivery !== false && total >= freeFrom && (
+      {cfg?.freeDelivery === true && cfg?.showFreeFrom !== false && total >= freeFrom && (
         <div style={{ background:C.ink, color:C.gold, padding:"7px 16px",
           fontSize:12, fontWeight:600, textAlign:"center" }}>
           ✦ Livraison offerte pour cette commande
@@ -999,7 +999,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onClearCar
       </div>
       {lines.length > 0 && (
         <div style={{ padding:16, borderTop:`1px solid ${bord}` }}>
-          {cfg?.freeDelivery !== false && cfg?.showFreeFrom !== false && total < freeFrom && (
+          {cfg?.freeDelivery === true && cfg?.showFreeFrom !== false && total < freeFrom && (
             <p style={{ fontSize:11, color:C.mute, margin:"0 0 8px" }}>
               Livraison offerte dès {fcfa(freeFrom)}
             </p>
@@ -1372,13 +1372,16 @@ function TrackModal({ open, onClose, t, dark, products, cfg }) {
         setReviewsSubmitting(false);
         return;
       }
-      await sb.post("reviews", {
+      const reviewData = {
         order_id: orderId,
         product: productName,
         stars: rv.stars,
         text: rv.text || "",
         date: new Date().toISOString().split("T")[0],
-      });
+        hidden: false,
+      };
+      const posted = await sb.post("reviews", reviewData);
+      console.log("Avis posté:", posted);
       if (prod) {
         const newCount = (prod.ratingCount||0) + 1;
         const newRating = ((prod.rating||0)*(prod.ratingCount||0) + rv.stars) / newCount;
@@ -1388,7 +1391,11 @@ function TrackModal({ open, onClose, t, dark, products, cfg }) {
         });
       }
       setItemReview(itemName, { sent:true });
-    } catch(e) { console.warn("Avis:", e.message); setItemReview(itemName, { sent:true }); }
+    } catch(e) {
+      console.error("Erreur soumission avis:", e.message);
+      // Ne pas marquer comme envoyé si erreur réelle
+      window.alert("Erreur lors de l'envoi de l'avis. Réessayez.");
+    }
     setReviewsSubmitting(false);
   };
 
@@ -2094,33 +2101,34 @@ function DraggableWA({ whatsapp, waMsg }) {
   const [pos, setPos] = useState({ bottom:80, right:18 });
   const [dragging, setDragging] = useState(false);
   const [moved, setMoved] = useState(false);
-  const startRef = useState(null);
-  const ref = { current: null };
+  const startRef = { current: null };
 
   const onTouchStart = (e) => {
     const t = e.touches[0];
-    startRef[1]({ x:t.clientX, y:t.clientY, pos:{ ...pos } });
+    startRef.current = { x:t.clientX, y:t.clientY, pos:{ ...pos } };
     setDragging(true);
     setMoved(false);
   };
 
   const onTouchMove = (e) => {
-    if (!startRef[0]) return;
+    if (!startRef.current) return;
     const t = e.touches[0];
-    const dx = t.clientX - startRef[0].x;
-    const dy = t.clientY - startRef[0].y;
-    if (Math.abs(dx)>5 || Math.abs(dy)>5) setMoved(true);
-    const newRight = Math.max(8, Math.min(window.innerWidth-58, startRef[0].pos.right - dx));
-    const newBottom = Math.max(8, Math.min(window.innerHeight-58, startRef[0].pos.bottom + dy));
-    setPos({ right:newRight, bottom:newBottom });
+    const dx = t.clientX - startRef.current.x;
+    const dy = t.clientY - startRef.current.y;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) setMoved(true);
+    // right diminue quand on glisse à droite, augmente à gauche
+    const newRight = Math.max(8, Math.min(window.innerWidth - 58,
+      startRef.current.pos.right - dx));
+    // bottom augmente quand on glisse vers le haut, diminue vers le bas
+    const newBottom = Math.max(8, Math.min(window.innerHeight - 58,
+      startRef.current.pos.bottom - dy));
+    setPos({ right: newRight, bottom: newBottom });
     e.preventDefault();
   };
 
   const onTouchEnd = () => { setDragging(false); };
 
-  const handleClick = (e) => {
-    if (moved) { e.preventDefault(); }
-  };
+  const handleClick = (e) => { if (moved) e.preventDefault(); };
 
   return (
     <a href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(waMsg)}`}
@@ -2133,9 +2141,9 @@ function DraggableWA({ whatsapp, waMsg }) {
         width:50, height:50, borderRadius:999, background:"#25D366",
         display:"grid", placeItems:"center", zIndex:49,
         boxShadow:`0 4px 16px rgba(37,211,102,${dragging?.6:.4})`,
-        textDecoration:"none", cursor:dragging?"grabbing":"grab",
-        transform:dragging?"scale(1.1)":"scale(1)",
-        transition:dragging?"none":"transform .2s",
+        textDecoration:"none", cursor:dragging?"grabbing":"pointer",
+        transform:dragging?"scale(1.08)":"scale(1)",
+        transition:dragging?"none":"transform .15s",
         userSelect:"none", touchAction:"none" }}>
       <MessageCircle size={22} color="#fff"/>
     </a>
@@ -2204,7 +2212,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         .catch(e => console.warn("cfg sync:", e.message));
     };
     fetchCatsCfg(); // immédiat au montage
-    const fastSync = setInterval(fetchCatsCfg, 10000);
+    const fastSync = setInterval(fetchCatsCfg, 3000);
     return () => clearInterval(fastSync);
   }, []);
 
@@ -3610,13 +3618,12 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   };
 
   const moveToTrash = (id) => {
+    if (!window.confirm("Mettre cet article à la corbeille ?")) return;
     const p = products.find(x=>x.id===id);
     if (!p) return;
     setProducts(ps=>ps.filter(x=>x.id!==id));
     setProductTrash(ts=>[...ts, p]);
     setSelectedIds(ids=>ids.filter(x=>x!==id));
-    // On ne supprime pas de Supabase, juste local — l'article reste en DB
-    // Pour supprimer définitivement utiliser deleteForeverProduct
   };
 
   const deleteSelected = () => {
@@ -4204,7 +4211,6 @@ function AdminCatsTab({ cats, setCats, dark }) {
   const add = async () => {
     if (!form.label.trim()) return;
     const newId = form.label.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
-    // Empêcher les doublons (par id OU par label, insensible à la casse)
     const exists = cats.some(c =>
       c.id === newId ||
       (c.label||"").toLowerCase().trim() === form.label.toLowerCase().trim()
@@ -4218,20 +4224,42 @@ function AdminCatsTab({ cats, setCats, dark }) {
     const updated = [...cats, newCat];
     setCats(updated);
     setForm({ label:"", labelEn:"", soon:false });
-    try { await sb.upsert("announcements", { id:"categories", data:updated }); } catch(e){console.warn(e.message);}
+    await saveCats(updated);
+  };
+
+  // Helper : sauvegarder les catégories de façon fiable (PATCH forcé)
+  const saveCats = async (data) => {
+    try {
+      // Essayer PATCH d'abord (plus fiable que upsert pour ligne existante)
+      const r = await fetch(`${SB_URL}/rest/v1/announcements?id=eq.categories`, {
+        method:"PATCH",
+        headers:{ ...sbHeaders, Prefer:"return=representation" },
+        body: JSON.stringify({ data })
+      });
+      if (!r.ok) throw new Error(r.status);
+      const rows = await r.json();
+      // Si PATCH n'a rien modifié (ligne n'existe pas), faire POST
+      if (!rows?.length) {
+        await sb.post("announcements", { id:"categories", data });
+      }
+    } catch(e) {
+      // Fallback sur upsert
+      try { await sb.upsert("announcements", { id:"categories", data }); }
+      catch(e2) { console.warn("saveCats:", e2.message); }
+    }
   };
 
   const toggleSoon = async (id) => {
     const updated = cats.map(c=>c.id===id?{...c,soon:!c.soon}:c);
     setCats(updated);
-    try { await sb.upsert("announcements", { id:"categories", data:updated }); } catch(e){console.warn(e.message);}
+    await saveCats(updated);
   };
 
   const del = async (id) => {
     if (!window.confirm("Supprimer cette catégorie ?")) return;
     const updated = cats.filter(c=>c.id!==id);
     setCats(updated);
-    try { await sb.upsert("announcements", { id:"categories", data:updated }); } catch(e){console.warn(e.message);}
+    await saveCats(updated);
   };
 
   const move = async (idx, dir) => {
@@ -4239,7 +4267,7 @@ function AdminCatsTab({ cats, setCats, dark }) {
     if (swap<0||swap>=arr.length) return;
     [arr[idx],arr[swap]]=[arr[swap],arr[idx]];
     setCats(arr);
-    try { await sb.upsert("announcements", { id:"categories", data:arr }); } catch(e){console.warn(e.message);}
+    await saveCats(arr);
   };
 
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
@@ -5063,11 +5091,16 @@ function AdminReviewsTab({ auth, dark }) {
   const [filter, setFilter]     = useState("all"); // all | pending | hidden
 
   useEffect(() => {
-    setLoading(true);
-    sb.get("reviews", "?order=date.desc&limit=100")
-      .then(rows => setReviews(rows||[]))
-      .catch(e => console.warn("reviews:", e.message))
-      .finally(() => setLoading(false));
+    const load = () => {
+      setLoading(true);
+      sb.get("reviews", `?order=date.desc&limit=100&_cb=${Date.now()}`)
+        .then(rows => setReviews(rows||[]))
+        .catch(e => console.warn("reviews:", e.message))
+        .finally(() => setLoading(false));
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const toggleHidden = async (r) => {
@@ -5288,7 +5321,7 @@ function AdminClientsTab({ orders, dark }) {
             fontSize:"16px", color:text, fontFamily:"inherit" }}/>
       </div>
       <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:12 }}>
-        {filtered.length} cliente{filtered.length>1?"s":""} · triées par montant total
+        {filtered.length} client{filtered.length>1?"s":""} · triée par montant total
       </p>
       <div style={{ display:"grid", gap:8 }}>
         {filtered.map((c,i) => (
@@ -5353,14 +5386,17 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
   const setL = (k,v) => setCfg(c=>({...c, loyalty:{ ...(c.loyalty||loyalty), [k]:v }}));
 
   // Calculer points par cliente depuis les commandes livrées
-  const clientPoints = {};
+  const clientMap2 = {};
   orders.filter(o=>o.status===3).forEach(o=>{
     const phone = o.customer_phone || o.phone || "—";
+    const name  = o.customer_name  || o.name  || "";
     const pts = Math.floor((o.total||0) / 1000) * (loyalty.pointsPer1000||1);
-    clientPoints[phone] = (clientPoints[phone]||0) + pts;
+    if (!clientMap2[phone]) clientMap2[phone] = { phone, name, pts:0 };
+    clientMap2[phone].pts += pts;
+    if (name) clientMap2[phone].name = name;
   });
-  const topClients = Object.entries(clientPoints)
-    .sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const topClients = Object.values(clientMap2)
+    .sort((a,b)=>b.pts-a.pts).slice(0,10);
 
   return (
     <div>
@@ -5387,8 +5423,8 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
                 Points gagnés par 1 000 FCFA dépensés
               </span>
               <input style={inp} type="number" min="1"
-                value={loyalty.pointsPer1000||1}
-                onChange={e=>setL("pointsPer1000",parseInt(e.target.value)||1)}/>
+                value={loyalty.pointsPer1000 ?? ""}
+                onChange={e=>setL("pointsPer1000", e.target.value===""?"":parseInt(e.target.value)||1)}/>
             </label>
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
@@ -5396,8 +5432,8 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
                 Valeur d'1 point (en FCFA de réduction)
               </span>
               <input style={inp} type="number" min="1"
-                value={loyalty.pointValue||100}
-                onChange={e=>setL("pointValue",parseInt(e.target.value)||100)}/>
+                value={loyalty.pointValue ?? ""}
+                onChange={e=>setL("pointValue", e.target.value===""?"":parseInt(e.target.value)||100)}/>
             </label>
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
@@ -5405,8 +5441,8 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
                 Points minimum pour utiliser ses points
               </span>
               <input style={inp} type="number" min="1"
-                value={loyalty.minRedeem||50}
-                onChange={e=>setL("minRedeem",parseInt(e.target.value)||50)}/>
+                value={loyalty.minRedeem ?? ""}
+                onChange={e=>setL("minRedeem", e.target.value===""?"":parseInt(e.target.value)||50)}/>
             </label>
             <div style={{ background:dark?`${CA.gold}0A`:`${CA.gold}08`,
               border:`1px solid ${CA.gold}33`, borderRadius:10,
@@ -5433,23 +5469,26 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
         </button>
       </div>
 
-      {/* Top clientes par points */}
+      {/* Top client(e)s par points */}
       {loyalty.active && topClients.length > 0 && (
         <div style={{ background:cardBg, border:`1px solid ${bord}`,
           borderRadius:14, padding:"16px" }}>
           <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 12px" }}>
-            🏆 Top clientes — Points cumulés
+            🏆 Top client(e)s — Points cumulés
           </h3>
-          {topClients.map(([phone, pts],i) => (
-            <div key={phone} style={{ display:"flex", justifyContent:"space-between",
+          {topClients.map((c,i) => (
+            <div key={c.phone} style={{ display:"flex", justifyContent:"space-between",
               alignItems:"center", padding:"9px 0",
               borderBottom:i<topClients.length-1?`1px solid ${bord}`:"none" }}>
               <div>
-                <span style={{ fontSize:13, color:text, fontWeight:600 }}>
-                  #{i+1} · {phone}
-                </span>
+                <div style={{ fontSize:13, color:text, fontWeight:600 }}>
+                  #{i+1} · {c.name || "Client"}
+                </div>
+                <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute }}>
+                  📞 {c.phone}
+                </div>
               </div>
-              <ABadge color={CA.gold}>{pts} pts</ABadge>
+              <ABadge color={CA.gold}>{c.pts} pts</ABadge>
             </div>
           ))}
         </div>
@@ -5752,7 +5791,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
     { key:"orders", icon:<ShoppingCart size={14}/>, label:auth.role==="delivery"?"Livraisons":"Commandes" },
     ...(can("add_product") ? [{ key:"products", icon:<ShoppingBag size={14}/>, label:"Produits" }] : []),
     ...(auth.role!=="delivery" ? [{ key:"reviews", icon:<Star size={14}/>, label:"Avis" }] : []),
-    ...(auth.role!=="delivery" ? [{ key:"clients", icon:<Heart size={14}/>, label:"Clientes" }] : []),
+    ...(auth.role!=="delivery" ? [{ key:"clients", icon:<Heart size={14}/>, label:"Clientèle" }] : []),
     ...(auth.role==="admin"?[
       { key:"loyalty",  icon:<Tag size={14}/>,      label:"Fidélité" },
       { key:"cats",     icon:<Tag size={14}/>,      label:"Catégories" },
