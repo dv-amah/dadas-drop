@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   ShoppingBag, Search, X, Plus, Minus, Trash2, Heart,
   Check, MessageCircle, Truck, Smartphone, ArrowRight,
@@ -149,6 +149,20 @@ const DEMO_ORDERS_TRACK = {
 const STATUS_LABELS = ["","En préparation","Expédiée","Livrée"];
 const STATUS_COLORS = ["", C.warning, "#1DC0D4", C.success];
 const PAYMENT_LABELS = { orange:"Orange Money", moov:"Moov Money", wave:"Wave", livraison:"À la livraison" };
+
+/* ════════════════════════════════════════════
+   🔗 SLUG — URL unique par article
+════════════════════════════════════════════ */
+const toSlug = (name) => (name||"")
+  .toLowerCase()
+  .normalize("NFD").replace(/[̀-ͯ]/g, "") // retirer accents
+  .replace(/[^a-z0-9\s-]/g, "")
+  .trim()
+  .replace(/\s+/g, "-");
+
+const slugToProduct = (slug, products) =>
+  products.find(p => toSlug(p.name) === slug);
+
 
 /* ════════════════════════════════════════════
    🌍 TRADUCTIONS
@@ -444,9 +458,12 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted, isFav, onT
 
   const shareArticle = e => {
     e.stopPropagation();
-    const msg = t.shareMsg
+    const slug = toSlug(p.name);
+    const url  = `https://dadas-drop.vercel.app/article/${slug}`;
+    const msg  = t.shareMsg
       .replace("{name}", p.name)
-      .replace("{price}", fcfa(displayPrice));
+      .replace("{price}", fcfa(displayPrice))
+      .replace("dadas-drop.vercel.app", url);
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -587,9 +604,12 @@ function ProductModal({ p, t, onClose, onAdd, dark }) {
   };
 
   const shareArticle = () => {
-    const msg = t.shareMsg
+    const slug = toSlug(p.name);
+    const url  = `https://dadas-drop.vercel.app/article/${slug}`;
+    const msg  = t.shareMsg
       .replace("{name}", p.name)
-      .replace("{price}", fcfa(displayPrice));
+      .replace("{price}", fcfa(displayPrice))
+      .replace("dadas-drop.vercel.app", url);
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -858,7 +878,20 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
       return `• ${l.qty}x ${l.name}${varStr} — ${fcfa(lPrice*l.qty)}`;
     }).join("\n");
     const promoStr = promoApplied ? `\n🎁 Code promo : ${promoApplied.code} (-${promoApplied.discount}%)` : "";
-    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}\n\n💰 Total : ${fcfa(finalTotal)}\n💳 Règlement : ${payLabels[pay]}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${pay!=="livraison"?"\n✅ Je joins la capture du paiement.":""}`;
+    // Numéro de paiement selon le mode choisi
+    const payNumbers = {
+      orange:   cfg?.orangeMoney || DEFAULT_CFG.orangeMoney,
+      moov:     cfg?.moovMoney   || DEFAULT_CFG.moovMoney,
+      wave:     cfg?.wave        || DEFAULT_CFG.wave,
+      livraison: null,
+    };
+    const payNumStr = payNumbers[pay]
+      ? `\n📱 Numéro de transfert : *${payNumbers[pay]}*`
+      : "";
+    const captureStr = pay!=="livraison"
+      ? `\n✅ Je joins la capture du paiement après transfert.`
+      : "";
+    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}\n\n💰 Total : *${fcfa(finalTotal)}*\n💳 Règlement : ${payLabels[pay]}${payNumStr}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${captureStr}`;
     window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
     setSaving(true);
     // Décrémenter le stock de chaque article commandé
@@ -1811,6 +1844,43 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
   useEffect(() => {
     window.scrollTo({ top:0, behavior:"instant" });
   }, [page]);
+
+  // Recharger catégories + config depuis Supabase toutes les 60s
+  // Pour que les changements admin apparaissent sur le shop sans recharger la page
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Recharger catégories
+      sb.get("announcements", "?id=eq.categories&select=data")
+        .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); })
+        .catch(e => console.warn("cats sync:", e.message));
+      // Recharger config (bannière, numéros, etc.)
+      sb.get("announcements", "?id=eq.config&select=data")
+        .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); })
+        .catch(e => console.warn("cfg sync:", e.message));
+      // Recharger produits (stock, prix, etc.)
+      sb.get("products", "?order=id.asc")
+        .then(rows => {
+          if(rows?.length>0) {
+            const normalized = rows.map(p => ({
+              ...p,
+              isNew:    p.is_new    ?? p.isNew    ?? false,
+              isBest:   p.is_best   ?? p.isBest   ?? false,
+              isPinned: p.is_pinned ?? p.isPinned ?? false,
+              isHidden: p.is_hidden ?? p.isHidden ?? false,
+              desc:     p.description ?? p.desc   ?? "",
+              imgs:     p.imgs || [],
+              accent:   p.accent || [],
+              variants: p.variants || [],
+              rating:   p.rating   || 0,
+              ratingCount: p.rating_count || 0,
+            }));
+            setProducts(normalized);
+          }
+        })
+        .catch(e => console.warn("products sync:", e.message));
+    }, 60000); // toutes les 60 secondes
+    return () => clearInterval(interval);
+  }, []);
   useEffect(() => {
     try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
   }, [cart]);
@@ -2377,6 +2447,123 @@ const INIT_USERS = [
   { id:3, name:"Erwin Ouili",      email:"erwinouili10@gmail.com",        role:"delivery", active:true, pwd:"Erwin@dadasdrop"   },
 ];
 
+
+/* ════════════════════════════════════════════
+   🔗 PAGE ARTICLE — URL directe /article/:slug
+════════════════════════════════════════════ */
+function ArticlePage({ products, cats, cfg, promos, dark, setDark }) {
+  const { slug } = useParams();
+
+  const product = slugToProduct(slug, products);
+
+  // Si article trouvé → ouvrir ShopApp avec la fiche ouverte
+  const [selected, setSelected] = useState(product||null);
+  const [cart, setCart]         = useState([]);
+
+  if (!product) {
+    return (
+      <div style={{ minHeight:"100vh", background:dark?C.dBg:C.cream,
+        display:"flex", flexDirection:"column",
+        alignItems:"center", justifyContent:"center",
+        padding:32, textAlign:"center",
+        fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+        <div style={{ fontFamily:"Georgia,serif", fontSize:60,
+          color:C.gold, marginBottom:16 }}>404</div>
+        <h1 style={{ fontFamily:"Georgia,serif", fontSize:22,
+          color:dark?C.dText:C.ink, margin:"0 0 10px", fontWeight:400 }}>
+          Article introuvable
+        </h1>
+        <p style={{ fontSize:14, color:dark?C.dMute:C.mute, margin:"0 0 24px" }}>
+          Cet article n'existe pas ou a été retiré.
+        </p>
+        <a href="/" style={{ ...primaryBtn, textDecoration:"none", gap:7 }}>
+          <ArrowLeft size={14}/> Voir la boutique
+        </a>
+      </div>
+    );
+  }
+
+  const t = T["fr"];
+  const addToCart = (p, qty=1, variant=null) => {
+    setCart(c => {
+      const key = `${p.id}-${variant?.label||""}`;
+      const ex  = c.find(i=>`${i.id}-${i.variant?.label||""}`===key);
+      if (ex) return c.map(i=>`${i.id}-${i.variant?.label||""}`===key?{...i,qty:i.qty+qty}:i);
+      return [...c,{id:p.id,qty,variant}];
+    });
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:dark?C.dBg:C.cream,
+      fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+      <style>{`*{box-sizing:border-box}`}</style>
+      {/* Header simple */}
+      <header style={{ background:dark?"rgba(15,12,8,.95)":"rgba(250,246,238,.95)",
+        backdropFilter:"blur(14px)",
+        borderBottom:`1px solid ${dark?C.dBorder:C.border}`,
+        padding:"0 16px", height:58,
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        position:"sticky", top:0, zIndex:50 }}>
+        <a href="/" style={{ display:"flex", alignItems:"center", gap:8,
+          textDecoration:"none", color:dark?C.dText:C.ink }}>
+          <ArrowLeft size={18}/> <span style={{ fontSize:13 }}>Retour à la boutique</span>
+        </a>
+        <LogoDD size={36}/>
+        <div style={{ width:80 }}/>
+      </header>
+      {/* Fiche article */}
+      <div style={{ maxWidth:520, margin:"24px auto", padding:"0 16px 60px" }}>
+        <Carousel p={product}/>
+        <div style={{ marginTop:16 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.gold,
+            letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>
+            {product.brand}
+          </div>
+          <h1 style={{ fontFamily:"Georgia,serif", fontSize:24,
+            color:dark?C.dText:C.ink, margin:"0 0 8px", fontWeight:400 }}>
+            {product.name}
+          </h1>
+          <StarRating rating={product.rating||0} count={product.ratingCount||0} size={14}/>
+          <div style={{ fontFamily:"Georgia,serif", fontWeight:700,
+            fontSize:22, color:C.gold, margin:"10px 0" }}>
+            {fcfa(product.discount>0
+              ? Math.round(product.price*(1-product.discount/100))
+              : product.price)}
+            {product.discount>0 && (
+              <span style={{ fontFamily:"sans-serif", fontSize:14,
+                color:C.mute, textDecoration:"line-through", marginLeft:10 }}>
+                {fcfa(product.price)}
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize:14, color:dark?C.dMute:C.mute,
+            lineHeight:1.7, margin:"0 0 20px" }}>
+            {product.desc}
+          </p>
+          {product.stock===0 ? (
+            <a href={`https://wa.me/${cfg?.whatsapp||DEFAULT_CFG.whatsapp}?text=${encodeURIComponent(
+              `Bonjour ! Je suis intéressée par "${product.name}" mais il est épuisé. Pouvez-vous me prévenir quand il est disponible ?`
+            )}`} target="_blank" rel="noreferrer"
+              style={{ display:"flex", alignItems:"center", justifyContent:"center",
+                gap:8, background:"#25D366", color:"#fff", textDecoration:"none",
+                padding:"13px", borderRadius:11, fontWeight:700, fontSize:15 }}>
+              <MessageCircle size={18}/> Me prévenir quand disponible
+            </a>
+          ) : (
+            <a href={`/?article=${toSlug(product.name)}`}
+              style={{ display:"flex", alignItems:"center", justifyContent:"center",
+                gap:8, background:C.ink, color:C.gold, textDecoration:"none",
+                border:`1px solid ${C.gold}44`,
+                padding:"13px", borderRadius:11, fontWeight:700, fontSize:15 }}>
+              <ShoppingBag size={18}/> Commander sur la boutique
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ════════════════════════════════════════════
    🔒 ADMIN GUARD — AdminApp défini plus bas dans ce fichier
 ════════════════════════════════════════════ */
@@ -2474,6 +2661,11 @@ export default function App() {
           <ShopApp products={products} cats={cats} cfg={cfg} promos={promos}
             dark={dark} setDark={setDark} initialPage="catalogue"/>
         }/>
+        {/* Route article direct — /article/mini-boston-rose */}
+        <Route path="/article/:slug" element={
+          <ArticlePage products={products} cats={cats} cfg={cfg}
+            promos={promos} dark={dark} setDark={setDark}/>
+        }/>
         <Route path="/admin" element={
           <AdminGuard products={products} setProducts={setProducts}
             cats={cats} setCats={setCats}
@@ -2535,15 +2727,9 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
   const [search, setSearch]       = useState("");
   const [filterStatus, setFilter] = useState(0);
   const [showTrash, setShowTrash] = useState(false);
-  const [trash, setTrash]         = useState(() => {
-    try { return JSON.parse(localStorage.getItem("dd_trash")||"[]"); } catch { return []; }
-  });
-
-  // Sauvegarder la corbeille dans localStorage
-  const saveTrash = (newTrash) => {
-    setTrash(newTrash);
-    try { localStorage.setItem("dd_trash", JSON.stringify(newTrash)); } catch {}
-  };
+  // La corbeille est gérée dans Supabase via le champ deleted=true
+  // "trash" = commandes avec deleted=true chargées depuis Supabase
+  const [trash, setTrash] = useState([]);
   const text = dark ? CA.dText : CA.ink;
   const bord = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
@@ -2600,27 +2786,29 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
   const deleteOrder = async (id) => {
     if (!window.confirm("Mettre cette commande à la corbeille ?")) return;
     const order = orders.find(o => o.id === id);
-    if (order) {
-      // Ajouter à la corbeille avec date de suppression
-      const newTrash = [...trash, { ...order, deletedAt: new Date().toISOString() }];
-      saveTrash(newTrash);
-    }
+    if (!order) return;
+    // Déplacer vers la corbeille dans Supabase
     setOrders(os => os.filter(o => o.id !== id));
-    try { await sb.patch("orders", id, { status:0 }); } catch(e){ console.warn(e.message); }
+    setTrash(ts => [...ts, { ...order, deleted_at: new Date().toISOString() }]);
+    try {
+      await sb.patch("orders", id, { deleted: true, deleted_at: new Date().toISOString() });
+    } catch(e) { console.warn(e.message); }
   };
 
-  const restoreOrder = (id) => {
+  const restoreOrder = async (id) => {
     const order = trash.find(o => o.id === id);
     if (!order) return;
-    const { deletedAt, ...restored } = order;
+    setTrash(ts => ts.filter(o => o.id !== id));
+    const { deleted_at, deleted, ...restored } = order;
     setOrders(os => [restored, ...os]);
-    saveTrash(trash.filter(o => o.id !== id));
-    try { sb.patch("orders", id, { status: restored.status||1 }); } catch(e){ console.warn(e.message); }
+    try {
+      await sb.patch("orders", id, { deleted: false, deleted_at: null });
+    } catch(e) { console.warn(e.message); }
   };
 
   const deleteForever = async (id) => {
     if (!window.confirm("⚠️ Supprimer définitivement ? Cette action est irréversible.")) return;
-    saveTrash(trash.filter(o => o.id !== id));
+    setTrash(ts => ts.filter(o => o.id !== id));
     try { await sb.del("orders", id); } catch(e){ console.warn(e.message); }
   };
 
@@ -3573,10 +3761,11 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
       window.alert("⛔ Seul David peut modifier le rôle d'un administrateur.");
       return;
     }
-    if (role==="admin" && !window.confirm("⚠️ Ce membre aura accès à l'admin. Confirmer ?")) return;
+    if (role==="admin" && !window.confirm(`⚠️ Donner les droits Admin à ce membre ?
+Il aura accès à tout le tableau de bord.`)) return;
     setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));
     try { await sb.patch("team_users",id,{role}); } catch(e){console.warn(e.message);}
-    window.alert(`✅ Rôle mis à jour. La personne doit se reconnecter pour voir son nouveau rôle.`);
+
   };
 
   const del = async id => {
@@ -4134,13 +4323,15 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
       sb.get("orders", "?order=created_at.desc&limit=100")
         .then(rows => {
           if (rows?.length > 0) {
-            const normalized = rows.map(o => ({
+            const all = rows.map(o => ({
               ...o,
               name:  o.customer_name  || o.name  || "Client",
               phone: o.customer_phone || o.phone || "",
               date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
             }));
-            setOrders(normalized);
+            // Séparer commandes actives et corbeille
+            setOrders(all.filter(o => !o.deleted));
+            setTrash(all.filter(o => o.deleted));
           }
         }).catch(e => console.warn(e.message));
     // 5s pour le livreur (quasi instantané), 30s pour les autres
