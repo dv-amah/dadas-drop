@@ -2725,15 +2725,26 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
             {s===0?"Toutes":STATUS_ADMIN_LABELS[s]}
           </button>
         ))}
-        <button onClick={() => setShowTrash(v=>!v)}
-          style={{ padding:"7px 12px", borderRadius:9, fontSize:12.5, fontWeight:600,
-            border:`1.5px solid ${showTrash?CA.danger:bord}`,
-            background:showTrash?CA.danger:cardBg,
-            color:showTrash?"#fff":text, cursor:"pointer",
-            display:"flex", alignItems:"center", gap:5 }}>
-          🗑 Corbeille {trash.length>0 && `(${trash.length})`}
-        </button>
       </div>
+      {/* Bouton corbeille — ligne séparée, toujours visible */}
+      <button onClick={() => setShowTrash(v=>!v)}
+        style={{ width:"100%", marginBottom:10, padding:"10px 14px",
+          borderRadius:10, fontSize:13.5, fontWeight:700,
+          border:`1.5px solid ${showTrash?CA.danger:bord}`,
+          background:showTrash?`${CA.danger}15`:cardBg,
+          color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
+          cursor:"pointer", display:"flex", alignItems:"center",
+          justifyContent:"space-between", gap:8 }}>
+        <span style={{ display:"flex", alignItems:"center", gap:7 }}>
+          🗑 <span>{showTrash?"← Retour aux commandes":"Corbeille"}</span>
+        </span>
+        {trash.length > 0 && (
+          <span style={{ background:CA.danger, color:"#fff", fontSize:11,
+            fontWeight:800, padding:"2px 8px", borderRadius:999 }}>
+            {trash.length}
+          </span>
+        )}
+      </button>
       <button onClick={exportCSV}
         style={{ width:"100%", marginBottom:14,
           background:CA.success, color:"#fff",
