@@ -582,7 +582,7 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted, isFav, onT
 /* ════════════════════════════════════════════
    🔍 FICHE PRODUIT
 ════════════════════════════════════════════ */
-function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen }) {
+function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenCart }) {
   const [qty, setQty]           = useState(1);
   const [variant, setVariant]   = useState(null);
   const [variantErr, setVariantErr] = useState(false);
@@ -600,9 +600,14 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen }) {
 
   const handleAdd = () => {
     if (hasVariants && !variant) { setVariantErr(true); return; }
-    onAdd(p, qty, variant);
+    onAdd(p, qty, variant, true); // true = noAutoOpen, on gère le timing nous-mêmes
     setAddedAnim(true);
-    setTimeout(() => { setAddedAnim(false); onClose(); }, 900);
+    setTimeout(() => {
+      setAddedAnim(false);
+      onClose();
+      // Ouvrir le panier 150ms après fermeture du modal pour éviter le flash
+      setTimeout(() => onOpenCart && onOpenCart(), 150);
+    }, 900);
   };
 
   const shareArticle = () => {
@@ -791,15 +796,16 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
   const text = dark ? C.dText : C.ink;
 
   return (<>
-    <div onClick={onClose}
+    {open && <div onClick={onClose}
       style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:60,
-        opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
+        animation:"ddFade .25s ease" }}/>}
     <aside style={{ position:"fixed", top:0, right:0, height:"100%",
       width:"min(380px,90vw)", background:bg, zIndex:61,
       transform:open?"translateX(0)":"translateX(105%)",
       transition:"transform .35s cubic-bezier(.2,.8,.2,1)",
       display:"flex", flexDirection:"column",
-      boxShadow:"-8px 0 32px rgba(0,0,0,.15)" }}>
+      boxShadow:"-8px 0 32px rgba(0,0,0,.15)",
+      visibility: open?"visible":"hidden" }}>
       <div style={{ padding:"16px 18px", borderBottom:`1px solid ${bord}`,
         display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>{t.cart}</span>
@@ -1909,19 +1915,22 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
     window.scrollTo({ top:0, behavior:"instant" });
   }, [page]);
 
-  // Recharger catégories + config depuis Supabase toutes les 60s
-  // Pour que les changements admin apparaissent sur le shop sans recharger la page
+  // Sync catégories + config toutes les 10s (léger, texte seulement)
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Recharger catégories
+    const fastSync = setInterval(() => {
       sb.get("announcements", "?id=eq.categories&select=data")
         .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); })
         .catch(e => console.warn("cats sync:", e.message));
-      // Recharger config (bannière, numéros, etc.)
       sb.get("announcements", "?id=eq.config&select=data")
         .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); })
         .catch(e => console.warn("cfg sync:", e.message));
-      // Recharger produits (stock, prix, etc.)
+    }, 10000);
+    return () => clearInterval(fastSync);
+  }, []);
+
+  // Sync produits toutes les 60s (plus lourd)
+  useEffect(() => {
+    const slowSync = setInterval(() => {
       sb.get("products", "?order=id.asc")
         .then(rows => {
           if(rows?.length>0) {
@@ -1942,16 +1951,25 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
           }
         })
         .catch(e => console.warn("products sync:", e.message));
-    }, 60000); // toutes les 60 secondes
-    return () => clearInterval(interval);
+    }, 60000);
+    return () => clearInterval(slowSync);
   }, []);
   useEffect(() => {
     try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
   }, [cart]);
   useEffect(() => {
     const isOpen = menuOpen||cartOpen||checkout||trackOpen||!!selected;
-    document.body.style.overflow = isOpen?"hidden":"";
-    return () => { document.body.style.overflow=""; };
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.touchAction = "none";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.touchAction = "";
+    };
   }, [menuOpen,cartOpen,checkout,trackOpen,selected]);
 
   const t    = T[lang];
@@ -2004,7 +2022,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
 
   const bestSellers = visibleProducts.filter(p=>p.isBest&&p.stock>0).slice(0,4);
 
-  const addToCart = useCallback((p, qty=1, variant=null) => {
+  const addToCart = useCallback((p, qty=1, variant=null, noAutoOpen=false) => {
     setCart(c => {
       const key = `${p.id}-${variant?.label||""}`;
       const ex  = c.find(i => `${i.id}-${i.variant?.label||""}` === key);
@@ -2014,7 +2032,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
       );
       return [...c, { id:p.id, qty, variant }];
     });
-    setCartOpen(true);
+    if (!noAutoOpen) setTimeout(() => setCartOpen(true), 50);
   }, []);
 
   const setQty = (id, qty, variant) => setCart(c => {
@@ -2473,6 +2491,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         setPage={setPage} setCat={setCat} cats={cats} favs={favs}/>
       <ProductModal p={selected} t={t} dark={dark}
         products={products} onOpen={setSelected}
+        onOpenCart={() => setCartOpen(true)}
         onClose={() => setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products}
         t={t} dark={dark} onClose={() => setCartOpen(false)}
@@ -3155,8 +3174,8 @@ function AdminOrdersTab({ orders, setOrders, trash, setTrash, users, auth, dark 
                 </>)}
               </div>
             </div>
-            {/* Livreur */}
-            {auth.role!=="delivery" && deliverers.length>0 && (
+            {/* Livreur — seulement si pas encore livré */}
+            {auth.role!=="delivery" && deliverers.length>0 && o.status < 3 && (
               <div style={{ marginTop:8 }}>
                 <select value={o.assignedTo||""} onChange={e=>assignDelivery(o.id,e.target.value)}
                   style={{ width:"100%", padding:"8px 10px", borderRadius:8,
@@ -3172,6 +3191,14 @@ function AdminOrdersTab({ orders, setOrders, trash, setTrash, users, auth, dark 
                     </ABadge>
                   </div>
                 )}
+              </div>
+            )}
+            {/* Si livré et livreur assigné, juste afficher le nom */}
+            {auth.role!=="delivery" && o.status===3 && o.assignedTo && (
+              <div style={{ marginTop:8 }}>
+                <ABadge color={CA.success}>
+                  ✅ Livré par {users.find(u=>u.id===o.assignedTo)?.name||"livreur"}
+                </ABadge>
               </div>
             )}
           </div>
@@ -3310,12 +3337,28 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
               📌 {products.filter(p=>p.isPinned).length} épinglé{products.filter(p=>p.isPinned).length>1?"s":""}
             </span>}
         </span>
-        <button onClick={startNew}
-          style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
-            borderRadius:10, padding:"9px 14px", cursor:"pointer",
-            fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-          <PlusCircle size={14}/> Ajouter
-        </button>
+        <div style={{ display:"flex", gap:7 }}>
+          <button onClick={async () => {
+              if (!window.confirm(`⚠️ Supprimer les ${products.length} articles du catalogue ? Cette action est irréversible.`)) return;
+              if (!window.confirm("Dernière confirmation — tout sera effacé.")) return;
+              for (const p of products) {
+                try { await sb.del("products", p.id); } catch(e){console.warn(e.message);}
+              }
+              setProducts([]);
+            }}
+            title="Vider tout le catalogue"
+            style={{ background:"none", color:CA.danger, border:`1px solid ${CA.danger}44`,
+              borderRadius:10, padding:"9px 12px", cursor:"pointer",
+              fontSize:12, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+            <Trash size={13}/> Tout vider
+          </button>
+          <button onClick={startNew}
+            style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+              borderRadius:10, padding:"9px 14px", cursor:"pointer",
+              fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+            <PlusCircle size={14}/> Ajouter
+          </button>
+        </div>
       </div>
 
       {/* Formulaire */}
@@ -3991,6 +4034,50 @@ Il aura accès à tout le tableau de bord.`)) return;
 }
 
 /* ──────────────────────────────────────────
+   ÉDITEUR PAGES LÉGALES (composant séparé pour éviter useState dans JSX)
+────────────────────────────────────────── */
+function LegalEditor({ cfg, setC, dark, cardBg, bord, text, inp }) {
+  const LEGAL_PAGES = [
+    { k:"legalMentions", title:"Mentions légales" },
+    { k:"legalCgv",      title:"CGV" },
+    { k:"legalRgpd",     title:"Confidentialité" },
+    { k:"legalSav",      title:"SAV" },
+  ];
+  const [legalTab, setLegalTab] = useState(LEGAL_PAGES[0].k);
+  return (
+    <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+      <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>⚖️ Pages légales</h3>
+      <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto",
+        paddingBottom:4, WebkitOverflowScrolling:"touch" }}>
+        {LEGAL_PAGES.map(pg => (
+          <button key={pg.k} onClick={() => setLegalTab(pg.k)}
+            style={{ padding:"6px 11px", borderRadius:8, fontSize:12, fontWeight:600,
+              border:`1.5px solid ${legalTab===pg.k?CA.gold:bord}`,
+              background:legalTab===pg.k?CA.ink:cardBg,
+              color:legalTab===pg.k?CA.gold:text,
+              cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+            {pg.title}
+          </button>
+        ))}
+      </div>
+      <label style={{ display:"block" }}>
+        <span style={{ fontSize:11.5, fontWeight:600,
+          color:dark?CA.dMute:CA.mute, display:"block", marginBottom:6 }}>
+          Contenu — {LEGAL_PAGES.find(pg=>pg.k===legalTab)?.title}
+        </span>
+        <textarea style={{ ...inp, resize:"vertical", lineHeight:1.6 }} rows={10}
+          value={cfg[legalTab]||""}
+          placeholder="Entrez le texte de cette page légale…"
+          onChange={setC(legalTab)}/>
+      </label>
+      <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:6 }}>
+        💡 Ce texte remplace le contenu par défaut sur le site client.
+      </p>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
    ONGLET PARAMÈTRES
 ────────────────────────────────────────── */
 function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth, setUsers }) {
@@ -4326,46 +4413,9 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
       )}
 
       {/* PAGES LÉGALES */}
-      {tab==="legal" && (() => {
-        const pages = [
-          { k:"legalMentions", title:"Mentions légales" },
-          { k:"legalCgv",      title:"CGV" },
-          { k:"legalRgpd",     title:"Politique de confidentialité" },
-          { k:"legalSav",      title:"SAV" },
-        ];
-        const [legalTab, setLegalTab] = useState(pages[0].k);
-        return (
-          <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
-            <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>⚖️ Pages légales</h3>
-            <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto",
-              paddingBottom:4, WebkitOverflowScrolling:"touch" }}>
-              {pages.map(pg => (
-                <button key={pg.k} onClick={() => setLegalTab(pg.k)}
-                  style={{ padding:"6px 11px", borderRadius:8, fontSize:12, fontWeight:600,
-                    border:`1.5px solid ${legalTab===pg.k?CA.gold:bord}`,
-                    background:legalTab===pg.k?CA.ink:cardBg,
-                    color:legalTab===pg.k?CA.gold:text,
-                    cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
-                  {pg.title}
-                </button>
-              ))}
-            </div>
-            <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
-                display:"block", marginBottom:6 }}>
-                Contenu — {pages.find(pg=>pg.k===legalTab)?.title}
-              </span>
-              <textarea style={{ ...inp, resize:"vertical", lineHeight:1.6 }} rows={10}
-                value={cfg[legalTab]||""}
-                placeholder="Entrez le texte de cette page légale…"
-                onChange={setC(legalTab)}/>
-            </label>
-            <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:6 }}>
-              💡 Ce texte remplace le contenu par défaut de la page correspondante sur le site.
-            </p>
-          </div>
-        );
-      })()}
+      {tab==="legal" && (
+        <LegalEditor cfg={cfg} setC={setC} dark={dark} cardBg={cardBg} bord={bord} text={text} inp={inp}/>
+      )}
 
       {/* Bouton Save global */}
       <button onClick={save}
@@ -4423,9 +4473,9 @@ function AdminReviewsTab({ auth, dark }) {
   };
 
   const filtered = reviews.filter(r => {
-    if (filter==="hidden")  return r.hidden;
+    if (filter==="hidden")  return r.hidden === true;
     if (filter==="pending") return !r.hidden && !r.reply;
-    return !r.hidden;
+    return r.hidden !== true; // null ou false → visible
   });
 
   const avgRating = reviews.filter(r=>!r.hidden&&r.stars>0).length
