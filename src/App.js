@@ -1086,7 +1086,9 @@ function TrackModal({ open, onClose, t, dark }) {
     // Accepter avec ou sans # devant
     const upper = num.toUpperCase().trim().replace(/^#/, "");
     try {
-      const rows = await sb.get("orders", `?id=eq.${upper}&select=*`);
+      // Chercher avec et sans # au cas où
+      const upperClean = upper.replace(/^#/,"");
+      const rows = await sb.get("orders", `?id=eq.${upperClean}&select=*`);
       if (rows?.length > 0) {
         const o = rows[0];
         setResult({
@@ -1107,10 +1109,16 @@ function TrackModal({ open, onClose, t, dark }) {
     setLoading(true); setResult(null); setResults([]); setNotFound(false);
     const cleaned = tel.replace(/\s/g,"");
     try {
-      // Chercher par customer_phone ET phone
-      const rows = await sb.get("orders",
-        `?or=(customer_phone.eq.${cleaned},phone.eq.${cleaned})&select=*&order=created_at.desc`
+      // Chercher par customer_phone d'abord
+      let rows = await sb.get("orders",
+        `?customer_phone=eq.${cleaned}&select=*&order=created_at.desc`
       );
+      // Si rien trouvé, essayer avec phone
+      if (!rows?.length) {
+        rows = await sb.get("orders",
+          `?phone=eq.${cleaned}&select=*&order=created_at.desc`
+        );
+      }
       if (rows?.length > 0) {
         const normalized = rows.map(o => ({
           ...o,
