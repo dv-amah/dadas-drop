@@ -2575,7 +2575,19 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
     };
     if (msgs[status]) {
       const waPhone = phone.startsWith("226") ? phone : `226${phone}`;
-      window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msgs[status])}`, "_blank");
+      const label = status===2 ? "Expédiée" : "Livrée";
+      const sendWa = window.confirm(
+        `📱 Envoyer une notification WhatsApp à ${name} (${phone}) ?
+
+` +
+        `Message : commande ${label}.
+
+` +
+        `Cliquez OK pour envoyer, Annuler pour ignorer.`
+      );
+      if (sendWa) {
+        window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msgs[status])}`, "_blank");
+      }
     }
   };
 
@@ -4122,7 +4134,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             setOrders(normalized);
           }
         }).catch(e => console.warn(e.message));
-    }, 30000);
+    // 5s pour le livreur (quasi instantané), 30s pour les autres
+    }, auth?.role === "delivery" ? 5000 : 15000);
     return () => clearInterval(interval);
   }, [auth]);
 
