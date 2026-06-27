@@ -586,9 +586,16 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   const [qty, setQty]           = useState(1);
   const [variant, setVariant]   = useState(null);
   const [variantErr, setVariantErr] = useState(false);
-  const [addedAnim, setAddedAnim] = useState(false);
+  const [reviews, setReviews]   = useState([]);
 
-  useEffect(() => { setVariant(null); setQty(1); setVariantErr(false); setAddedAnim(false); }, [p]);
+  useEffect(() => {
+    setVariant(null); setQty(1); setVariantErr(false); setAddedAnim(false); setReviews([]);
+    if (!p) return;
+    // Charger les avis visibles de ce produit
+    sb.get("reviews", `?product=eq.${encodeURIComponent(p.name)}&order=date.desc&limit=10`)
+      .then(rows => setReviews((rows||[]).filter(r => r.hidden !== true)))
+      .catch(() => {});
+  }, [p]);
 
   if (!p) return null;
   const out  = p.stock === 0;
@@ -600,14 +607,8 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
 
   const handleAdd = () => {
     if (hasVariants && !variant) { setVariantErr(true); return; }
-    onAdd(p, qty, variant, true); // true = noAutoOpen, on gère le timing nous-mêmes
-    setAddedAnim(true);
-    setTimeout(() => {
-      setAddedAnim(false);
-      onClose();
-      // Ouvrir le panier 150ms après fermeture du modal pour éviter le flash
-      setTimeout(() => onOpenCart && onOpenCart(), 150);
-    }, 900);
+    onAdd(p, qty, variant);
+    onClose();
   };
 
   const shareArticle = () => {
@@ -692,12 +693,8 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
                   </button>
                 </div>
                 <button onClick={handleAdd}
-                  style={{ flex:1, ...primaryBtn, justifyContent:"center",
-                    background: addedAnim ? C.success : C.ink,
-                    transition:"background .3s" }}>
-                  {addedAnim
-                    ? <><Check size={15}/> Ajouté !</>
-                    : <><ShoppingBag size={15}/> {t.addCart}</>}
+                  style={{ flex:1, ...primaryBtn, justifyContent:"center" }}>
+                  <ShoppingBag size={15}/> {t.addCart}
                 </button>
               </div>
               {/* Partager */}
@@ -730,6 +727,48 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
               </div>
             )}
           </div>
+
+          {/* AVIS CLIENTS */}
+          {reviews.length > 0 && (
+            <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${bord}` }}>
+              <div style={{ fontSize:11, fontWeight:700, color:C.gold,
+                letterSpacing:1, textTransform:"uppercase", marginBottom:12 }}>
+                ⭐ Avis clients ({reviews.length})
+              </div>
+              {reviews.map((r,i) => (
+                <div key={r.id||i} style={{ marginBottom:12, paddingBottom:12,
+                  borderBottom: i<reviews.length-1?`1px solid ${bord}`:"none" }}>
+                  <div style={{ display:"flex", gap:2, marginBottom:4 }}>
+                    {[1,2,3,4,5].map(s => (
+                      <span key={s} style={{ fontSize:13,
+                        color:s<=(r.stars||0)?"#F5A623":"#DDD" }}>★</span>
+                    ))}
+                    <span style={{ fontSize:10.5, color:dark?C.dMute:C.mute, marginLeft:6 }}>
+                      {r.date}
+                    </span>
+                  </div>
+                  {r.text && (
+                    <p style={{ fontSize:13, color:dark?C.dMute:C.mute,
+                      margin:"0 0 6px", lineHeight:1.6, fontStyle:"italic" }}>
+                      "{r.text}"
+                    </p>
+                  )}
+                  {r.reply && (
+                    <div style={{ background:dark?`${C.gold}0A`:`${C.gold}08`,
+                      border:`1px solid ${C.gold}22`, borderRadius:8,
+                      padding:"8px 10px", marginTop:6 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:C.gold, marginBottom:3 }}>
+                        💬 Réponse de la boutique
+                      </div>
+                      <p style={{ fontSize:12, color:dark?C.dText:C.ink, margin:0, lineHeight:1.5 }}>
+                        {r.reply}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* VOUS AIMEREZ AUSSI */}
           {(() => {
@@ -782,7 +821,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
 /* ════════════════════════════════════════════
    🛒 PANIER
 ════════════════════════════════════════════ */
-function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout, t, dark }) {
+function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout, t, dark, cfg }) {
   const lines = cart.map(it => {
     const p = products.find(x => x.id === it.id);
     return p ? { ...p, qty:it.qty, variant:it.variant } : null;
@@ -791,6 +830,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
     const price = l.discount>0 ? Math.round(l.price*(1-l.discount/100)) : l.price;
     return s + price * l.qty;
   }, 0);
+  const freeFrom = cfg?.freeFrom ? parseInt(cfg.freeFrom) : DEFAULT_CFG.freeFrom;
   const bg   = dark ? C.dCard : "#fff";
   const bord = dark ? C.dBorder : C.border;
   const text = dark ? C.dText : C.ink;
@@ -814,7 +854,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
           <X size={20}/>
         </button>
       </div>
-      {total >= DEFAULT_CFG.freeFrom && (
+      {cfg?.freeDelivery !== false && total >= freeFrom && (
         <div style={{ background:C.ink, color:C.gold, padding:"7px 16px",
           fontSize:12, fontWeight:600, textAlign:"center" }}>
           ✦ Livraison offerte pour cette commande
@@ -872,9 +912,9 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
       </div>
       {lines.length > 0 && (
         <div style={{ padding:16, borderTop:`1px solid ${bord}` }}>
-          {total < DEFAULT_CFG.freeFrom && (
+          {cfg?.freeDelivery !== false && total < freeFrom && (
             <p style={{ fontSize:11, color:C.mute, margin:"0 0 8px" }}>
-              Livraison offerte dès {fcfa(DEFAULT_CFG.freeFrom)}
+              Livraison offerte dès {fcfa(freeFrom)}
             </p>
           )}
           <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
@@ -1380,10 +1420,15 @@ Merci de confirmer l'annulation.`
                     rows={3} placeholder="Partagez votre expérience…"
                     style={{ ...inpStyle(dark), resize:"vertical" }}/>
                   <button onClick={async () => {
-                      // Sauvegarder l'avis dans Supabase
                       try {
                         const orderId = result?.id || num.toUpperCase().trim();
-                        const productName = (result?.items||[])[0]?.split(" x")[0] || "";
+                        // Vérifier si un avis existe déjà pour cette commande
+                        const existing = await sb.get("reviews", `?order_id=eq.${orderId}&select=id`);
+                        if (existing?.length > 0) {
+                          setCommentSent(true); // Considérer comme déjà envoyé
+                          return;
+                        }
+                        const productName = (result?.items||[])[0]?.split(" x")[0].replace(/ \(.*\)/,"").trim() || "";
                         await sb.post("reviews", {
                           order_id: orderId,
                           product: productName,
@@ -1391,7 +1436,6 @@ Merci de confirmer l'annulation.`
                           text: comment.text || "",
                           date: new Date().toISOString().split("T")[0],
                         });
-                        // Mettre à jour la note du produit
                         const prod = products?.find(p =>
                           (p.name||"").toLowerCase().includes(productName.toLowerCase())
                         );
@@ -2022,7 +2066,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
 
   const bestSellers = visibleProducts.filter(p=>p.isBest&&p.stock>0).slice(0,4);
 
-  const addToCart = useCallback((p, qty=1, variant=null, noAutoOpen=false) => {
+  const addToCart = useCallback((p, qty=1, variant=null) => {
     setCart(c => {
       const key = `${p.id}-${variant?.label||""}`;
       const ex  = c.find(i => `${i.id}-${i.variant?.label||""}` === key);
@@ -2032,7 +2076,6 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
       );
       return [...c, { id:p.id, qty, variant }];
     });
-    if (!noAutoOpen) setTimeout(() => setCartOpen(true), 50);
   }, []);
 
   const setQty = (id, qty, variant) => setCart(c => {
@@ -2494,7 +2537,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         onOpenCart={() => setCartOpen(true)}
         onClose={() => setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products}
-        t={t} dark={dark} onClose={() => setCartOpen(false)}
+        t={t} dark={dark} cfg={cfg} onClose={() => setCartOpen(false)}
         onQty={setQty} onRemove={removeItem}
         onCheckout={() => { setCartOpen(false); setCheckout(true); }}/>
       <Checkout open={checkout} lines={lines} total={total}
@@ -3234,6 +3277,8 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const [saving, setSaving]     = useState(false);
   const [form, setForm]         = useState(emptyForm);
   const [newVariant, setNewVariant] = useState({ type:"color", label:"", hex:"#C9A84C", stock:"" });
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [productTrash, setProductTrash] = useState([]);
 
   const setF = k => e => setForm(f => ({...f, [k]: e.target.type==="checkbox"?e.target.checked:e.target.value}));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
@@ -3298,10 +3343,40 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     setSaving(false); setEditP(null); setShowForm(false);
   };
 
-  const del = async id => {
-    if (!window.confirm("Supprimer cet article ?")) return;
-    setProducts(ps=>ps.filter(p=>p.id!==id));
+  const moveToTrash = (id) => {
+    const p = products.find(x=>x.id===id);
+    if (!p) return;
+    setProducts(ps=>ps.filter(x=>x.id!==id));
+    setProductTrash(ts=>[...ts, p]);
+    setSelectedIds(ids=>ids.filter(x=>x!==id));
+    // On ne supprime pas de Supabase, juste local — l'article reste en DB
+    // Pour supprimer définitivement utiliser deleteForeverProduct
+  };
+
+  const deleteSelected = () => {
+    if (!selectedIds.length) return;
+    if (!window.confirm(`Mettre ${selectedIds.length} article${selectedIds.length>1?"s":""} à la corbeille ?`)) return;
+    const toTrash = products.filter(p=>selectedIds.includes(p.id));
+    setProducts(ps=>ps.filter(p=>!selectedIds.includes(p.id)));
+    setProductTrash(ts=>[...ts,...toTrash]);
+    setSelectedIds([]);
+  };
+
+  const restoreProduct = (id) => {
+    const p = productTrash.find(x=>x.id===id);
+    if (!p) return;
+    setProductTrash(ts=>ts.filter(x=>x.id!==id));
+    setProducts(ps=>[p,...ps]);
+  };
+
+  const deleteForeverProduct = async (id) => {
+    if (!window.confirm("⚠️ Supprimer définitivement ? Irréversible.")) return;
+    setProductTrash(ts=>ts.filter(x=>x.id!==id));
     try { await sb.del("products",id); } catch(e){console.warn(e.message);}
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
   };
 
   const toggleProp = async (id, prop) => {
@@ -3329,7 +3404,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     <div>
       {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between",
-        alignItems:"center", marginBottom:14 }}>
+        alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:8 }}>
         <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>
           {products.length} articles
           {products.filter(p=>p.isPinned).length>0 &&
@@ -3337,21 +3412,34 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
               📌 {products.filter(p=>p.isPinned).length} épinglé{products.filter(p=>p.isPinned).length>1?"s":""}
             </span>}
         </span>
-        <div style={{ display:"flex", gap:7 }}>
-          <button onClick={async () => {
-              if (!window.confirm(`⚠️ Supprimer les ${products.length} articles du catalogue ? Cette action est irréversible.`)) return;
-              if (!window.confirm("Dernière confirmation — tout sera effacé.")) return;
-              for (const p of products) {
-                try { await sb.del("products", p.id); } catch(e){console.warn(e.message);}
-              }
-              setProducts([]);
-            }}
-            title="Vider tout le catalogue"
-            style={{ background:"none", color:CA.danger, border:`1px solid ${CA.danger}44`,
-              borderRadius:10, padding:"9px 12px", cursor:"pointer",
-              fontSize:12, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
-            <Trash size={13}/> Tout vider
-          </button>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {/* Sélection multiple */}
+          {selectedIds.length > 0 && (
+            <button onClick={deleteSelected}
+              style={{ background:CA.danger, color:"#fff", border:"none",
+                borderRadius:9, padding:"8px 12px", cursor:"pointer",
+                fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+              <Trash size={13}/> Supprimer {selectedIds.length} sélectionné{selectedIds.length>1?"s":""}
+            </button>
+          )}
+          {selectedIds.length === 0 && (
+            <button onClick={() => setSelectedIds(selectedIds.length ? [] : products.map(p=>p.id))}
+              style={{ background:"none", color:dark?CA.dMute:CA.mute,
+                border:`1px solid ${dark?CA.dBorder:CA.border}`,
+                borderRadius:9, padding:"8px 10px", cursor:"pointer",
+                fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+              ☐ Sélectionner tout
+            </button>
+          )}
+          {selectedIds.length > 0 && (
+            <button onClick={() => setSelectedIds([])}
+              style={{ background:"none", color:dark?CA.dMute:CA.mute,
+                border:`1px solid ${dark?CA.dBorder:CA.border}`,
+                borderRadius:9, padding:"8px 10px", cursor:"pointer",
+                fontSize:12, fontWeight:600 }}>
+              ✕ Annuler
+            </button>
+          )}
           <button onClick={startNew}
             style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
               borderRadius:10, padding:"9px 14px", cursor:"pointer",
@@ -3360,6 +3448,59 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
           </button>
         </div>
       </div>
+
+      {/* Corbeille produits */}
+      {productTrash.length > 0 && (
+        <div style={{ background:dark?`${CA.danger}08`:`${CA.danger}05`,
+          border:`1px solid ${CA.danger}33`, borderRadius:12,
+          padding:"12px 14px", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"center", marginBottom:10 }}>
+            <span style={{ fontSize:13, fontWeight:700, color:CA.danger }}>
+              🗑 Corbeille — {productTrash.length} article{productTrash.length>1?"s":""}
+            </span>
+            <button onClick={async () => {
+                if (!window.confirm(`Supprimer définitivement les ${productTrash.length} articles de la corbeille ?`)) return;
+                for (const p of productTrash) {
+                  try { await sb.del("products", p.id); } catch(e){console.warn(e.message);}
+                }
+                setProductTrash([]);
+              }}
+              style={{ fontSize:11.5, color:CA.danger, background:"none",
+                border:`1px solid ${CA.danger}44`, borderRadius:7,
+                padding:"4px 10px", cursor:"pointer", fontWeight:700 }}>
+              Tout supprimer définitivement
+            </button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {productTrash.map(p => (
+              <div key={p.id} style={{ display:"flex", alignItems:"center",
+                gap:8, padding:"8px 10px", background:cardBg,
+                borderRadius:9, border:`1px solid ${bord}` }}>
+                <div style={{ width:34, height:34, borderRadius:6, overflow:"hidden",
+                  flexShrink:0, background:C.creamD }}>
+                  {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name}
+                    style={{ width:"100%",height:"100%",objectFit:"cover" }}/> : <span>👜</span>}
+                </div>
+                <span style={{ flex:1, fontSize:13, color:text }}>{p.name}</span>
+                <button onClick={() => restoreProduct(p.id)}
+                  style={{ fontSize:11.5, color:CA.success, background:"none",
+                    border:`1px solid ${CA.success}44`, borderRadius:7,
+                    padding:"4px 9px", cursor:"pointer", fontWeight:700,
+                    whiteSpace:"nowrap" }}>
+                  ↩ Restaurer
+                </button>
+                <button onClick={() => deleteForeverProduct(p.id)}
+                  style={{ width:26, height:26, borderRadius:6, border:`1px solid ${bord}`,
+                    background:"none", cursor:"pointer", display:"grid",
+                    placeItems:"center", color:CA.danger, flexShrink:0 }}>
+                  <Trash size={11}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Formulaire */}
       {showForm && (
@@ -3581,12 +3722,23 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
 
       {/* Liste produits */}
       <div style={{ display:"grid", gap:8 }}>
-        {products.map((p,idx) => (
-          <div key={p.id} style={{ background:cardBg,
-            border:`1px solid ${p.isPinned?CA.gold+"88":bord}`,
+        {products.map((p,idx) => {
+          const isSelected = selectedIds.includes(p.id);
+          return (
+          <div key={p.id} style={{ background: isSelected?`${CA.gold}10`:cardBg,
+            border:`1px solid ${isSelected?CA.gold:p.isPinned?CA.gold+"88":bord}`,
             borderRadius:12, padding:"12px 13px",
             display:"flex", gap:10, alignItems:"center",
             opacity:p.isHidden?.5:1 }}>
+            {/* Checkbox sélection */}
+            <button onClick={() => toggleSelect(p.id)}
+              style={{ width:22, height:22, borderRadius:6, flexShrink:0,
+                border:`2px solid ${isSelected?CA.gold:bord}`,
+                background:isSelected?CA.gold:"transparent",
+                cursor:"pointer", display:"grid", placeItems:"center",
+                color:"#fff", fontSize:12 }}>
+              {isSelected ? "✓" : ""}
+            </button>
             {/* Ordre */}
             <div style={{ display:"flex", flexDirection:"column", gap:0, flexShrink:0 }}>
               <button onClick={() => move(idx,-1)} disabled={idx===0}
@@ -3664,7 +3816,8 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
                   display:"grid",placeItems:"center",color:text }}>
                 <Edit size={13}/>
               </button>
-              <button onClick={() => del(p.id)}
+              <button onClick={() => moveToTrash(p.id)}
+                title="Mettre à la corbeille"
                 style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
                   background:"none",cursor:"pointer",
                   display:"grid",placeItems:"center",color:CA.danger }}>
@@ -3672,7 +3825,8 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -3851,14 +4005,17 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
     try { await sb.post("team_users",u); } catch(e){console.warn(e.message);}
   };
   const toggle = async id => {
-    // Empêcher de se désactiver soi-même
     if (id === auth.id) {
       window.alert("⛔ Vous ne pouvez pas désactiver votre propre compte.");
       return;
     }
     const u = users.find(x=>x.id===id);
-    if (!u.active === false && !window.confirm(`Réactiver ${u.name} ?`)) return;
-    if (u.active && !window.confirm(`Désactiver ${u.name} ? Il ne pourra plus se connecter.`)) return;
+    if (!u) return;
+    if (u.active) {
+      if (!window.confirm(`Désactiver ${u.name} ? Il ne pourra plus se connecter.`)) return;
+    } else {
+      if (!window.confirm(`Réactiver ${u.name} ?`)) return;
+    }
     setUsers(us=>us.map(x=>x.id===id?{...x,active:!x.active}:x));
     try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
   };
@@ -4176,10 +4333,23 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
             <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Ville principale</span>
             <input style={inp} value={cfg.city||""} onChange={setC("city")}/>
           </label>
-          <label style={{ display:"block" }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Livraison gratuite à partir de (FCFA)</span>
-            <input style={inp} type="number" value={cfg.freeFrom||""} onChange={setC("freeFrom")}/>
+          <label style={{ display:"flex", alignItems:"center", gap:8,
+            cursor:"pointer", marginBottom:14, fontSize:13.5, color:text }}>
+            <input type="checkbox" checked={cfg.freeDelivery !== false}
+              onChange={e => setCfg(c=>({...c, freeDelivery: e.target.checked}))}/>
+            Activer la livraison gratuite automatique
           </label>
+          {cfg.freeDelivery !== false && (
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Livraison gratuite à partir de (FCFA)</span>
+              <input style={inp} type="number" value={cfg.freeFrom||""} onChange={setC("freeFrom")}/>
+            </label>
+          )}
+          {cfg.freeDelivery === false && (
+            <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginTop:4 }}>
+              La bannière "Livraison offerte" ne s'affichera pas dans le panier.
+            </p>
+          )}
         </div>
       )}
 
