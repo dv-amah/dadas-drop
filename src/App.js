@@ -61,6 +61,8 @@ const DEFAULT_CFG = {
   wave:        "+226 77 00 00 00",
   city:        "Ouagadougou",
   freeFrom:    20000,
+  deliveryFee: 1000,
+  freeDelivery: true,
   heroTitle:   "L'élégance, livrée chez vous.",
   heroSub:     "Sacs & accessoires sélectionnés avec soin, livrés à Ouagadougou.",
   waMessage:   "Bonjour Dada's Drop 👋 Je suis intéressée par vos articles. Pouvez-vous m'aider ?",
@@ -591,9 +593,17 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   useEffect(() => {
     setVariant(null); setQty(1); setVariantErr(false); setReviews([]);
     if (!p) return;
-    // Charger les avis visibles de ce produit
-    sb.get("reviews", `?product=eq.${encodeURIComponent(p.name)}&order=date.desc&limit=10`)
-      .then(rows => setReviews((rows||[]).filter(r => r.hidden !== true)))
+    // Charger les avis : matching souple sur le nom (exact OU contenu)
+    const pn = (p.name||"").toLowerCase().trim();
+    sb.get("reviews", `?order=date.desc&limit=200`)
+      .then(rows => {
+        const matched = (rows||[]).filter(r => {
+          if (r.hidden === true) return false;
+          const rn = (r.product||"").toLowerCase().trim();
+          return rn && (rn === pn || rn.includes(pn) || pn.includes(rn));
+        }).slice(0, 10);
+        setReviews(matched);
+      })
       .catch(() => {});
   }, [p]);
 
@@ -821,7 +831,15 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
 /* ════════════════════════════════════════════
    🛒 PANIER
 ════════════════════════════════════════════ */
-function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout, t, dark, cfg }) {
+function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onClearCart, onCheckout, t, dark, cfg }) {
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+
+  // Réinitialiser le mode sélection à la fermeture
+  useEffect(() => {
+    if (!open) { setSelectMode(false); setSelectedKeys([]); }
+  }, [open]);
+
   const lines = cart.map(it => {
     const p = products.find(x => x.id === it.id);
     return p ? { ...p, qty:it.qty, variant:it.variant } : null;
@@ -835,17 +853,36 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
   const bord = dark ? C.dBorder : C.border;
   const text = dark ? C.dText : C.ink;
 
+  const lineKey = (l) => `${l.id}-${l.variant?.label||""}`;
+  const toggleSelectKey = (key) =>
+    setSelectedKeys(ks => ks.includes(key) ? ks.filter(k=>k!==key) : [...ks, key]);
+
+  const deleteSelected = () => {
+    selectedKeys.forEach(key => {
+      const l = lines.find(x => lineKey(x) === key);
+      if (l) onRemove(l.id, l.variant);
+    });
+    setSelectedKeys([]);
+    setSelectMode(false);
+  };
+
+  const clearAll = () => {
+    if (!window.confirm("Vider entièrement le panier ?")) return;
+    onClearCart && onClearCart();
+    setSelectMode(false);
+    setSelectedKeys([]);
+  };
+
   return (<>
-    {open && <div onClick={onClose}
+    <div onClick={onClose}
       style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:60,
-        animation:"ddFade .25s ease" }}/>}
+        opacity:open?1:0, pointerEvents:open?"auto":"none", transition:"opacity .3s" }}/>
     <aside style={{ position:"fixed", top:0, right:0, height:"100%",
       width:"min(380px,90vw)", background:bg, zIndex:61,
       transform:open?"translateX(0)":"translateX(105%)",
       transition:"transform .35s cubic-bezier(.2,.8,.2,1)",
       display:"flex", flexDirection:"column",
-      boxShadow:"-8px 0 32px rgba(0,0,0,.15)",
-      visibility: open?"visible":"hidden" }}>
+      boxShadow:"-8px 0 32px rgba(0,0,0,.15)" }}>
       <div style={{ padding:"16px 18px", borderBottom:`1px solid ${bord}`,
         display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span style={{ fontFamily:"Georgia,serif", fontSize:17, color:text }}>{t.cart}</span>
@@ -854,6 +891,44 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
           <X size={20}/>
         </button>
       </div>
+      {/* Barre d'actions : vider / sélectionner */}
+      {lines.length > 0 && (
+        <div style={{ display:"flex", gap:8, padding:"10px 16px",
+          borderBottom:`1px solid ${bord}`, alignItems:"center" }}>
+          {!selectMode ? (<>
+            <button onClick={() => setSelectMode(true)}
+              style={{ flex:1, padding:"7px", borderRadius:8, fontSize:12, fontWeight:600,
+                border:`1px solid ${bord}`, background:"none", color:text, cursor:"pointer" }}>
+              ✓ Sélectionner
+            </button>
+            <button onClick={clearAll}
+              style={{ flex:1, padding:"7px", borderRadius:8, fontSize:12, fontWeight:600,
+                border:`1px solid ${C.danger}44`, background:"none",
+                color:C.danger, cursor:"pointer", display:"flex",
+                alignItems:"center", justifyContent:"center", gap:5 }}>
+              <Trash size={12}/> Vider le panier
+            </button>
+          </>) : (<>
+            <span style={{ fontSize:12, color:text, fontWeight:600 }}>
+              {selectedKeys.length} sélectionné{selectedKeys.length>1?"s":""}
+            </span>
+            <div style={{ flex:1 }}/>
+            {selectedKeys.length > 0 && (
+              <button onClick={deleteSelected}
+                style={{ padding:"7px 12px", borderRadius:8, fontSize:12, fontWeight:700,
+                  border:"none", background:C.danger, color:"#fff", cursor:"pointer",
+                  display:"flex", alignItems:"center", gap:5 }}>
+                <Trash size={12}/> Supprimer
+              </button>
+            )}
+            <button onClick={() => { setSelectMode(false); setSelectedKeys([]); }}
+              style={{ padding:"7px 10px", borderRadius:8, fontSize:12, fontWeight:600,
+                border:`1px solid ${bord}`, background:"none", color:text, cursor:"pointer" }}>
+              Annuler
+            </button>
+          </>)}
+        </div>
+      )}
       {cfg?.freeDelivery !== false && total >= freeFrom && (
         <div style={{ background:C.ink, color:C.gold, padding:"7px 16px",
           fontSize:12, fontWeight:600, textAlign:"center" }}>
@@ -868,10 +943,21 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onCheckout
           </div>
         ) : lines.map(l => {
           const lPrice = l.discount>0 ? Math.round(l.price*(1-l.discount/100)) : l.price;
+          const key = lineKey(l);
+          const isSel = selectedKeys.includes(key);
           return (
-            <div key={`${l.id}-${l.variant?.label||""}`}
+            <div key={key}
               style={{ display:"flex", gap:10, padding:"10px 0",
-                borderBottom:`1px solid ${bord}` }}>
+                borderBottom:`1px solid ${bord}`, alignItems:"center" }}>
+              {selectMode && (
+                <button onClick={() => toggleSelectKey(key)}
+                  style={{ width:22, height:22, borderRadius:6, flexShrink:0,
+                    border:`2px solid ${isSel?C.gold:bord}`,
+                    background:isSel?C.gold:"transparent", cursor:"pointer",
+                    display:"grid", placeItems:"center", color:C.ink, fontSize:12 }}>
+                  {isSel ? "✓" : ""}
+                </button>
+              )}
               <div style={{ width:58, height:58, borderRadius:9,
                 overflow:"hidden", flexShrink:0 }}><Thumb p={l}/></div>
               <div style={{ flex:1 }}>
@@ -947,8 +1033,16 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
   const [copied, setCopied]     = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]:e.target.value }));
 
-  const finalTotal = promoApplied
+  // Sous-total après promo
+  const subTotal = promoApplied
     ? Math.round(total * (1 - promoApplied.discount/100)) : total;
+  // Frais de livraison : gratuit si seuil atteint (et option activée), sinon prix fixé
+  const deliveryFee = parseInt(cfg?.deliveryFee) || 0;
+  const freeFrom = cfg?.freeFrom ? parseInt(cfg.freeFrom) : DEFAULT_CFG.freeFrom;
+  const freeDeliveryActive = cfg?.freeDelivery !== false;
+  const isFreeDelivery = freeDeliveryActive && subTotal >= freeFrom;
+  const shippingCost = isFreeDelivery ? 0 : deliveryFee;
+  const finalTotal = subTotal + shippingCost;
   const valid = form.nom.trim() && /^[0-9]{8}$/.test(form.tel.replace(/\s/g,"")) && form.ville.trim();
 
   if (!open) return null;
@@ -987,7 +1081,16 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
     const captureStr = pay!=="livraison"
       ? `\n✅ Je joins la capture du paiement après transfert.`
       : "";
-    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}\n\n💰 Total : *${fcfa(finalTotal)}*\n💳 Règlement : ${payLabels[pay]}${payNumStr}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${captureStr}`;
+    // Ligne livraison : gratuite ou payante
+    const shippingStr = isFreeDelivery
+      ? `\n🚚 Livraison : *Offerte*`
+      : shippingCost > 0
+        ? `\n🚚 Livraison : *${fcfa(shippingCost)}*`
+        : "";
+    const subTotalStr = shippingCost > 0
+      ? `\n🛍 Sous-total : ${fcfa(subTotal)}`
+      : "";
+    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}${subTotalStr}${shippingStr}\n\n💰 Total : *${fcfa(finalTotal)}*\n💳 Règlement : ${payLabels[pay]}${payNumStr}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${captureStr}`;
     window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
     setSaving(true);
     // Décrémenter le stock de chaque article commandé
@@ -1063,25 +1166,43 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
           ) : (<>
             <h3 style={{ fontFamily:"Georgia,serif", fontSize:19,
               color:text, margin:"0 0 4px" }}>{t.finalize}</h3>
-            <div style={{ display:"flex", justifyContent:"space-between",
-              alignItems:"center", marginBottom:12 }}>
-              <span style={{ color:C.gold, fontWeight:700, fontSize:13 }}>
-                {t.total} : {fcfa(finalTotal)}
-              </span>
-              {promoApplied && (
+            {promoApplied && (
+              <div style={{ marginBottom:8 }}>
                 <span style={{ fontSize:12, background:`${C.success}15`,
                   color:C.success, padding:"3px 8px", borderRadius:999,
                   fontWeight:600 }}>
                   -{promoApplied.discount}% appliqué ✓
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Infos livraison */}
+            {/* Récap montants */}
             <div style={{ background: dark?"#1A1510":C.creamD,
-              border:`1px solid ${bord}`, borderRadius:9,
-              padding:"8px 11px", fontSize:11.5, color: dark?C.dMute:C.mute, marginBottom:12 }}>
-              {t.shippingNote} {fcfa(DEFAULT_CFG.freeFrom)}.
+              border:`1px solid ${bord}`, borderRadius:10,
+              padding:"11px 13px", marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between",
+                fontSize:13, color:dark?C.dMute:C.mute, marginBottom:5 }}>
+                <span>Sous-total</span>
+                <span>{fcfa(subTotal)}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between",
+                fontSize:13, color:dark?C.dMute:C.mute, marginBottom:5 }}>
+                <span>Livraison</span>
+                <span style={{ color:isFreeDelivery?C.success:undefined, fontWeight:isFreeDelivery?700:400 }}>
+                  {isFreeDelivery ? "Offerte ✦" : shippingCost>0 ? fcfa(shippingCost) : "—"}
+                </span>
+              </div>
+              {freeDeliveryActive && !isFreeDelivery && deliveryFee>0 && (
+                <div style={{ fontSize:11, color:C.gold, marginBottom:5 }}>
+                  Plus que {fcfa(freeFrom - subTotal)} pour la livraison offerte
+                </div>
+              )}
+              <div style={{ display:"flex", justifyContent:"space-between",
+                fontSize:15, color:text, fontWeight:700,
+                borderTop:`1px solid ${bord}`, paddingTop:7, marginTop:2 }}>
+                <span>Total</span>
+                <span style={{ color:C.gold }}>{fcfa(finalTotal)}</span>
+              </div>
             </div>
 
             <Field label={t.name} dark={dark}>
@@ -1201,14 +1322,84 @@ function TrackModal({ open, onClose, t, dark, products, cfg }) {
   const [results, setResults] = useState([]); // recherche par téléphone
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [comment, setComment] = useState("");
-  const [commentSent, setCommentSent] = useState(false);
+  const [itemReviews, setItemReviews] = useState({}); // { "Nom article": {stars, text, sent} }
+  const [reviewsSubmitting, setReviewsSubmitting] = useState(false);
 
   if (!open) return null;
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
   const steps = [t.statusPrep, t.statusShip, t.statusDeliv];
   const icons = [<Package size={13}/>, <Truck size={13}/>, <MapPin size={13}/>];
+
+  // Extraire le nom propre d'un article depuis une ligne de commande
+  // "Mini Boston Rose (Rose poudré) x2" → "Mini Boston Rose"
+  const cleanItemName = (raw) => {
+    if (!raw) return "";
+    return String(raw)
+      .replace(/\s*x\s*\d+\s*$/i, "")   // retirer " x2" à la fin
+      .replace(/\s*\([^)]*\)\s*/g, " ") // retirer "(Rose poudré)"
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  // Trouver le produit correspondant à un nom d'article (matching souple)
+  const findProduct = (itemName) => {
+    const clean = cleanItemName(itemName).toLowerCase();
+    if (!clean || !products) return null;
+    // 1. correspondance exacte
+    let prod = products.find(p => (p.name||"").toLowerCase() === clean);
+    if (prod) return prod;
+    // 2. le nom produit est contenu dans l'article ou inversement
+    prod = products.find(p => {
+      const pn = (p.name||"").toLowerCase();
+      return pn && (clean.includes(pn) || pn.includes(clean));
+    });
+    return prod || null;
+  };
+
+  // Liste dédupliquée des articles de la commande livrée
+  const orderItems = result?.status === 3
+    ? [...new Set((result.items||[]).map(cleanItemName).filter(Boolean))]
+    : [];
+
+  const setItemReview = (name, patch) =>
+    setItemReviews(r => ({ ...r, [name]: { ...(r[name]||{}), ...patch } }));
+
+  const submitItemReview = async (itemName) => {
+    const rv = itemReviews[itemName];
+    if (!rv?.stars) return;
+    setReviewsSubmitting(true);
+    try {
+      const orderId = result?.id || num.toUpperCase().trim().replace(/^#/, "");
+      const prod = findProduct(itemName);
+      const productName = prod?.name || itemName;
+      // Anti-doublon : un avis par article par commande
+      const existing = await sb.get("reviews",
+        `?order_id=eq.${orderId}&product=eq.${encodeURIComponent(productName)}&select=id`);
+      if (existing?.length > 0) {
+        setItemReview(itemName, { sent:true });
+        setReviewsSubmitting(false);
+        return;
+      }
+      await sb.post("reviews", {
+        order_id: orderId,
+        product: productName,
+        stars: rv.stars,
+        text: rv.text || "",
+        date: new Date().toISOString().split("T")[0],
+      });
+      if (prod) {
+        const newCount = (prod.ratingCount||0) + 1;
+        const newRating = ((prod.rating||0)*(prod.ratingCount||0) + rv.stars) / newCount;
+        await sb.patch("products", prod.id, {
+          rating: Math.round(newRating*10)/10,
+          rating_count: newCount,
+        });
+      }
+      setItemReview(itemName, { sent:true });
+    } catch(e) { console.warn("Avis:", e.message); setItemReview(itemName, { sent:true }); }
+    setReviewsSubmitting(false);
+  };
 
   const trackById = async () => {
     setLoading(true); setResult(null); setResults([]); setNotFound(false);
@@ -1397,70 +1588,57 @@ Merci de confirmer l'annulation.`
                 </div>
               )}
 
-              {result.status === 3 && (
-                commentSent ? (
-                  <div style={{ display:"flex", alignItems:"center", gap:7,
-                    color:C.success, fontSize:13, fontWeight:600 }}>
-                    <CheckCircle size={16}/> Merci pour votre avis ✦
-                  </div>
-                ) : (<>
-                  <div style={{ fontSize:12.5, fontWeight:700, color:text, marginBottom:8 }}>
+              {result.status === 3 && orderItems.length > 0 && (
+                <div>
+                  <div style={{ fontSize:12.5, fontWeight:700, color:text, marginBottom:4 }}>
                     {t.comment}
                   </div>
-                  {/* Note étoiles */}
-                  <div style={{ marginBottom:10 }}>
-                    <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute, marginBottom:5 }}>
-                      Votre note :
-                    </div>
-                    <StarRating
-                      rating={comment.stars||0} size={28} interactive
-                      onRate={v=>setComment(c=>({...c,stars:v}))}/>
-                  </div>
-                  <textarea value={comment.text||""} onChange={e=>setComment(c=>({...c,text:e.target.value}))}
-                    rows={3} placeholder="Partagez votre expérience…"
-                    style={{ ...inpStyle(dark), resize:"vertical" }}/>
-                  <button onClick={async () => {
-                      try {
-                        const orderId = result?.id || num.toUpperCase().trim();
-                        // Vérifier si un avis existe déjà pour cette commande
-                        const existing = await sb.get("reviews", `?order_id=eq.${orderId}&select=id`);
-                        if (existing?.length > 0) {
-                          setCommentSent(true); // Considérer comme déjà envoyé
-                          return;
-                        }
-                        const productName = (result?.items||[])[0]?.split(" x")[0].replace(/ \(.*\)/,"").trim() || "";
-                        await sb.post("reviews", {
-                          order_id: orderId,
-                          product: productName,
-                          stars: comment.stars,
-                          text: comment.text || "",
-                          date: new Date().toISOString().split("T")[0],
-                        });
-                        const prod = products?.find(p =>
-                          (p.name||"").toLowerCase().includes(productName.toLowerCase())
-                        );
-                        if (prod) {
-                          const newCount = (prod.ratingCount||0) + 1;
-                          const newRating = ((prod.rating||0)*(prod.ratingCount||0) + comment.stars) / newCount;
-                          await sb.patch("products", prod.id, {
-                            rating: Math.round(newRating*10)/10,
-                            rating_count: newCount,
-                          });
-                        }
-                      } catch(e) { console.warn("Avis:", e.message); }
-                      setCommentSent(true);
-                    }}
-                    disabled={!comment.stars}
-                    style={{ ...primaryBtn, marginTop:7, width:"100%",
-                      justifyContent:"center", opacity:comment.stars?1:.5 }}>
-                    <Star size={14}/> {t.commentSend}
-                  </button>
-                  {!comment.stars && (
-                    <p style={{ fontSize:11, color:C.mute, margin:"4px 0 0", textAlign:"center" }}>
-                      Donnez au moins une note pour envoyer votre avis
-                    </p>
-                  )}
-                </>)
+                  <p style={{ fontSize:11.5, color:dark?C.dMute:C.mute, margin:"0 0 12px" }}>
+                    Notez chaque article de votre commande :
+                  </p>
+                  {orderItems.map((itemName, idx) => {
+                    const rv = itemReviews[itemName] || {};
+                    const prod = findProduct(itemName);
+                    return (
+                      <div key={idx} style={{ background:dark?"#1A1510":C.creamD,
+                        border:`1px solid ${bord}`, borderRadius:11,
+                        padding:"12px 13px", marginBottom:10 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                          {prod?.imgs?.[0] && (
+                            <div style={{ width:34, height:34, borderRadius:7,
+                              overflow:"hidden", flexShrink:0 }}>
+                              <img src={prod.imgs[0]} alt={itemName}
+                                style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
+                            </div>
+                          )}
+                          <span style={{ fontFamily:"Georgia,serif", fontSize:13.5,
+                            color:text, fontWeight:600 }}>{itemName}</span>
+                        </div>
+                        {rv.sent ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:6,
+                            color:C.success, fontSize:12.5, fontWeight:600 }}>
+                            <CheckCircle size={14}/> Merci pour votre avis ✦
+                          </div>
+                        ) : (<>
+                          <StarRating rating={rv.stars||0} size={24} interactive
+                            onRate={v=>setItemReview(itemName, {stars:v})}/>
+                          <textarea
+                            value={rv.text||""}
+                            onChange={e=>setItemReview(itemName, {text:e.target.value})}
+                            rows={2} placeholder="Votre avis (facultatif)…"
+                            style={{ ...inpStyle(dark), resize:"vertical", marginTop:8, marginBottom:8 }}/>
+                          <button onClick={() => submitItemReview(itemName)}
+                            disabled={!rv.stars || reviewsSubmitting}
+                            style={{ ...primaryBtn, width:"100%", justifyContent:"center",
+                              opacity:(rv.stars && !reviewsSubmitting)?1:.5,
+                              padding:"9px" }}>
+                            <Star size={13}/> {reviewsSubmitting?"Envoi…":t.commentSend}
+                          </button>
+                        </>)}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -1860,7 +2038,9 @@ function LegalPage({ type, dark, setPage, cfg }) {
   const bord = dark ? C.dBorder : C.border;
   // Mapping type → clé cfg
   const cfgKey = { legal:"legalMentions", cgv:"legalCgv", rgpd:"legalRgpd", sav:"legalSav" }[type];
-  const customText = cfg?.[cfgKey];
+  const custom = cfg?.[cfgKey];
+  // Les sections à afficher : custom (array de {h,p}) si défini et non vide, sinon fallback
+  const sections = Array.isArray(custom) && custom.length > 0 ? custom : content.content;
   return (
     <div style={{ maxWidth:720, margin:"0 auto", padding:"32px 20px 60px" }}>
       <button onClick={() => setPage("home")}
@@ -1871,26 +2051,21 @@ function LegalPage({ type, dark, setPage, cfg }) {
       </button>
       <h1 style={{ fontFamily:"Georgia,serif", fontSize:26, color:text,
         margin:"0 0 24px", fontWeight:400 }}>{content.title}</h1>
-      {customText ? (
-        <div style={{ background: dark?C.dCard:"#fff", border:`1px solid ${bord}`,
-          borderRadius:14, padding:"20px 24px" }}>
-          <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.9, margin:0,
-            whiteSpace:"pre-wrap" }}>{customText}</p>
-        </div>
-      ) : (
-        content.content.map((s,i) => (
-          <div key={i} style={{ background: dark?C.dCard:"#fff",
-            border:`1px solid ${bord}`, borderRadius:14,
-            padding:"20px 24px", marginBottom:14 }}>
+      {sections.map((s,i) => (
+        <div key={i} style={{ background: dark?C.dCard:"#fff",
+          border:`1px solid ${bord}`, borderRadius:14,
+          padding:"20px 24px", marginBottom:14 }}>
+          {s.h && (
             <h2 style={{ fontFamily:"Georgia,serif", fontSize:17, color:text, margin:"0 0 10px" }}>
               {s.h}
             </h2>
-            <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8, margin:0 }}>
-              {s.p}
-            </p>
-          </div>
-        ))
-      )}
+          )}
+          <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8, margin:0,
+            whiteSpace:"pre-wrap" }}>
+            {s.p}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1923,7 +2098,18 @@ function Page404({ dark, setPage }) {
 ════════════════════════════════════════════ */
 function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, dark, setDark, initialPage="home" }) {
   const [lang, setLang]         = useState("fr");
-  const [page, setPage]         = useState(initialPage);
+  const [page, setPageRaw]      = useState(initialPage);
+  const [toast, setToast]       = useState(null);
+
+  // Navigation qui force le scroll en haut même si on est déjà sur la page
+  const setPage = useCallback((p) => {
+    setPageRaw(prev => {
+      if (prev === p) {
+        window.scrollTo({ top:0, behavior:"smooth" });
+      }
+      return p;
+    });
+  }, []);
   const [query, setQuery]       = useState("");
   const [cat, setCat]           = useState(0);
   const [sort, setSort]         = useState("new");
@@ -1961,14 +2147,16 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
 
   // Sync catégories + config toutes les 10s (léger, texte seulement)
   useEffect(() => {
-    const fastSync = setInterval(() => {
+    const fetchCatsCfg = () => {
       sb.get("announcements", "?id=eq.categories&select=data")
         .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); })
         .catch(e => console.warn("cats sync:", e.message));
       sb.get("announcements", "?id=eq.config&select=data")
         .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); })
         .catch(e => console.warn("cfg sync:", e.message));
-    }, 10000);
+    };
+    fetchCatsCfg(); // immédiat au montage
+    const fastSync = setInterval(fetchCatsCfg, 10000);
     return () => clearInterval(fastSync);
   }, []);
 
@@ -2004,16 +2192,24 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   useEffect(() => {
     const isOpen = menuOpen||cartOpen||checkout||trackOpen||!!selected;
     if (isOpen) {
+      // Technique iOS-compatible : fixer le body à la position de scroll actuelle
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
-      document.body.style.touchAction = "none";
-    } else {
-      document.body.style.overflow = "";
-      document.body.style.touchAction = "";
+      return () => {
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.width = "";
+        document.body.style.overflow = "";
+        window.scrollTo(0, scrollY); // restaurer la position
+      };
     }
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.touchAction = "";
-    };
   }, [menuOpen,cartOpen,checkout,trackOpen,selected]);
 
   const t    = T[lang];
@@ -2076,7 +2272,16 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
       );
       return [...c, { id:p.id, qty, variant }];
     });
+    // Toast discret "ajouté au panier"
+    setToast(`✦ ${p.name} ajouté au panier`);
   }, []);
+
+  // Faire disparaître le toast après 2,2s
+  useEffect(() => {
+    if (!toast) return;
+    const tm = setTimeout(() => setToast(null), 2200);
+    return () => clearTimeout(tm);
+  }, [toast]);
 
   const setQty = (id, qty, variant) => setCart(c => {
     const key = `${id}-${variant?.label||""}`;
@@ -2116,6 +2321,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         .dd-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.12);transform:translateY(-2px)!important}
         @keyframes ddFade{from{opacity:0}to{opacity:1}}
         @keyframes ddHero{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes ddToast{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
         .dd-lang-btn{display:inline-flex}
         @media(max-width:600px){
           .dd-grid{grid-template-columns:repeat(2,1fr)!important}
@@ -2528,6 +2734,20 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         <MessageCircle size={22} color="#fff"/>
       </a>
 
+      {/* TOAST "ajouté au panier" */}
+      {toast && (
+        <div style={{ position:"fixed", bottom:"calc(90px + env(safe-area-inset-bottom,0px))",
+          left:"50%", transform:"translateX(-50%)", zIndex:80,
+          background:C.ink, color:C.gold, padding:"11px 20px",
+          borderRadius:999, fontSize:13, fontWeight:600,
+          boxShadow:"0 6px 24px rgba(0,0,0,.3)", border:`1px solid ${C.gold}44`,
+          maxWidth:"88vw", textAlign:"center", whiteSpace:"nowrap",
+          overflow:"hidden", textOverflow:"ellipsis",
+          animation:"ddToast .3s ease" }}>
+          {toast}
+        </div>
+      )}
+
       {/* MODALS */}
       <SideMenu open={menuOpen} onClose={() => setMenuOpen(false)}
         t={t} lang={lang} setLang={setLang} dark={dark}
@@ -2538,7 +2758,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         onClose={() => setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products}
         t={t} dark={dark} cfg={cfg} onClose={() => setCartOpen(false)}
-        onQty={setQty} onRemove={removeItem}
+        onQty={setQty} onRemove={removeItem} onClearCart={() => setCart([])}
         onCheckout={() => { setCartOpen(false); setCheckout(true); }}/>
       <Checkout open={checkout} lines={lines} total={total}
         t={t} dark={dark} promos={promos} cfg={cfg}
@@ -3279,6 +3499,8 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const [newVariant, setNewVariant] = useState({ type:"color", label:"", hex:"#C9A84C", stock:"" });
   const [selectedIds, setSelectedIds] = useState([]);
   const [productTrash, setProductTrash] = useState([]);
+  const [showTrash, setShowTrash] = useState(false);
+  const [trashSelectedIds, setTrashSelectedIds] = useState([]);
 
   const setF = k => e => setForm(f => ({...f, [k]: e.target.type==="checkbox"?e.target.checked:e.target.value}));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
@@ -3379,6 +3601,29 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     setSelectedIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
   };
 
+  const toggleTrashSelect = (id) => {
+    setTrashSelectedIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
+  };
+
+  const restoreSelected = () => {
+    if (!trashSelectedIds.length) return;
+    const toRestore = productTrash.filter(p=>trashSelectedIds.includes(p.id));
+    setProductTrash(ts=>ts.filter(p=>!trashSelectedIds.includes(p.id)));
+    setProducts(ps=>[...toRestore, ...ps]);
+    setTrashSelectedIds([]);
+  };
+
+  const deleteSelectedForever = async () => {
+    if (!trashSelectedIds.length) return;
+    if (!window.confirm(`Supprimer définitivement ${trashSelectedIds.length} article${trashSelectedIds.length>1?"s":""} ? Irréversible.`)) return;
+    const ids = [...trashSelectedIds];
+    setProductTrash(ts=>ts.filter(p=>!ids.includes(p.id)));
+    setTrashSelectedIds([]);
+    for (const id of ids) {
+      try { await sb.del("products", id); } catch(e){console.warn(e.message);}
+    }
+  };
+
   const toggleProp = async (id, prop) => {
     setProducts(ps=>ps.map(p=>p.id===id?{...p,[prop]:!p[prop]}:p));
     const p = products.find(x=>x.id===id);
@@ -3401,109 +3646,157 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const variantType = form.variants[0]?.type || newVariant.type;
 
   return (
-    <div>
+    <div style={{ width:"100%", maxWidth:"100%", boxSizing:"border-box", overflowX:"hidden" }}>
       {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between",
         alignItems:"center", marginBottom:10, flexWrap:"wrap", gap:8 }}>
         <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>
-          {products.length} articles
-          {products.filter(p=>p.isPinned).length>0 &&
-            <span style={{ fontSize:12, color:CA.gold, marginLeft:8 }}>
-              📌 {products.filter(p=>p.isPinned).length} épinglé{products.filter(p=>p.isPinned).length>1?"s":""}
-            </span>}
+          {showTrash
+            ? `🗑 Corbeille — ${productTrash.length} article${productTrash.length>1?"s":""}`
+            : <>{products.length} articles
+              {products.filter(p=>p.isPinned).length>0 &&
+                <span style={{ fontSize:12, color:CA.gold, marginLeft:8 }}>
+                  📌 {products.filter(p=>p.isPinned).length}
+                </span>}</>}
         </span>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-          {/* Sélection multiple */}
-          {selectedIds.length > 0 && (
+          {/* Bouton bascule corbeille */}
+          <button onClick={() => { setShowTrash(v=>!v); setSelectedIds([]); setTrashSelectedIds([]); }}
+            style={{ background:showTrash?`${CA.danger}15`:"none",
+              color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
+              border:`1px solid ${showTrash?CA.danger:dark?CA.dBorder:CA.border}`,
+              borderRadius:9, padding:"8px 10px", cursor:"pointer",
+              fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
+            {showTrash ? "← Retour" : `🗑 Corbeille${productTrash.length>0?` (${productTrash.length})`:""}`}
+          </button>
+          {!showTrash && selectedIds.length > 0 && (
             <button onClick={deleteSelected}
               style={{ background:CA.danger, color:"#fff", border:"none",
                 borderRadius:9, padding:"8px 12px", cursor:"pointer",
                 fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
-              <Trash size={13}/> Supprimer {selectedIds.length} sélectionné{selectedIds.length>1?"s":""}
+              <Trash size={13}/> Corbeille ({selectedIds.length})
             </button>
           )}
-          {selectedIds.length === 0 && (
-            <button onClick={() => setSelectedIds(selectedIds.length ? [] : products.map(p=>p.id))}
+          {!showTrash && selectedIds.length === 0 && products.length > 0 && (
+            <button onClick={() => setSelectedIds(products.map(p=>p.id))}
               style={{ background:"none", color:dark?CA.dMute:CA.mute,
                 border:`1px solid ${dark?CA.dBorder:CA.border}`,
                 borderRadius:9, padding:"8px 10px", cursor:"pointer",
-                fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:5 }}>
-              ☐ Sélectionner tout
+                fontSize:12, fontWeight:600 }}>
+              ☐ Tout
             </button>
           )}
-          {selectedIds.length > 0 && (
+          {!showTrash && selectedIds.length > 0 && (
             <button onClick={() => setSelectedIds([])}
               style={{ background:"none", color:dark?CA.dMute:CA.mute,
                 border:`1px solid ${dark?CA.dBorder:CA.border}`,
                 borderRadius:9, padding:"8px 10px", cursor:"pointer",
                 fontSize:12, fontWeight:600 }}>
-              ✕ Annuler
+              ✕
             </button>
           )}
-          <button onClick={startNew}
-            style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
-              borderRadius:10, padding:"9px 14px", cursor:"pointer",
-              fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-            <PlusCircle size={14}/> Ajouter
-          </button>
+          {!showTrash && (
+            <button onClick={startNew}
+              style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+                borderRadius:10, padding:"9px 14px", cursor:"pointer",
+                fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+              <PlusCircle size={14}/> Ajouter
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Corbeille produits */}
-      {productTrash.length > 0 && (
-        <div style={{ background:dark?`${CA.danger}08`:`${CA.danger}05`,
-          border:`1px solid ${CA.danger}33`, borderRadius:12,
-          padding:"12px 14px", marginBottom:14 }}>
-          <div style={{ display:"flex", justifyContent:"space-between",
-            alignItems:"center", marginBottom:10 }}>
-            <span style={{ fontSize:13, fontWeight:700, color:CA.danger }}>
-              🗑 Corbeille — {productTrash.length} article{productTrash.length>1?"s":""}
-            </span>
-            <button onClick={async () => {
-                if (!window.confirm(`Supprimer définitivement les ${productTrash.length} articles de la corbeille ?`)) return;
-                for (const p of productTrash) {
-                  try { await sb.del("products", p.id); } catch(e){console.warn(e.message);}
-                }
-                setProductTrash([]);
-              }}
-              style={{ fontSize:11.5, color:CA.danger, background:"none",
-                border:`1px solid ${CA.danger}44`, borderRadius:7,
-                padding:"4px 10px", cursor:"pointer", fontWeight:700 }}>
-              Tout supprimer définitivement
-            </button>
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {productTrash.map(p => (
-              <div key={p.id} style={{ display:"flex", alignItems:"center",
-                gap:8, padding:"8px 10px", background:cardBg,
-                borderRadius:9, border:`1px solid ${bord}` }}>
-                <div style={{ width:34, height:34, borderRadius:6, overflow:"hidden",
-                  flexShrink:0, background:C.creamD }}>
-                  {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name}
-                    style={{ width:"100%",height:"100%",objectFit:"cover" }}/> : <span>👜</span>}
-                </div>
-                <span style={{ flex:1, fontSize:13, color:text }}>{p.name}</span>
-                <button onClick={() => restoreProduct(p.id)}
-                  style={{ fontSize:11.5, color:CA.success, background:"none",
-                    border:`1px solid ${CA.success}44`, borderRadius:7,
-                    padding:"4px 9px", cursor:"pointer", fontWeight:700,
-                    whiteSpace:"nowrap" }}>
-                  ↩ Restaurer
+      {/* VUE CORBEILLE DÉDIÉE */}
+      {showTrash && (
+        <div>
+          {productTrash.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"50px 16px", color:dark?CA.dMute:"#bbb" }}>
+              <span style={{ fontSize:42 }}>🗑</span>
+              <p style={{ marginTop:10, fontSize:14 }}>La corbeille est vide.</p>
+            </div>
+          ) : (<>
+            {/* Actions corbeille */}
+            <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+              {trashSelectedIds.length > 0 ? (<>
+                <button onClick={restoreSelected}
+                  style={{ background:CA.success, color:"#fff", border:"none",
+                    borderRadius:9, padding:"8px 12px", cursor:"pointer",
+                    fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+                  ↩ Restaurer ({trashSelectedIds.length})
                 </button>
-                <button onClick={() => deleteForeverProduct(p.id)}
-                  style={{ width:26, height:26, borderRadius:6, border:`1px solid ${bord}`,
-                    background:"none", cursor:"pointer", display:"grid",
-                    placeItems:"center", color:CA.danger, flexShrink:0 }}>
-                  <Trash size={11}/>
+                <button onClick={deleteSelectedForever}
+                  style={{ background:"none", color:CA.danger, border:`1px solid ${CA.danger}`,
+                    borderRadius:9, padding:"8px 12px", cursor:"pointer",
+                    fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+                  <Trash size={12}/> Supprimer ({trashSelectedIds.length})
                 </button>
-              </div>
-            ))}
-          </div>
+                <button onClick={() => setTrashSelectedIds([])}
+                  style={{ background:"none", color:dark?CA.dMute:CA.mute,
+                    border:`1px solid ${dark?CA.dBorder:CA.border}`,
+                    borderRadius:9, padding:"8px 10px", cursor:"pointer",
+                    fontSize:12, fontWeight:600 }}>✕</button>
+              </>) : (
+                <button onClick={() => setTrashSelectedIds(productTrash.map(p=>p.id))}
+                  style={{ background:"none", color:dark?CA.dMute:CA.mute,
+                    border:`1px solid ${dark?CA.dBorder:CA.border}`,
+                    borderRadius:9, padding:"8px 10px", cursor:"pointer",
+                    fontSize:12, fontWeight:600 }}>
+                  ☐ Tout sélectionner
+                </button>
+              )}
+            </div>
+            {/* Liste corbeille */}
+            <div style={{ display:"grid", gap:8 }}>
+              {productTrash.map(p => {
+                const isSel = trashSelectedIds.includes(p.id);
+                return (
+                  <div key={p.id} style={{ background:isSel?`${CA.gold}10`:cardBg,
+                    border:`1px solid ${isSel?CA.gold:bord}`, borderRadius:11,
+                    padding:"10px 12px", display:"flex", alignItems:"center", gap:10,
+                    boxSizing:"border-box", width:"100%" }}>
+                    <button onClick={() => toggleTrashSelect(p.id)}
+                      style={{ width:22, height:22, borderRadius:6, flexShrink:0,
+                        border:`2px solid ${isSel?CA.gold:bord}`,
+                        background:isSel?CA.gold:"transparent", cursor:"pointer",
+                        display:"grid", placeItems:"center", color:"#fff", fontSize:12 }}>
+                      {isSel ? "✓" : ""}
+                    </button>
+                    <div style={{ width:42, height:42, borderRadius:7, overflow:"hidden",
+                      flexShrink:0, background:C.creamD }}>
+                      {p.imgs?.[0] ? <img src={p.imgs[0]} alt={p.name}
+                        style={{ width:"100%",height:"100%",objectFit:"cover" }}/>
+                        : <div style={{ width:"100%",height:"100%",display:"grid",placeItems:"center" }}>👜</div>}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, color:text, fontWeight:600,
+                        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.name}</div>
+                      <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute }}>
+                        {(p.price||0).toLocaleString("fr-FR")} FCFA
+                      </div>
+                    </div>
+                    <button onClick={() => { setProductTrash(ts=>ts.filter(x=>x.id!==p.id)); setProducts(ps=>[p,...ps]); }}
+                      style={{ fontSize:11.5, color:CA.success, background:"none",
+                        border:`1px solid ${CA.success}44`, borderRadius:7,
+                        padding:"5px 9px", cursor:"pointer", fontWeight:700,
+                        whiteSpace:"nowrap", flexShrink:0 }}>
+                      ↩
+                    </button>
+                    <button onClick={() => deleteForeverProduct(p.id)}
+                      style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`,
+                        background:"none", cursor:"pointer", display:"grid",
+                        placeItems:"center", color:CA.danger, flexShrink:0 }}>
+                      <Trash size={12}/>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>)}
         </div>
       )}
 
       {/* Formulaire */}
-      {showForm && (
+      {!showTrash && showForm && (
         <div style={{ background:cardBg, border:`1px solid ${CA.gold}55`,
           borderRadius:14, padding:"18px", marginBottom:16 }}>
           <h4 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text,
@@ -3721,7 +4014,8 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
       )}
 
       {/* Liste produits */}
-      <div style={{ display:"grid", gap:8 }}>
+      {!showTrash && (
+      <div style={{ display:"grid", gap:8, width:"100%", boxSizing:"border-box" }}>
         {products.map((p,idx) => {
           const isSelected = selectedIds.includes(p.id);
           return (
@@ -3729,6 +4023,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
             border:`1px solid ${isSelected?CA.gold:p.isPinned?CA.gold+"88":bord}`,
             borderRadius:12, padding:"12px 13px",
             display:"flex", gap:10, alignItems:"center",
+            boxSizing:"border-box", width:"100%", overflow:"hidden",
             opacity:p.isHidden?.5:1 }}>
             {/* Checkbox sélection */}
             <button onClick={() => toggleSelect(p.id)}
@@ -3828,6 +4123,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -3863,8 +4159,18 @@ function AdminCatsTab({ cats, setCats, dark }) {
 
   const add = async () => {
     if (!form.label.trim()) return;
-    const newCat = { id: form.label.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""),
-      label:form.label, labelEn:form.labelEn||form.label, soon:form.soon };
+    const newId = form.label.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
+    // Empêcher les doublons (par id OU par label, insensible à la casse)
+    const exists = cats.some(c =>
+      c.id === newId ||
+      (c.label||"").toLowerCase().trim() === form.label.toLowerCase().trim()
+    );
+    if (exists) {
+      window.alert(`⚠️ La catégorie "${form.label.trim()}" existe déjà.`);
+      return;
+    }
+    const newCat = { id: newId,
+      label:form.label.trim(), labelEn:form.labelEn||form.label.trim(), soon:form.soon };
     const updated = [...cats, newCat];
     setCats(updated);
     setForm({ label:"", labelEn:"", soon:false });
@@ -4193,17 +4499,43 @@ Il aura accès à tout le tableau de bord.`)) return;
 /* ──────────────────────────────────────────
    ÉDITEUR PAGES LÉGALES (composant séparé pour éviter useState dans JSX)
 ────────────────────────────────────────── */
-function LegalEditor({ cfg, setC, dark, cardBg, bord, text, inp }) {
+function LegalEditor({ cfg, setCfg, dark, cardBg, bord, text, inp }) {
+  // Mapping clé cfg → type LEGAL fallback
   const LEGAL_PAGES = [
-    { k:"legalMentions", title:"Mentions légales" },
-    { k:"legalCgv",      title:"CGV" },
-    { k:"legalRgpd",     title:"Confidentialité" },
-    { k:"legalSav",      title:"SAV" },
+    { k:"legalMentions", type:"legal", title:"Mentions légales" },
+    { k:"legalCgv",      type:"cgv",   title:"CGV" },
+    { k:"legalRgpd",     type:"rgpd",  title:"Confidentialité" },
+    { k:"legalSav",      type:"sav",   title:"SAV" },
   ];
   const [legalTab, setLegalTab] = useState(LEGAL_PAGES[0].k);
+  const current = LEGAL_PAGES.find(pg => pg.k === legalTab);
+
+  // Sections actuelles : custom si défini, sinon copie du fallback
+  const getSections = () => {
+    const custom = cfg[legalTab];
+    if (Array.isArray(custom) && custom.length > 0) return custom;
+    return (LEGAL[current.type]?.content || []).map(s => ({ ...s }));
+  };
+  const sections = getSections();
+
+  const updateSections = (newSections) => {
+    setCfg(c => ({ ...c, [legalTab]: newSections }));
+  };
+  const setSectionField = (idx, field, value) => {
+    const copy = sections.map((s,i) => i===idx ? { ...s, [field]:value } : s);
+    updateSections(copy);
+  };
+  const addSection = () => updateSections([...sections, { h:"", p:"" }]);
+  const removeSection = (idx) => updateSections(sections.filter((_,i)=>i!==idx));
+  const resetToDefault = () => {
+    if (!window.confirm("Réinitialiser cette page au texte par défaut ?")) return;
+    setCfg(c => { const n = { ...c }; delete n[legalTab]; return n; });
+  };
+
   return (
     <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
       <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>⚖️ Pages légales</h3>
+      {/* Onglets pages */}
       <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto",
         paddingBottom:4, WebkitOverflowScrolling:"touch" }}>
         {LEGAL_PAGES.map(pg => (
@@ -4217,18 +4549,50 @@ function LegalEditor({ cfg, setC, dark, cardBg, bord, text, inp }) {
           </button>
         ))}
       </div>
-      <label style={{ display:"block" }}>
-        <span style={{ fontSize:11.5, fontWeight:600,
-          color:dark?CA.dMute:CA.mute, display:"block", marginBottom:6 }}>
-          Contenu — {LEGAL_PAGES.find(pg=>pg.k===legalTab)?.title}
-        </span>
-        <textarea style={{ ...inp, resize:"vertical", lineHeight:1.6 }} rows={10}
-          value={cfg[legalTab]||""}
-          placeholder="Entrez le texte de cette page légale…"
-          onChange={setC(legalTab)}/>
-      </label>
-      <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:6 }}>
-        💡 Ce texte remplace le contenu par défaut sur le site client.
+
+      {/* Sections éditables */}
+      {sections.map((s,idx) => (
+        <div key={idx} style={{ border:`1px solid ${bord}`, borderRadius:11,
+          padding:"12px", marginBottom:10, background:dark?"#1A1510":"#FAFAF7" }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"center", marginBottom:7 }}>
+            <span style={{ fontSize:10.5, fontWeight:700, color:CA.gold }}>
+              SECTION {idx+1}
+            </span>
+            <button onClick={() => removeSection(idx)}
+              style={{ width:24, height:24, borderRadius:6, border:`1px solid ${bord}`,
+                background:"none", cursor:"pointer", display:"grid",
+                placeItems:"center", color:CA.danger }}>
+              <Trash size={11}/>
+            </button>
+          </div>
+          <input style={{ ...inp, marginBottom:7, fontWeight:600 }}
+            value={s.h||""} placeholder="Titre de la section (ex : Éditeur)"
+            onChange={e => setSectionField(idx, "h", e.target.value)}/>
+          <textarea style={{ ...inp, resize:"vertical", lineHeight:1.6 }} rows={4}
+            value={s.p||""} placeholder="Texte de la section…"
+            onChange={e => setSectionField(idx, "p", e.target.value)}/>
+        </div>
+      ))}
+
+      {/* Boutons ajouter / réinitialiser */}
+      <div style={{ display:"flex", gap:8, marginTop:4, flexWrap:"wrap" }}>
+        <button onClick={addSection}
+          style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+            borderRadius:9, padding:"8px 12px", cursor:"pointer",
+            fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+          <PlusCircle size={13}/> Ajouter une section
+        </button>
+        <button onClick={resetToDefault}
+          style={{ background:"none", color:dark?CA.dMute:CA.mute,
+            border:`1px solid ${bord}`, borderRadius:9, padding:"8px 12px",
+            cursor:"pointer", fontSize:12.5, fontWeight:600 }}>
+          ↺ Réinitialiser
+        </button>
+      </div>
+      <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:10 }}>
+        💡 Chaque section = un titre en gras + un texte, comme affiché sur le site.
+        N'oubliez pas d'<strong>Enregistrer</strong> en bas de page.
       </p>
     </div>
   );
@@ -4329,25 +4693,40 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
       {tab==="livraison" && (
         <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
           <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🚚 Livraison</h3>
-          <label style={{ display:"block", marginBottom:12 }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Ville principale</span>
-            <input style={inp} value={cfg.city||""} onChange={setC("city")}/>
+
+          {/* Prix de livraison */}
+          <label style={{ display:"block", marginBottom:14 }}>
+            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>
+              Prix de la livraison (FCFA)
+            </span>
+            <input style={inp} type="number" min="0"
+              value={cfg.deliveryFee ?? ""} onChange={setC("deliveryFee")}
+              placeholder="Ex : 1000"/>
+            <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:3, display:"block" }}>
+              Ce montant s'ajoute au total et apparaît dans le message WhatsApp.
+            </span>
           </label>
+
+          {/* Toggle livraison gratuite */}
           <label style={{ display:"flex", alignItems:"center", gap:8,
-            cursor:"pointer", marginBottom:14, fontSize:13.5, color:text }}>
+            cursor:"pointer", marginBottom:12, fontSize:13.5, color:text }}>
             <input type="checkbox" checked={cfg.freeDelivery !== false}
               onChange={e => setCfg(c=>({...c, freeDelivery: e.target.checked}))}/>
-            Activer la livraison gratuite automatique
+            Activer la livraison gratuite à partir d'un montant
           </label>
-          {cfg.freeDelivery !== false && (
+
+          {/* Seuil gratuit (si activé) */}
+          {cfg.freeDelivery !== false ? (
             <label style={{ display:"block" }}>
-              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Livraison gratuite à partir de (FCFA)</span>
-              <input style={inp} type="number" value={cfg.freeFrom||""} onChange={setC("freeFrom")}/>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>
+                Livraison gratuite à partir de (FCFA)
+              </span>
+              <input style={inp} type="number" value={cfg.freeFrom||""} onChange={setC("freeFrom")}
+                placeholder="Ex : 20000"/>
             </label>
-          )}
-          {cfg.freeDelivery === false && (
+          ) : (
             <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginTop:4 }}>
-              La bannière "Livraison offerte" ne s'affichera pas dans le panier.
+              La livraison gratuite est désactivée. Le prix de livraison s'applique à toutes les commandes.
             </p>
           )}
         </div>
@@ -4584,7 +4963,7 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
 
       {/* PAGES LÉGALES */}
       {tab==="legal" && (
-        <LegalEditor cfg={cfg} setC={setC} dark={dark} cardBg={cardBg} bord={bord} text={text} inp={inp}/>
+        <LegalEditor cfg={cfg} setCfg={setCfg} dark={dark} cardBg={cardBg} bord={bord} text={text} inp={inp}/>
       )}
 
       {/* Bouton Save global */}
