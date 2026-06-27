@@ -2738,34 +2738,29 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
           </button>
         ))}
       </div>
-      {/* Bouton corbeille — ligne séparée, toujours visible */}
-      <button onClick={() => setShowTrash(v=>!v)}
-        style={{ width:"100%", marginBottom:10, padding:"10px 14px",
-          borderRadius:10, fontSize:13.5, fontWeight:700,
-          border:`1.5px solid ${showTrash?CA.danger:bord}`,
-          background:showTrash?`${CA.danger}15`:cardBg,
-          color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
-          cursor:"pointer", display:"flex", alignItems:"center",
-          justifyContent:"space-between", gap:8 }}>
-        <span style={{ display:"flex", alignItems:"center", gap:7 }}>
-          🗑 <span>{showTrash?"← Retour aux commandes":"Corbeille"}</span>
-        </span>
-        {trash.length > 0 && (
-          <span style={{ background:CA.danger, color:"#fff", fontSize:11,
-            fontWeight:800, padding:"2px 8px", borderRadius:999 }}>
-            {trash.length}
-          </span>
+      {/* Corbeille + Excel — même ligne, style compact */}
+      <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+        <button onClick={() => setShowTrash(v=>!v)}
+          style={{ flex:1, padding:"8px 12px", borderRadius:9,
+            fontSize:12.5, fontWeight:700,
+            border:`1.5px solid ${showTrash?CA.danger:bord}`,
+            background:showTrash?`${CA.danger}15`:cardBg,
+            color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
+            cursor:"pointer", display:"flex", alignItems:"center",
+            justifyContent:"center", gap:6 }}>
+          🗑 {showTrash?"← Retour":trash.length>0?`Corbeille (${trash.length})`:"Corbeille"}
+        </button>
+        {!showTrash && (
+          <button onClick={exportCSV}
+            style={{ flex:1, background:CA.success, color:"#fff",
+              border:"none", borderRadius:9, padding:"8px 12px",
+              cursor:"pointer", fontSize:12.5, fontWeight:700,
+              display:"flex", alignItems:"center",
+              justifyContent:"center", gap:6 }}>
+            📊 Excel
+          </button>
         )}
-      </button>
-      <button onClick={exportCSV}
-        style={{ width:"100%", marginBottom:14,
-          background:CA.success, color:"#fff",
-          border:"none", borderRadius:9, padding:"9px 12px",
-          cursor:"pointer", fontSize:13, fontWeight:700,
-          display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-        📊 Exporter en Excel (CSV)
-      </button>
-
+      </div>
       {/* VUE CORBEILLE */}
       {showTrash && (
         <div>
@@ -3556,7 +3551,14 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
     try { await sb.post("team_users",u); } catch(e){console.warn(e.message);}
   };
   const toggle = async id => {
+    // Empêcher de se désactiver soi-même
+    if (id === auth.id) {
+      window.alert("⛔ Vous ne pouvez pas désactiver votre propre compte.");
+      return;
+    }
     const u = users.find(x=>x.id===id);
+    if (!u.active === false && !window.confirm(`Réactiver ${u.name} ?`)) return;
+    if (u.active && !window.confirm(`Désactiver ${u.name} ? Il ne pourra plus se connecter.`)) return;
     setUsers(us=>us.map(x=>x.id===id?{...x,active:!x.active}:x));
     try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
   };
@@ -3701,13 +3703,18 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
                 </select>
               ) : null}
               {/* Activer / désactiver */}
-              <button onClick={() => toggle(u.id)}
-                title={u.active?"Désactiver":"Activer"}
-                style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
-                  background:"none",cursor:"pointer",display:"grid",placeItems:"center",
-                  color:u.active?CA.success:CA.danger }}>
-                {u.active?<CheckCircle size={13}/>:<X size={13}/>}
-              </button>
+              {/* Pas de bouton désactiver sur soi-même */}
+              {u.id !== auth.id && (
+                <button onClick={() => toggle(u.id)}
+                  title={u.active?"Désactiver ce membre":"Réactiver ce membre"}
+                  style={{ width:32,height:32,borderRadius:8,
+                    border:`1px solid ${u.active?CA.success:CA.danger}`,
+                    background:u.active?`${CA.success}11`:`${CA.danger}11`,
+                    cursor:"pointer",display:"grid",placeItems:"center",
+                    color:u.active?CA.success:CA.danger }}>
+                  {u.active?<CheckCircle size={13}/>:<X size={13}/>}
+                </button>
+              )}
               {/* Supprimer */}
               {u.role!=="admin" && (
                 <button onClick={() => del(u.id)}
@@ -4039,20 +4046,25 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   const cardBg = dark ? CA.dCard  : CA.card;
   const unread = notifs.filter(n=>!n.read).length;
 
-  // Stock faible → notifs auto
+  // Stock faible → notifs auto + suppression si stock corrigé
   useEffect(() => {
     const lowStock = products.filter(p=>p.stock>0&&p.stock<=5);
-    if (lowStock.length>0) {
-      setNotifs(ns => {
-        const existing = ns.map(n=>n.msg);
-        const newNotifs = lowStock
-          .filter(p=>!existing.some(m=>m.includes(p.name)))
-          .map(p=>({ id:Date.now()+p.id,
-            msg:`⚠️ Stock faible : ${p.name} (${p.stock} restant${p.stock>1?"s":""})`,
-            time:new Date().toISOString(), read:false }));
-        return [...ns, ...newNotifs];
+    const okStock  = products.filter(p=>p.stock>5);
+    setNotifs(ns => {
+      // Retirer les notifs des produits dont le stock est repassé au-dessus de 5
+      let updated = ns.filter(n => {
+        if (!n.msg.includes("Stock faible")) return true;
+        return !okStock.some(p => n.msg.includes(p.name));
       });
-    }
+      // Ajouter les nouvelles notifs stock faible
+      const existing = updated.map(n=>n.msg);
+      const newNotifs = lowStock
+        .filter(p=>!existing.some(m=>m.includes(p.name)))
+        .map(p=>({ id:Date.now()+p.id,
+          msg:`⚠️ Stock faible : ${p.name} (${p.stock} restant${p.stock>1?"s":""})`,
+          time:new Date().toISOString(), read:false }));
+      return [...updated, ...newNotifs];
+    });
   }, [products]);
 
   // Charger membres équipe depuis Supabase
@@ -4092,26 +4104,23 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
           return;
         }
 
-        // Rôle rétrogradé → déconnexion forcée immédiate
+        // Rôle modifié → mettre à jour auth en direct (hausse OU baisse)
         const roleLevel = { delivery:1, manager:2, admin:3 };
-        if (roleLevel[current.role] < roleLevel[auth.role]) {
-          clearInterval(checkRole);
-          window.alert(`⚠️ Votre rôle a été modifié (${auth.role} → ${current.role}). Vous allez être déconnecté.`);
-          logout();
+        if (roleLevel[current.role] !== roleLevel[auth.role]) {
+          setAuth(a => ({...a, role: current.role}));
+          // Si rôle baissé → aussi mettre à jour le tab actif si nécessaire
+          if (roleLevel[current.role] < roleLevel[auth.role]) {
+            setTab("orders");
+            setNotifs(ns => [{
+              id:Date.now(),
+              msg:`⚠️ Votre rôle a changé → ${current.role}. Vos droits ont été mis à jour.`,
+              time:new Date().toISOString(), read:false
+            }, ...ns]);
+          }
           return;
         }
 
-        // Rôle augmenté → mettre à jour auth en direct + notif
-        if (roleLevel[current.role] > roleLevel[auth.role]) {
-          setAuth(a => ({...a, role: current.role}));
-          setNotifs(ns => {
-            const already = ns.some(n => n.msg.includes("rôle a été mis à jour"));
-            if (already) return ns;
-            return [{ id:Date.now(),
-              msg:`✨ Votre rôle a été mis à jour → ${current.role}. Vos nouveaux droits sont actifs !`,
-              time:new Date().toISOString(), read:false }, ...ns];
-          });
-        }
+
       } catch(e) { console.warn("Realtime check:", e.message); }
     }, 10000); // toutes les 10 secondes
 
