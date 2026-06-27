@@ -582,12 +582,13 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted, isFav, onT
 /* ════════════════════════════════════════════
    🔍 FICHE PRODUIT
 ════════════════════════════════════════════ */
-function ProductModal({ p, t, onClose, onAdd, dark }) {
+function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen }) {
   const [qty, setQty]           = useState(1);
   const [variant, setVariant]   = useState(null);
   const [variantErr, setVariantErr] = useState(false);
+  const [addedAnim, setAddedAnim] = useState(false);
 
-  useEffect(() => { setVariant(null); setQty(1); setVariantErr(false); }, [p]);
+  useEffect(() => { setVariant(null); setQty(1); setVariantErr(false); setAddedAnim(false); }, [p]);
 
   if (!p) return null;
   const out  = p.stock === 0;
@@ -600,7 +601,8 @@ function ProductModal({ p, t, onClose, onAdd, dark }) {
   const handleAdd = () => {
     if (hasVariants && !variant) { setVariantErr(true); return; }
     onAdd(p, qty, variant);
-    onClose();
+    setAddedAnim(true);
+    setTimeout(() => { setAddedAnim(false); onClose(); }, 900);
   };
 
   const shareArticle = () => {
@@ -685,8 +687,12 @@ function ProductModal({ p, t, onClose, onAdd, dark }) {
                   </button>
                 </div>
                 <button onClick={handleAdd}
-                  style={{ flex:1, ...primaryBtn, justifyContent:"center" }}>
-                  <ShoppingBag size={15}/> {t.addCart}
+                  style={{ flex:1, ...primaryBtn, justifyContent:"center",
+                    background: addedAnim ? C.success : C.ink,
+                    transition:"background .3s" }}>
+                  {addedAnim
+                    ? <><Check size={15}/> Ajouté !</>
+                    : <><ShoppingBag size={15}/> {t.addCart}</>}
                 </button>
               </div>
               {/* Partager */}
@@ -719,6 +725,49 @@ function ProductModal({ p, t, onClose, onAdd, dark }) {
               </div>
             )}
           </div>
+
+          {/* VOUS AIMEREZ AUSSI */}
+          {(() => {
+            const similar = products.filter(x =>
+              x.id !== p.id && !x.isHidden && x.stock > 0 &&
+              (x.cat === p.cat || x.brand === p.brand)
+            ).slice(0, 4);
+            if (!similar.length) return null;
+            return (
+              <div style={{ marginTop:20, paddingTop:16,
+                borderTop:`1px solid ${bord}` }}>
+                <div style={{ fontSize:11, fontWeight:700, color:C.gold,
+                  letterSpacing:1, textTransform:"uppercase", marginBottom:10 }}>
+                  ✦ Vous aimerez aussi
+                </div>
+                <div style={{ display:"flex", gap:9, overflowX:"auto",
+                  paddingBottom:4, WebkitOverflowScrolling:"touch" }}>
+                  {similar.map(s => {
+                    const sPrice = s.discount>0
+                      ? Math.round(s.price*(1-s.discount/100)) : s.price;
+                    return (
+                      <div key={s.id}
+                        onClick={() => { onClose(); setTimeout(() => onOpen && onOpen(s), 120); }}
+                        style={{ flexShrink:0, width:110, cursor:"pointer" }}>
+                        <div style={{ width:110, height:110, borderRadius:10,
+                          overflow:"hidden", background:C.creamD, marginBottom:6 }}>
+                          <Thumb p={s}/>
+                        </div>
+                        <div style={{ fontFamily:"Georgia,serif", fontSize:11.5,
+                          color:text, lineHeight:1.3, marginBottom:2 }}>
+                          {s.name.length>22 ? s.name.slice(0,22)+"…" : s.name}
+                        </div>
+                        <div style={{ fontWeight:700, fontSize:12,
+                          color: s.discount>0 ? "#E05030" : C.gold }}>
+                          {fcfa(sPrice)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </Overlay>
@@ -865,7 +914,8 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
   const applyPromo = () => {
     const found = (promos||[]).find(p =>
       p.code === promoCode.toUpperCase().trim() &&
-      p.active && p.uses < p.maxUses
+      p.active && p.uses < p.maxUses &&
+      (!p.expiresAt || new Date(p.expiresAt) > new Date())
     );
     if (found) { setPromoApplied(found); setPromoErr(false); }
     else { setPromoErr(true); setPromoApplied(null); }
@@ -1097,7 +1147,7 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
 /* ════════════════════════════════════════════
    📦 SUIVI COMMANDE
 ════════════════════════════════════════════ */
-function TrackModal({ open, onClose, t, dark }) {
+function TrackModal({ open, onClose, t, dark, products, cfg }) {
   const [num, setNum]         = useState("");
   const [tel, setTel]         = useState("");
   const [searchMode, setMode] = useState("id"); // "id" ou "phone"
@@ -1286,7 +1336,7 @@ function TrackModal({ open, onClose, t, dark }) {
                       L'annulation n'est possible qu'avant l'expédition.
                     </span>
                   </p>
-                  <a href={`https://wa.me/${DEFAULT_CFG.whatsapp}?text=${encodeURIComponent(
+                  <a href={`https://wa.me/${cfg?.whatsapp||DEFAULT_CFG.whatsapp}?text=${encodeURIComponent(
                     `Bonjour Dada's Drop 👋
 Je souhaite annuler ma commande *#${result.id || num.toUpperCase().trim().replace(/^#/,"")}*.
 Merci de confirmer l'annulation.`
@@ -1670,15 +1720,18 @@ function AboutPage({ dark, cfg }) {
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
   const whatsapp = cfg?.whatsapp || DEFAULT_CFG.whatsapp;
+  const aboutTitle = cfg?.aboutTitle || "Dada's Drop";
+  const aboutSub   = cfg?.aboutSub   || "Collection Premium · Ouagadougou, Burkina Faso";
+  const aboutStory = cfg?.aboutStory || "Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou.";
   return (
     <div style={{ maxWidth:680, margin:"0 auto", padding:"40px 20px" }}>
       <div style={{ textAlign:"center", marginBottom:32 }}>
         <LogoDD size={64}/>
         <h1 style={{ fontFamily:"Georgia,serif", fontSize:28, color:text, margin:"16px 0 8px" }}>
-          Dada's Drop
+          {aboutTitle}
         </h1>
         <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.7 }}>
-          Collection Premium · Ouagadougou, Burkina Faso
+          {aboutSub}
         </p>
       </div>
       <div style={{ background: dark?C.dCard:"#fff", border:`1px solid ${bord}`,
@@ -1687,7 +1740,7 @@ function AboutPage({ dark, cfg }) {
           Notre histoire
         </h2>
         <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8 }}>
-          Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou.
+          {aboutStory}
         </p>
       </div>
       <div style={{ background: dark?C.dCard:"#fff", border:`1px solid ${bord}`,
@@ -1751,10 +1804,13 @@ const LEGAL = {
   ]},
 };
 
-function LegalPage({ type, dark, setPage }) {
+function LegalPage({ type, dark, setPage, cfg }) {
   const content = LEGAL[type];
   const text = dark ? C.dText : C.ink;
   const bord = dark ? C.dBorder : C.border;
+  // Mapping type → clé cfg
+  const cfgKey = { legal:"legalMentions", cgv:"legalCgv", rgpd:"legalRgpd", sav:"legalSav" }[type];
+  const customText = cfg?.[cfgKey];
   return (
     <div style={{ maxWidth:720, margin:"0 auto", padding:"32px 20px 60px" }}>
       <button onClick={() => setPage("home")}
@@ -1765,18 +1821,26 @@ function LegalPage({ type, dark, setPage }) {
       </button>
       <h1 style={{ fontFamily:"Georgia,serif", fontSize:26, color:text,
         margin:"0 0 24px", fontWeight:400 }}>{content.title}</h1>
-      {content.content.map((s,i) => (
-        <div key={i} style={{ background: dark?C.dCard:"#fff",
-          border:`1px solid ${bord}`, borderRadius:14,
-          padding:"20px 24px", marginBottom:14 }}>
-          <h2 style={{ fontFamily:"Georgia,serif", fontSize:17, color:text, margin:"0 0 10px" }}>
-            {s.h}
-          </h2>
-          <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8, margin:0 }}>
-            {s.p}
-          </p>
+      {customText ? (
+        <div style={{ background: dark?C.dCard:"#fff", border:`1px solid ${bord}`,
+          borderRadius:14, padding:"20px 24px" }}>
+          <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.9, margin:0,
+            whiteSpace:"pre-wrap" }}>{customText}</p>
         </div>
-      ))}
+      ) : (
+        content.content.map((s,i) => (
+          <div key={i} style={{ background: dark?C.dCard:"#fff",
+            border:`1px solid ${bord}`, borderRadius:14,
+            padding:"20px 24px", marginBottom:14 }}>
+            <h2 style={{ fontFamily:"Georgia,serif", fontSize:17, color:text, margin:"0 0 10px" }}>
+              {s.h}
+            </h2>
+            <p style={{ fontSize:14, color: dark?C.dMute:C.mute, lineHeight:1.8, margin:0 }}>
+              {s.p}
+            </p>
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -1807,7 +1871,7 @@ function Page404({ dark, setPage }) {
 /* ════════════════════════════════════════════
    🛍 SHOP APP
 ════════════════════════════════════════════ */
-function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home" }) {
+function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, dark, setDark, initialPage="home" }) {
   const [lang, setLang]         = useState("fr");
   const [page, setPage]         = useState(initialPage);
   const [query, setQuery]       = useState("");
@@ -2344,10 +2408,10 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
         </section>
       )}
       {page==="about"  && <AboutPage dark={dark} cfg={cfg}/>}
-      {page==="legal"  && <LegalPage type="legal" dark={dark} setPage={setPage}/>}
-      {page==="cgv"    && <LegalPage type="cgv"   dark={dark} setPage={setPage}/>}
-      {page==="rgpd"   && <LegalPage type="rgpd"  dark={dark} setPage={setPage}/>}
-      {page==="sav"    && <LegalPage type="sav"   dark={dark} setPage={setPage}/>}
+      {page==="legal"  && <LegalPage type="legal" dark={dark} setPage={setPage} cfg={cfg}/>}
+      {page==="cgv"    && <LegalPage type="cgv"   dark={dark} setPage={setPage} cfg={cfg}/>}
+      {page==="rgpd"   && <LegalPage type="rgpd"  dark={dark} setPage={setPage} cfg={cfg}/>}
+      {page==="sav"    && <LegalPage type="sav"   dark={dark} setPage={setPage} cfg={cfg}/>}
       {page==="404"    && <Page404   dark={dark}  setPage={setPage}/>}
 
       {/* FOOTER */}
@@ -2408,6 +2472,7 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
         t={t} lang={lang} setLang={setLang} dark={dark}
         setPage={setPage} setCat={setCat} cats={cats} favs={favs}/>
       <ProductModal p={selected} t={t} dark={dark}
+        products={products} onOpen={setSelected}
         onClose={() => setSelected(null)} onAdd={addToCart}/>
       <CartDrawer open={cartOpen} cart={cart} products={products}
         t={t} dark={dark} onClose={() => setCartOpen(false)}
@@ -2418,6 +2483,7 @@ function ShopApp({ products, cats, cfg, promos, dark, setDark, initialPage="home
         onClose={() => setCheckout(false)}
         onClearCart={() => setCart([])}/>
       <TrackModal open={trackOpen} t={t} dark={dark}
+        products={products} cfg={cfg}
         onClose={() => setTrackOpen(false)}/>
     </div>
   );
@@ -2654,11 +2720,17 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={
-          <ShopApp products={products} cats={cats} cfg={cfg} promos={promos}
+          <ShopApp products={products} setProducts={setProducts}
+            cats={cats} setCats={setCats}
+            cfg={cfg} setCfg={setCfg}
+            promos={promos}
             dark={dark} setDark={setDark}/>
         }/>
         <Route path="/catalogue" element={
-          <ShopApp products={products} cats={cats} cfg={cfg} promos={promos}
+          <ShopApp products={products} setProducts={setProducts}
+            cats={cats} setCats={setCats}
+            cfg={cfg} setCfg={setCfg}
+            promos={promos}
             dark={dark} setDark={setDark} initialPage="catalogue"/>
         }/>
         {/* Route article direct — /article/mini-boston-rose */}
@@ -2723,13 +2795,10 @@ function AStatCard({ icon, value, label, color, dark }) {
 /* ──────────────────────────────────────────
    ONGLET COMMANDES
 ────────────────────────────────────────── */
-function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
+function AdminOrdersTab({ orders, setOrders, trash, setTrash, users, auth, dark }) {
   const [search, setSearch]       = useState("");
   const [filterStatus, setFilter] = useState(0);
   const [showTrash, setShowTrash] = useState(false);
-  // La corbeille est gérée dans Supabase via le champ deleted=true
-  // "trash" = commandes avec deleted=true chargées depuis Supabase
-  const [trash, setTrash] = useState([]);
   const text = dark ? CA.dText : CA.ink;
   const bord = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
@@ -3924,14 +3993,14 @@ Il aura accès à tout le tableau de bord.`)) return;
 /* ──────────────────────────────────────────
    ONGLET PARAMÈTRES
 ────────────────────────────────────────── */
-function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
+function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth, setUsers }) {
   const text   = dark ? CA.dText : CA.ink;
   const bord   = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
   const [tab, setTab]   = useState("contacts");
   const [saved, setSaved] = useState(false);
   const [pwd, setPwd] = useState({ old:"", new1:"", new2:"", err:"", ok:false });
-  const [newPromo, setNewPromo] = useState({ code:"", discount:"", maxUses:"" });
+  const [newPromo, setNewPromo] = useState({ code:"", discount:"", maxUses:"", expiresAt:"" });
   const setC = k => e => setCfg(c=>({...c,[k]:e.target.type==="checkbox"?e.target.checked:e.target.value}));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
     border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
@@ -3945,9 +4014,10 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
   const addPromo = () => {
     if (!newPromo.code||!newPromo.discount) return;
     const p = { code:newPromo.code.toUpperCase(), discount:parseInt(newPromo.discount)||0,
-      maxUses:parseInt(newPromo.maxUses)||999, uses:0, active:true };
+      maxUses:parseInt(newPromo.maxUses)||999, uses:0, active:true,
+      expiresAt: newPromo.expiresAt || null };
     setPromos(ps=>[...ps,p]);
-    setNewPromo({ code:"", discount:"", maxUses:"" });
+    setNewPromo({ code:"", discount:"", maxUses:"", expiresAt:"" });
   };
 
   const changePwd = () => {
@@ -3968,6 +4038,8 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
     { k:"banniere",  label:"📢 Bannière" },
     { k:"promos",    label:"🎁 Promos" },
     { k:"apparence", label:"🎨 Apparence" },
+    { k:"apropos",   label:"📄 À propos" },
+    { k:"legal",     label:"⚖️ Pages légales" },
     { k:"securite",  label:"🔐 Sécurité" },
   ];
 
@@ -4072,7 +4144,7 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
           <div style={{ background:dark?`${CA.gold}0A`:`${CA.gold}08`,
             border:`1px solid ${CA.gold}33`, borderRadius:10,
             padding:"14px", marginBottom:16 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
               <label style={{ display:"block" }}>
                 <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Code *</span>
                 <input style={inp} value={newPromo.code}
@@ -4093,6 +4165,12 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
                   onChange={e=>setNewPromo(p=>({...p,maxUses:e.target.value}))}
                   placeholder="100"/>
               </label>
+              <label style={{ display:"block" }}>
+                <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Expire le (optionnel)</span>
+                <input style={inp} type="date"
+                  value={newPromo.expiresAt||""}
+                  onChange={e=>setNewPromo(p=>({...p,expiresAt:e.target.value}))}/>
+              </label>
             </div>
             <button onClick={addPromo}
               style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
@@ -4103,37 +4181,62 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
           </div>
           {/* Liste */}
           <div style={{ display:"grid", gap:8 }}>
-            {promos.map((p,i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:8,
-                padding:"10px 12px", borderRadius:10,
-                border:`1px solid ${p.active?CA.gold+"44":bord}`,
-                background:p.active?`${CA.gold}08`:"none",
-                opacity:p.active?1:.6 }}>
-                <div style={{ fontFamily:"Georgia,serif", fontWeight:700,
-                  color:p.active?CA.gold:text, fontSize:14, flex:1 }}>
-                  {p.code}
+            {promos.map((p,i) => {
+              // Compte à rebours
+              let countdown = null;
+              if (p.expiresAt) {
+                const diff = new Date(p.expiresAt) - new Date();
+                if (diff <= 0) {
+                  countdown = <span style={{ fontSize:10, color:CA.danger, fontWeight:700 }}>Expiré</span>;
+                } else {
+                  const days = Math.floor(diff/86400000);
+                  const hrs  = Math.floor((diff%86400000)/3600000);
+                  countdown = (
+                    <span style={{ fontSize:10, color:CA.warning, fontWeight:700 }}>
+                      ⏱ {days>0?`${days}j `:""}{hrs}h
+                    </span>
+                  );
+                }
+              }
+              return (
+                <div key={i} style={{ padding:"10px 12px", borderRadius:10,
+                  border:`1px solid ${p.active?CA.gold+"44":bord}`,
+                  background:p.active?`${CA.gold}08`:"none",
+                  opacity:p.active?1:.6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <div style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                      color:p.active?CA.gold:text, fontSize:14, flex:1 }}>
+                      {p.code}
+                    </div>
+                    <ABadge color={p.active?CA.success:CA.mute}>
+                      {p.active?"Actif":"Inactif"}
+                    </ABadge>
+                    <span style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>-{p.discount}%</span>
+                    <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute }}>
+                      {p.uses}/{p.maxUses} utilisations
+                    </span>
+                    {countdown}
+                    <button onClick={() => setPromos(ps=>ps.map(x=>x.code===p.code?{...x,active:!x.active}:x))}
+                      style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
+                        background:"none",cursor:"pointer",display:"grid",placeItems:"center",
+                        color:p.active?CA.success:CA.mute }}>
+                      {p.active?<CheckCircle size={12}/>:<X size={12}/>}
+                    </button>
+                    <button onClick={() => setPromos(ps=>ps.filter(x=>x.code!==p.code))}
+                      style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
+                        background:"none",cursor:"pointer",display:"grid",
+                        placeItems:"center",color:CA.danger }}>
+                      <Trash size={12}/>
+                    </button>
+                  </div>
+                  {p.expiresAt && (
+                    <div style={{ fontSize:10.5, color:dark?CA.dMute:CA.mute, marginTop:4 }}>
+                      📅 Expire le {new Date(p.expiresAt).toLocaleDateString("fr-FR")}
+                    </div>
+                  )}
                 </div>
-                <ABadge color={p.active?CA.success:CA.mute}>
-                  {p.active?"Actif":"Inactif"}
-                </ABadge>
-                <span style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>-{p.discount}%</span>
-                <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute }}>
-                  {p.uses}/{p.maxUses}
-                </span>
-                <button onClick={() => setPromos(ps=>ps.map(x=>x.code===p.code?{...x,active:!x.active}:x))}
-                  style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
-                    background:"none",cursor:"pointer",display:"grid",placeItems:"center",
-                    color:p.active?CA.success:CA.mute }}>
-                  {p.active?<CheckCircle size={12}/>:<X size={12}/>}
-                </button>
-                <button onClick={() => setPromos(ps=>ps.filter(x=>x.code!==p.code))}
-                  style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
-                    background:"none",cursor:"pointer",display:"grid",
-                    placeItems:"center",color:CA.danger }}>
-                  <Trash size={12}/>
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -4199,6 +4302,71 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
         </div>
       )}
 
+      {/* À PROPOS */}
+      {tab==="apropos" && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>📄 Page À propos</h3>
+          <div style={{ display:"grid", gap:12 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Titre de la boutique</span>
+              <input style={inp} value={cfg.aboutTitle||"Dada's Drop"} onChange={setC("aboutTitle")}/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Sous-titre</span>
+              <input style={inp} value={cfg.aboutSub||"Collection Premium · Ouagadougou, Burkina Faso"} onChange={setC("aboutSub")}/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Notre histoire</span>
+              <textarea style={{ ...inp, resize:"vertical" }} rows={4}
+                value={cfg.aboutStory||"Dada's Drop est née d'une passion pour l'élégance accessible. Nous sélectionnons avec soin des sacs et accessoires de qualité premium, importés pour vous et livrés directement à Ouagadougou."}
+                onChange={setC("aboutStory")}/>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* PAGES LÉGALES */}
+      {tab==="legal" && (() => {
+        const pages = [
+          { k:"legalMentions", title:"Mentions légales" },
+          { k:"legalCgv",      title:"CGV" },
+          { k:"legalRgpd",     title:"Politique de confidentialité" },
+          { k:"legalSav",      title:"SAV" },
+        ];
+        const [legalTab, setLegalTab] = useState(pages[0].k);
+        return (
+          <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+            <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>⚖️ Pages légales</h3>
+            <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto",
+              paddingBottom:4, WebkitOverflowScrolling:"touch" }}>
+              {pages.map(pg => (
+                <button key={pg.k} onClick={() => setLegalTab(pg.k)}
+                  style={{ padding:"6px 11px", borderRadius:8, fontSize:12, fontWeight:600,
+                    border:`1.5px solid ${legalTab===pg.k?CA.gold:bord}`,
+                    background:legalTab===pg.k?CA.ink:cardBg,
+                    color:legalTab===pg.k?CA.gold:text,
+                    cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+                  {pg.title}
+                </button>
+              ))}
+            </div>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:6 }}>
+                Contenu — {pages.find(pg=>pg.k===legalTab)?.title}
+              </span>
+              <textarea style={{ ...inp, resize:"vertical", lineHeight:1.6 }} rows={10}
+                value={cfg[legalTab]||""}
+                placeholder="Entrez le texte de cette page légale…"
+                onChange={setC(legalTab)}/>
+            </label>
+            <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:6 }}>
+              💡 Ce texte remplace le contenu par défaut de la page correspondante sur le site.
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Bouton Save global */}
       <button onClick={save}
         style={{ marginTop:16, background:CA.ink, color:CA.gold,
@@ -4207,6 +4375,202 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark }) {
           display:"flex", alignItems:"center", gap:8 }}>
         {saved?<><CheckCircle size={16}/> Enregistré !</>:<><Save size={16}/> Enregistrer</>}
       </button>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET AVIS
+────────────────────────────────────────── */
+function AdminReviewsTab({ auth, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const [reviews, setReviews]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [replyId, setReplyId]   = useState(null);
+  const [replyText, setReplyText] = useState("");
+  const [filter, setFilter]     = useState("all"); // all | pending | hidden
+
+  useEffect(() => {
+    setLoading(true);
+    sb.get("reviews", "?order=date.desc&limit=100")
+      .then(rows => setReviews(rows||[]))
+      .catch(e => console.warn("reviews:", e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const toggleHidden = async (r) => {
+    const updated = { ...r, hidden: !r.hidden };
+    setReviews(rs => rs.map(x => x.id===r.id ? updated : x));
+    try { await sb.patch("reviews", r.id, { hidden: !r.hidden }); }
+    catch(e) { console.warn(e.message); }
+  };
+
+  const sendReply = async (r) => {
+    if (!replyText.trim()) return;
+    const updated = { ...r, reply: replyText.trim(), reply_by: auth.name,
+      reply_date: new Date().toISOString().split("T")[0] };
+    setReviews(rs => rs.map(x => x.id===r.id ? updated : x));
+    try {
+      await sb.patch("reviews", r.id, {
+        reply: replyText.trim(),
+        reply_by: auth.name,
+        reply_date: new Date().toISOString().split("T")[0],
+      });
+    } catch(e) { console.warn(e.message); }
+    setReplyId(null); setReplyText("");
+  };
+
+  const filtered = reviews.filter(r => {
+    if (filter==="hidden")  return r.hidden;
+    if (filter==="pending") return !r.hidden && !r.reply;
+    return !r.hidden;
+  });
+
+  const avgRating = reviews.filter(r=>!r.hidden&&r.stars>0).length
+    ? (reviews.filter(r=>!r.hidden&&r.stars>0).reduce((s,r)=>s+(r.stars||0),0)
+       / reviews.filter(r=>!r.hidden&&r.stars>0).length).toFixed(1)
+    : "—";
+
+  return (
+    <div>
+      {/* Stats rapides */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",
+        gap:10, marginBottom:16 }}>
+        {[
+          { label:"Total avis",   value:reviews.filter(r=>!r.hidden).length, color:CA.gold },
+          { label:"Note moyenne", value:avgRating+" ★",                       color:"#F5A623" },
+          { label:"Sans réponse", value:reviews.filter(r=>!r.hidden&&!r.reply).length, color:CA.warning },
+          { label:"Masqués",      value:reviews.filter(r=>r.hidden).length,   color:CA.mute },
+        ].map(s => (
+          <div key={s.label} style={{ background:cardBg, border:`1px solid ${bord}`,
+            borderRadius:12, padding:"12px 14px" }}>
+            <div style={{ fontFamily:"Georgia,serif", fontSize:20, fontWeight:700,
+              color:s.color }}>{s.value}</div>
+            <div style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtres */}
+      <div style={{ display:"flex", gap:7, marginBottom:14, flexWrap:"wrap" }}>
+        {[["all","Tous"],["pending","Sans réponse"],["hidden","Masqués"]].map(([k,l]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ padding:"7px 13px", borderRadius:9, fontSize:12.5, fontWeight:600,
+              border:`1.5px solid ${filter===k?CA.gold:bord}`,
+              background:filter===k?CA.ink:cardBg,
+              color:filter===k?CA.gold:text, cursor:"pointer" }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:"center", padding:32, color:dark?CA.dMute:CA.mute }}>
+          Chargement des avis…
+        </div>
+      ) : filtered.length===0 ? (
+        <div style={{ textAlign:"center", padding:"40px 20px",
+          color:dark?CA.dMute:"#bbb" }}>
+          <Star size={32} strokeWidth={1.2}/>
+          <p style={{ marginTop:10, fontSize:13 }}>Aucun avis dans cette catégorie.</p>
+        </div>
+      ) : filtered.map(r => (
+        <div key={r.id} style={{ background:cardBg, border:`1px solid ${r.hidden?bord:CA.gold+"33"}`,
+          borderRadius:12, padding:"14px 16px", marginBottom:10,
+          opacity:r.hidden?.6:1 }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"flex-start", gap:8, marginBottom:6 }}>
+            <div>
+              <div style={{ fontWeight:700, fontSize:13.5, color:text, marginBottom:2 }}>
+                {r.product||"Article inconnu"}
+              </div>
+              <div style={{ display:"flex", gap:2, marginBottom:4 }}>
+                {[1,2,3,4,5].map(i => (
+                  <span key={i} style={{ fontSize:14,
+                    color:i<=(r.stars||0)?"#F5A623":"#DDD" }}>★</span>
+                ))}
+                <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginLeft:5 }}>
+                  — commande #{r.order_id}
+                </span>
+              </div>
+              {r.text && (
+                <p style={{ fontSize:13, color:dark?CA.dMute:CA.mute,
+                  margin:"0 0 6px", lineHeight:1.6, fontStyle:"italic" }}>
+                  "{r.text}"
+                </p>
+              )}
+              <div style={{ fontSize:10.5, color:dark?CA.dMute:CA.mute }}>
+                📅 {r.date}
+              </div>
+            </div>
+            <button onClick={() => toggleHidden(r)}
+              title={r.hidden?"Rendre visible":"Masquer cet avis"}
+              style={{ flexShrink:0, padding:"5px 10px", borderRadius:8, fontSize:11.5,
+                fontWeight:600, cursor:"pointer",
+                border:`1px solid ${r.hidden?CA.success:bord}`,
+                background:r.hidden?`${CA.success}15`:"none",
+                color:r.hidden?CA.success:(dark?CA.dMute:CA.mute) }}>
+              {r.hidden ? <><Eye size={12}/> Afficher</> : <><EyeOff size={12}/> Masquer</>}
+            </button>
+          </div>
+
+          {/* Réponse existante */}
+          {r.reply && (
+            <div style={{ background:dark?`${CA.gold}08`:`${CA.gold}06`,
+              border:`1px solid ${CA.gold}33`, borderRadius:9,
+              padding:"10px 13px", marginTop:8 }}>
+              <div style={{ fontSize:10.5, fontWeight:700, color:CA.gold, marginBottom:4 }}>
+                💬 Réponse de {r.reply_by||"l'équipe"} · {r.reply_date||""}
+              </div>
+              <p style={{ fontSize:13, color:text, margin:0, lineHeight:1.6 }}>{r.reply}</p>
+              <button onClick={() => { setReplyId(r.id); setReplyText(r.reply); }}
+                style={{ marginTop:6, fontSize:11, color:CA.mute, background:"none",
+                  border:"none", cursor:"pointer", textDecoration:"underline" }}>
+                Modifier
+              </button>
+            </div>
+          )}
+
+          {/* Formulaire réponse */}
+          {replyId===r.id ? (
+            <div style={{ marginTop:10 }}>
+              <textarea value={replyText}
+                onChange={e=>setReplyText(e.target.value)}
+                rows={3} placeholder="Votre réponse à cet avis…"
+                style={{ width:"100%", padding:"9px 11px", borderRadius:9,
+                  border:`1.5px solid ${CA.gold}`,
+                  background:dark?CA.dCard:"#fff",
+                  fontSize:"16px", color:text, fontFamily:"inherit",
+                  resize:"vertical", boxSizing:"border-box" }}/>
+              <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                <button onClick={() => sendReply(r)}
+                  style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+                    borderRadius:9, padding:"8px 14px", cursor:"pointer",
+                    fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:5 }}>
+                  <Check size={13}/> Publier la réponse
+                </button>
+                <button onClick={() => { setReplyId(null); setReplyText(""); }}
+                  style={{ background:"none", color:dark?CA.dMute:CA.mute,
+                    border:`1px solid ${bord}`, borderRadius:9,
+                    padding:"8px 12px", cursor:"pointer", fontSize:13 }}>
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : !r.reply && (
+            <button onClick={() => { setReplyId(r.id); setReplyText(""); }}
+              style={{ marginTop:8, display:"inline-flex", alignItems:"center", gap:5,
+                background:dark?`${CA.gold}0A`:`${CA.gold}08`,
+                border:`1px solid ${CA.gold}33`, borderRadius:8,
+                padding:"6px 12px", cursor:"pointer",
+                fontSize:12, fontWeight:600, color:CA.gold }}>
+              💬 Répondre à cet avis
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -4224,6 +4588,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   const [wrong, setWrong] = useState(false);
   const [tab, setTab]     = useState("overview");
   const [orders, setOrders] = useState([]);
+  const [trash, setTrash]   = useState([]);
   const [users, setUsers]   = useState(INIT_USERS);
   const [notifs, setNotifs] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -4346,9 +4711,16 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
     sb.get("orders", "?order=created_at.desc&limit=100")
       .then(rows => {
         if (rows?.length>0) {
-          setOrders(rows);
+          const all = rows.map(o => ({
+            ...o,
+            name:  o.customer_name  || o.name  || "Client",
+            phone: o.customer_phone || o.phone || "",
+            date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
+          }));
+          setOrders(all.filter(o => !o.deleted));
+          setTrash(all.filter(o => o.deleted));
           // Notifs nouvelles commandes
-          const newOrders = rows.filter(o=>o.status===1);
+          const newOrders = all.filter(o=>o.status===1&&!o.deleted);
           if (newOrders.length>0) {
             setNotifs(ns=>[{
               id:Date.now(),
@@ -4357,8 +4729,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             }, ...ns]);
           }
         } else {
-          // Aucune commande pour l'instant
           setOrders([]);
+          setTrash([]);
         }
       })
       .catch(e=>console.warn("Supabase orders:",e.message))
@@ -4496,6 +4868,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
     ...(auth.role!=="delivery" && can("view_stats") ? [{ key:"overview", icon:<BarChart2 size={14}/>, label:"Bilan" }] : []),
     { key:"orders", icon:<ShoppingCart size={14}/>, label:auth.role==="delivery"?"Livraisons":"Commandes" },
     ...(can("add_product") ? [{ key:"products", icon:<ShoppingBag size={14}/>, label:"Produits" }] : []),
+    ...(auth.role!=="delivery" ? [{ key:"reviews", icon:<Star size={14}/>, label:"Avis" }] : []),
     ...(auth.role==="admin"?[
       { key:"cats",     icon:<Tag size={14}/>,      label:"Catégories" },
       { key:"team",     icon:<Users size={14}/>,    label:"Équipe" },
@@ -4710,7 +5083,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
 
               {/* Stock faible */}
               <div style={{ background:cardBg, border:`1px solid ${bord}`,
-                borderRadius:14, padding:"16px" }}>
+                borderRadius:14, padding:"16px", marginBottom:14 }}>
                 <h3 style={{ fontFamily:"Georgia,serif", fontSize:15,
                   color:text, margin:"0 0 12px" }}>⚠️ Stock faible</h3>
                 {lowStock.length===0 ? (
@@ -4728,12 +5101,49 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                   </div>
                 ))}
               </div>
+
+              {/* Best-sellers automatiques calculés depuis les commandes */}
+              {(() => {
+                const salesCount = {};
+                orders.filter(o=>o.status===3).forEach(o => {
+                  (o.items||[]).forEach(item => {
+                    const name = (item||"").split(" x")[0].replace(/ \(.*\)/,"").trim();
+                    if (name) salesCount[name] = (salesCount[name]||0) + 1;
+                  });
+                });
+                const ranked = Object.entries(salesCount)
+                  .sort(([,a],[,b])=>b-a).slice(0,5);
+                if (!ranked.length) return null;
+                return (
+                  <div style={{ background:cardBg, border:`1px solid ${bord}`,
+                    borderRadius:14, padding:"16px" }}>
+                    <h3 style={{ fontFamily:"Georgia,serif", fontSize:15,
+                      color:text, margin:"0 0 12px" }}>🏆 Meilleures ventes</h3>
+                    {ranked.map(([name, count], i) => (
+                      <div key={name} style={{ display:"flex", alignItems:"center",
+                        gap:10, padding:"8px 0",
+                        borderBottom:i<ranked.length-1?`1px solid ${bord}`:"none" }}>
+                        <span style={{ fontFamily:"Georgia,serif", fontSize:16,
+                          color:CA.gold, fontWeight:700, width:22, flexShrink:0 }}>
+                          {i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`}
+                        </span>
+                        <span style={{ flex:1, fontSize:13, color:text }}>{name}</span>
+                        <ABadge color={CA.success}>{count} vendu{count>1?"s":""}</ABadge>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </>)}
           </div>
         )}
 
+        {tab==="reviews" && auth.role!=="delivery" && (
+          <AdminReviewsTab auth={auth} dark={dark}/>
+        )}
         {tab==="orders" && (
           <AdminOrdersTab orders={myOrders} setOrders={setOrders}
+            trash={trash} setTrash={setTrash}
             users={users} auth={auth} dark={dark}/>
         )}
         {tab==="products" && can("add_product") && (
@@ -4748,7 +5158,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
         )}
         {tab==="settings" && auth.role==="admin" && (
           <AdminSettingsTab cfg={cfg} setCfg={setCfg}
-            promos={promos} setPromos={setPromos} dark={dark}/>
+            promos={promos} setPromos={setPromos} dark={dark}
+            auth={auth} setAuth={setAuth} setUsers={setUsers}/>
         )}
       </div>
     </div>
