@@ -930,7 +930,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onClearCar
           </>)}
         </div>
       )}
-      {cfg?.freeDelivery === true && cfg?.showFreeFrom !== false && total >= freeFrom && (
+      {!!(cfg?.freeDelivery) && cfg?.showFreeFrom !== false && total >= freeFrom && (
         <div style={{ background:C.ink, color:C.gold, padding:"7px 16px",
           fontSize:12, fontWeight:600, textAlign:"center" }}>
           ✦ Livraison offerte pour cette commande
@@ -999,7 +999,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onClearCar
       </div>
       {lines.length > 0 && (
         <div style={{ padding:16, borderTop:`1px solid ${bord}` }}>
-          {cfg?.freeDelivery === true && cfg?.showFreeFrom !== false && total < freeFrom && (
+          {!!(cfg?.freeDelivery) && cfg?.showFreeFrom !== false && total < freeFrom && (
             <p style={{ fontSize:11, color:C.mute, margin:"0 0 8px" }}>
               Livraison offerte dès {fcfa(freeFrom)}
             </p>
@@ -2100,14 +2100,17 @@ function Page404({ dark, setPage }) {
 function DraggableWA({ whatsapp, waMsg }) {
   const [pos, setPos] = useState({ bottom:80, right:18 });
   const [dragging, setDragging] = useState(false);
+  const movedRef = { current: false };
   const [moved, setMoved] = useState(false);
-  const startRef = { current: null };
+  // useRef pour persister entre renders sans déclencher de re-render
+  const startRef = useState({ current: null })[0];
 
   const onTouchStart = (e) => {
     const t = e.touches[0];
     startRef.current = { x:t.clientX, y:t.clientY, pos:{ ...pos } };
     setDragging(true);
     setMoved(false);
+    movedRef.current = false;
   };
 
   const onTouchMove = (e) => {
@@ -2115,20 +2118,24 @@ function DraggableWA({ whatsapp, waMsg }) {
     const t = e.touches[0];
     const dx = t.clientX - startRef.current.x;
     const dy = t.clientY - startRef.current.y;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) setMoved(true);
-    // right diminue quand on glisse à droite, augmente à gauche
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      movedRef.current = true;
+      setMoved(true);
+    }
     const newRight = Math.max(8, Math.min(window.innerWidth - 58,
       startRef.current.pos.right - dx));
-    // bottom augmente quand on glisse vers le haut, diminue vers le bas
     const newBottom = Math.max(8, Math.min(window.innerHeight - 58,
       startRef.current.pos.bottom - dy));
     setPos({ right: newRight, bottom: newBottom });
     e.preventDefault();
   };
 
-  const onTouchEnd = () => { setDragging(false); };
+  const onTouchEnd = () => {
+    setDragging(false);
+    startRef.current = null;
+  };
 
-  const handleClick = (e) => { if (moved) e.preventDefault(); };
+  const handleClick = (e) => { if (movedRef.current) e.preventDefault(); };
 
   return (
     <a href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(waMsg)}`}
@@ -4189,6 +4196,8 @@ function AdminCatsTab({ cats, setCats, dark }) {
   const [form, setForm] = useState({ label:"", labelEn:"", soon:false });
   const [saving, setSaving] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [catTrash, setCatTrash] = useState([]);
+  const [showTrash, setShowTrash] = useState(false);
 
   // Traduction en direct avec debounce 800ms
   useEffect(() => {
@@ -4256,10 +4265,27 @@ function AdminCatsTab({ cats, setCats, dark }) {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Supprimer cette catégorie ?")) return;
+    if (!window.confirm("Mettre cette catégorie à la corbeille ?")) return;
+    const cat = cats.find(c=>c.id===id);
+    if (!cat) return;
     const updated = cats.filter(c=>c.id!==id);
     setCats(updated);
+    setCatTrash(t=>[...t, cat]);
     await saveCats(updated);
+  };
+
+  const restoreCat = async (id) => {
+    const cat = catTrash.find(c=>c.id===id);
+    if (!cat) return;
+    setCatTrash(t=>t.filter(c=>c.id!==id));
+    const updated = [...cats, cat];
+    setCats(updated);
+    await saveCats(updated);
+  };
+
+  const deleteForeverCat = (id) => {
+    if (!window.confirm("Supprimer définitivement cette catégorie ?")) return;
+    setCatTrash(t=>t.filter(c=>c.id!==id));
   };
 
   const move = async (idx, dir) => {
@@ -4276,8 +4302,51 @@ function AdminCatsTab({ cats, setCats, dark }) {
 
   return (
     <div>
+      {/* Header avec bouton corbeille */}
+      {catTrash.length > 0 && (
+        <div style={{ marginBottom:12 }}>
+          <button onClick={() => setShowTrash(v=>!v)}
+            style={{ background:showTrash?`${CA.danger}15`:"none",
+              color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
+              border:`1px solid ${showTrash?CA.danger:bord}`,
+              borderRadius:9, padding:"8px 12px", cursor:"pointer",
+              fontSize:12.5, fontWeight:700, display:"flex",
+              alignItems:"center", gap:6 }}>
+            🗑 {showTrash ? "← Retour" : `Corbeille (${catTrash.length})`}
+          </button>
+        </div>
+      )}
+
+      {/* Vue corbeille catégories */}
+      {showTrash && (
+        <div style={{ marginBottom:16 }}>
+          {catTrash.map(c => (
+            <div key={c.id} style={{ background:cardBg, border:`1px solid ${CA.danger}33`,
+              borderRadius:11, padding:"11px 13px", marginBottom:8,
+              display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:600, fontSize:14, color:text }}>{c.label}</div>
+                {c.labelEn && <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{c.labelEn}</div>}
+              </div>
+              <button onClick={() => restoreCat(c.id)}
+                style={{ fontSize:12, color:CA.success, background:"none",
+                  border:`1px solid ${CA.success}44`, borderRadius:7,
+                  padding:"5px 10px", cursor:"pointer", fontWeight:700 }}>
+                ↩ Restaurer
+              </button>
+              <button onClick={() => deleteForeverCat(c.id)}
+                style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`,
+                  background:"none", cursor:"pointer", display:"grid",
+                  placeItems:"center", color:CA.danger }}>
+                <Trash size={12}/>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Ajouter une catégorie */}
-      <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
+      {!showTrash && <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
         borderRadius:14, padding:"16px", marginBottom:16 }}>
         <h4 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 12px" }}>
           ➕ Nouvelle catégorie
@@ -4318,10 +4387,10 @@ function AdminCatsTab({ cats, setCats, dark }) {
             fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
           <PlusCircle size={14}/> Ajouter la catégorie
         </button>
-      </div>
+      </div>}
 
       {/* Liste catégories */}
-      <div style={{ display:"grid", gap:8 }}>
+      {!showTrash && <div style={{ display:"grid", gap:8 }}>
         {cats.map((c,idx) => (
           <div key={c.id} style={{ background:cardBg, border:`1px solid ${bord}`,
             borderRadius:11, padding:"12px 14px",
@@ -4357,7 +4426,7 @@ function AdminCatsTab({ cats, setCats, dark }) {
             </button>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -5377,6 +5446,7 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
   const text   = dark ? CA.dText : CA.ink;
   const bord   = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
+  const [saved, setSaved] = useState(false);
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
     border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
     fontSize:"16px", color:text, fontFamily:"inherit" };
@@ -5459,13 +5529,17 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
             try {
               await sb.upsert("announcements", { id:"config",
                 data:{ ...cfg, loyalty } });
+              setSaved(true);
+              setTimeout(() => setSaved(false), 2500);
             } catch(e){console.warn(e.message);}
           }}
-          style={{ marginTop:14, background:CA.ink, color:CA.gold,
-            border:`1px solid ${CA.gold}44`, borderRadius:10,
+          style={{ marginTop:14, background:saved?CA.success:CA.ink,
+            color:saved?"#fff":CA.gold,
+            border:`1px solid ${saved?CA.success:CA.gold}44`, borderRadius:10,
             padding:"9px 16px", cursor:"pointer", fontSize:13,
-            fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-          <Save size={13}/> Enregistrer
+            fontWeight:700, display:"flex", alignItems:"center", gap:6,
+            transition:"background .3s" }}>
+          {saved ? <><CheckCircle size={13}/> Enregistré !</> : <><Save size={13}/> Enregistrer</>}
         </button>
       </div>
 
