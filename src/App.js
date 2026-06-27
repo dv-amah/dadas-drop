@@ -1083,10 +1083,20 @@ function TrackModal({ open, onClose, t, dark }) {
 
   const trackById = async () => {
     setLoading(true); setResult(null); setResults([]); setNotFound(false);
-    const upper = num.toUpperCase().trim();
+    // Accepter avec ou sans # devant
+    const upper = num.toUpperCase().trim().replace(/^#/, "");
     try {
       const rows = await sb.get("orders", `?id=eq.${upper}&select=*`);
-      if (rows?.length > 0) { setResult(rows[0]); setLoading(false); return; }
+      if (rows?.length > 0) {
+        const o = rows[0];
+        setResult({
+          ...o,
+          name:  o.customer_name  || o.name  || "",
+          phone: o.customer_phone || o.phone || "",
+          date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
+        });
+        setLoading(false); return;
+      }
     } catch(e) { console.warn(e.message); }
     const demo = DEMO_ORDERS_TRACK[upper];
     if (demo) setResult(demo); else setNotFound(true);
@@ -1097,10 +1107,20 @@ function TrackModal({ open, onClose, t, dark }) {
     setLoading(true); setResult(null); setResults([]); setNotFound(false);
     const cleaned = tel.replace(/\s/g,"");
     try {
-      const rows = await sb.get("orders", `?phone=eq.${cleaned}&select=*&order=date.desc`);
-      if (rows?.length > 0) { setResults(rows); setLoading(false); return; }
+      // Chercher par customer_phone ET phone
+      const rows = await sb.get("orders",
+        `?or=(customer_phone.eq.${cleaned},phone.eq.${cleaned})&select=*&order=created_at.desc`
+      );
+      if (rows?.length > 0) {
+        const normalized = rows.map(o => ({
+          ...o,
+          name:  o.customer_name  || o.name  || "",
+          phone: o.customer_phone || o.phone || "",
+          date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
+        }));
+        setResults(normalized); setLoading(false); return;
+      }
     } catch(e) { console.warn(e.message); }
-    // Fallback démo
     const demos = Object.entries(DEMO_ORDERS_TRACK)
       .filter(([,o]) => o.phone === cleaned)
       .map(([id,o]) => ({...o, id}));
@@ -1161,7 +1181,7 @@ function TrackModal({ open, onClose, t, dark }) {
           {searchMode === "id" ? (
             <div style={{ display:"flex", gap:7 }}>
               <input value={num} onChange={e=>setNum(e.target.value)}
-                placeholder="Ex : DD-001" style={{ ...inpStyle(dark), flex:1 }}
+                placeholder="Ex : DD-1234 ou #DD-1234" style={{ ...inpStyle(dark), flex:1 }}
                 onKeyDown={e=>e.key==="Enter"&&trackById()}/>
               <button onClick={trackById}
                 style={{ ...primaryBtn, padding:"9px 14px" }}>
@@ -1212,6 +1232,34 @@ function TrackModal({ open, onClose, t, dark }) {
                 </div>
               </div>
               {renderTimeline(result)}
+
+              {/* Bouton annuler — seulement si encore en préparation */}
+              {result.status === 1 && (
+                <div style={{ background:`${C.danger}0F`,
+                  border:`1px solid ${C.danger}33`,
+                  borderRadius:11, padding:"13px 15px", marginBottom:14 }}>
+                  <p style={{ fontSize:13, color:dark?C.dText:C.ink,
+                    margin:"0 0 10px", lineHeight:1.6 }}>
+                    Vous souhaitez annuler votre commande ?<br/>
+                    <span style={{ fontSize:12, color:dark?C.dMute:C.mute }}>
+                      L'annulation n'est possible qu'avant l'expédition.
+                    </span>
+                  </p>
+                  <a href={`https://wa.me/${DEFAULT_CFG.whatsapp}?text=${encodeURIComponent(
+                    `Bonjour Dada's Drop 👋
+Je souhaite annuler ma commande *#${result.id || num.toUpperCase().trim().replace(/^#/,"")}*.
+Merci de confirmer l'annulation.`
+                  )}`}
+                    target="_blank" rel="noreferrer"
+                    style={{ display:"inline-flex", alignItems:"center", gap:7,
+                      background:"#25D366", color:"#fff", textDecoration:"none",
+                      padding:"9px 14px", borderRadius:9,
+                      fontWeight:700, fontSize:13 }}>
+                    <MessageCircle size={14}/> Annuler via WhatsApp
+                  </a>
+                </div>
+              )}
+
               {result.status === 3 && (
                 commentSent ? (
                   <div style={{ display:"flex", alignItems:"center", gap:7,
@@ -2478,6 +2526,16 @@ function AStatCard({ icon, value, label, color, dark }) {
 function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
   const [search, setSearch]       = useState("");
   const [filterStatus, setFilter] = useState(0);
+  const [showTrash, setShowTrash] = useState(false);
+  const [trash, setTrash]         = useState(() => {
+    try { return JSON.parse(localStorage.getItem("dd_trash")||"[]"); } catch { return []; }
+  });
+
+  // Sauvegarder la corbeille dans localStorage
+  const saveTrash = (newTrash) => {
+    setTrash(newTrash);
+    try { localStorage.setItem("dd_trash", JSON.stringify(newTrash)); } catch {}
+  };
   const text = dark ? CA.dText : CA.ink;
   const bord = dark ? CA.dBorder : CA.border;
   const cardBg = dark ? CA.dCard : CA.card;
@@ -2520,8 +2578,29 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
   };
 
   const deleteOrder = async (id) => {
-    if (!window.confirm("Supprimer définitivement cette commande ?")) return;
+    if (!window.confirm("Mettre cette commande à la corbeille ?")) return;
+    const order = orders.find(o => o.id === id);
+    if (order) {
+      // Ajouter à la corbeille avec date de suppression
+      const newTrash = [...trash, { ...order, deletedAt: new Date().toISOString() }];
+      saveTrash(newTrash);
+    }
     setOrders(os => os.filter(o => o.id !== id));
+    try { await sb.patch("orders", id, { status:0 }); } catch(e){ console.warn(e.message); }
+  };
+
+  const restoreOrder = (id) => {
+    const order = trash.find(o => o.id === id);
+    if (!order) return;
+    const { deletedAt, ...restored } = order;
+    setOrders(os => [restored, ...os]);
+    saveTrash(trash.filter(o => o.id !== id));
+    try { sb.patch("orders", id, { status: restored.status||1 }); } catch(e){ console.warn(e.message); }
+  };
+
+  const deleteForever = async (id) => {
+    if (!window.confirm("⚠️ Supprimer définitivement ? Cette action est irréversible.")) return;
+    saveTrash(trash.filter(o => o.id !== id));
     try { await sb.del("orders", id); } catch(e){ console.warn(e.message); }
   };
 
@@ -2638,6 +2717,14 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
             {s===0?"Toutes":STATUS_ADMIN_LABELS[s]}
           </button>
         ))}
+        <button onClick={() => setShowTrash(v=>!v)}
+          style={{ padding:"7px 12px", borderRadius:9, fontSize:12.5, fontWeight:600,
+            border:`1.5px solid ${showTrash?CA.danger:bord}`,
+            background:showTrash?CA.danger:cardBg,
+            color:showTrash?"#fff":text, cursor:"pointer",
+            display:"flex", alignItems:"center", gap:5 }}>
+          🗑 Corbeille {trash.length>0 && `(${trash.length})`}
+        </button>
       </div>
       <button onClick={exportCSV}
         style={{ width:"100%", marginBottom:14,
@@ -2648,7 +2735,59 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
         📊 Exporter en Excel (CSV)
       </button>
 
-      <div style={{ display:"grid", gap:10 }}>
+      {/* VUE CORBEILLE */}
+      {showTrash && (
+        <div>
+          {trash.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 16px",
+              color:dark?CA.dMute:"#bbb" }}>
+              <span style={{ fontSize:40 }}>🗑</span>
+              <p style={{ marginTop:10, fontSize:14 }}>La corbeille est vide.</p>
+            </div>
+          ) : trash.map(o => (
+            <div key={o.id} style={{ background:cardBg,
+              border:`1px solid ${CA.danger}44`,
+              borderRadius:13, padding:"14px 16px", marginBottom:10,
+              opacity:.8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between",
+                alignItems:"center", marginBottom:6 }}>
+                <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                  color:text }}>#{o.id}</span>
+                <span style={{ fontSize:11, color:CA.danger }}>
+                  Supprimée le {new Date(o.deletedAt).toLocaleDateString("fr-FR")}
+                </span>
+              </div>
+              <div style={{ fontSize:14, fontWeight:600, color:text, marginBottom:4 }}>
+                {o.name||o.customer_name||"Client"}
+              </div>
+              <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:8 }}>
+                {(o.items||[]).join(", ")} · {(o.total||0).toLocaleString("fr-FR")} FCFA
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => restoreOrder(o.id)}
+                  style={{ flex:1, background:CA.success, color:"#fff",
+                    border:"none", borderRadius:8, padding:"8px",
+                    cursor:"pointer", fontSize:13, fontWeight:700,
+                    display:"flex", alignItems:"center",
+                    justifyContent:"center", gap:5 }}>
+                  ↩️ Restaurer
+                </button>
+                <button onClick={() => deleteForever(o.id)}
+                  style={{ flex:1, background:"none", color:CA.danger,
+                    border:`1px solid ${CA.danger}`, borderRadius:8,
+                    padding:"8px", cursor:"pointer", fontSize:13, fontWeight:700,
+                    display:"flex", alignItems:"center",
+                    justifyContent:"center", gap:5 }}>
+                  🗑 Supprimer définitivement
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* LISTE NORMALE */}
+      {!showTrash && <div style={{ display:"grid", gap:10 }}>
         {filtered.map(o => (
           <div key={o.id} style={{ background:cardBg, border:`1px solid ${bord}`,
             borderRadius:13, padding:"14px 16px" }}>
@@ -2665,7 +2804,7 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
               </ABadge>
             </div>
             <div style={{ fontSize:14, color:text, fontWeight:600, marginBottom:2 }}>
-              {o.name}
+              {o.name || o.customer_name || "Client"}
             </div>
             <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:2 }}>
               📞 {o.phone||o.customer_phone} · 📍 {o.quartier?`${o.quartier}, `:""}{o.ville}
@@ -2761,7 +2900,7 @@ function AdminOrdersTab({ orders, setOrders, users, auth, dark }) {
             <p style={{ marginTop:10, fontSize:14 }}>Aucune commande trouvée.</p>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -3911,6 +4050,9 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
         if (!rows?.length) return;
         const current = rows[0];
 
+        // David (id:1) est intouchable — jamais déconnecté par le polling
+        if (auth.id === 1) return;
+
         // Compte désactivé → déconnexion forcée
         if (current.active === false) {
           clearInterval(checkRole);
@@ -3945,11 +4087,31 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
     return () => clearInterval(checkRole);
   }, [auth]);
 
+  // Rafraîchissement auto commandes toutes les 30s
+  useEffect(() => {
+    if (!auth) return;
+    const interval = setInterval(() => {
+      sb.get("orders", "?order=created_at.desc&limit=100")
+        .then(rows => {
+          if (rows?.length > 0) {
+            const normalized = rows.map(o => ({
+              ...o,
+              name:  o.customer_name  || o.name  || "Client",
+              phone: o.customer_phone || o.phone || "",
+              date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
+            }));
+            setOrders(normalized);
+          }
+        }).catch(e => console.warn(e.message));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [auth]);
+
   // Charger commandes depuis Supabase
   useEffect(() => {
     if (!auth) return;
     setLoadingOrders(true);
-    sb.get("orders", "?order=date.desc&limit=100")
+    sb.get("orders", "?order=created_at.desc&limit=100")
       .then(rows => {
         if (rows?.length>0) {
           setOrders(rows);
@@ -4289,7 +4451,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                     borderBottom:i<4?`1px solid ${bord}`:"none" }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontWeight:600, fontSize:13, color:text }}>
-                        #{o.id} — {o.name}
+                        #{o.id} — {o.name||o.customer_name||"Client"}
                       </div>
                       <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute }}>
                         {(o.items||[]).join(", ")}
