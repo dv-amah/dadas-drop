@@ -61,7 +61,6 @@ const DEFAULT_CFG = {
   wave:        "+226 77 00 00 00",
   city:        "Ouagadougou",
   freeFrom:    20000,
-  deliveryFee: 1000,
   freeDelivery: true,
   heroTitle:   "L'élégance, livrée chez vous.",
   heroSub:     "Sacs & accessoires sélectionnés avec soin, livrés à Ouagadougou.",
@@ -593,6 +592,8 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   useEffect(() => {
     setVariant(null); setQty(1); setVariantErr(false); setReviews([]);
     if (!p) return;
+    // Incrémenter le compteur de vues (silencieux)
+    sb.patch("products", p.id, { views: (p.views||0) + 1 }).catch(()=>{});
     // Charger les avis : matching souple sur le nom (exact OU contenu)
     const pn = (p.name||"").toLowerCase().trim();
     sb.get("reviews", `?order=date.desc&limit=200`)
@@ -998,7 +999,7 @@ function CartDrawer({ open, cart, products, onClose, onQty, onRemove, onClearCar
       </div>
       {lines.length > 0 && (
         <div style={{ padding:16, borderTop:`1px solid ${bord}` }}>
-          {cfg?.freeDelivery !== false && total < freeFrom && (
+          {cfg?.freeDelivery !== false && cfg?.showFreeFrom !== false && total < freeFrom && (
             <p style={{ fontSize:11, color:C.mute, margin:"0 0 8px" }}>
               Livraison offerte dès {fcfa(freeFrom)}
             </p>
@@ -1036,13 +1037,10 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
   // Sous-total après promo
   const subTotal = promoApplied
     ? Math.round(total * (1 - promoApplied.discount/100)) : total;
-  // Frais de livraison : gratuit si seuil atteint (et option activée), sinon prix fixé
-  const deliveryFee = parseInt(cfg?.deliveryFee) || 0;
   const freeFrom = cfg?.freeFrom ? parseInt(cfg.freeFrom) : DEFAULT_CFG.freeFrom;
   const freeDeliveryActive = cfg?.freeDelivery !== false;
   const isFreeDelivery = freeDeliveryActive && subTotal >= freeFrom;
-  const shippingCost = isFreeDelivery ? 0 : deliveryFee;
-  const finalTotal = subTotal + shippingCost;
+  const finalTotal = subTotal; // le livreur s'arrange pour le prix livraison
   const valid = form.nom.trim() && /^[0-9]{8}$/.test(form.tel.replace(/\s/g,"")) && form.ville.trim();
 
   if (!open) return null;
@@ -1081,16 +1079,8 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
     const captureStr = pay!=="livraison"
       ? `\n✅ Je joins la capture du paiement après transfert.`
       : "";
-    // Ligne livraison : gratuite ou payante
-    const shippingStr = isFreeDelivery
-      ? `\n🚚 Livraison : *Offerte*`
-      : shippingCost > 0
-        ? `\n🚚 Livraison : *${fcfa(shippingCost)}*`
-        : "";
-    const subTotalStr = shippingCost > 0
-      ? `\n🛍 Sous-total : ${fcfa(subTotal)}`
-      : "";
-    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}${subTotalStr}${shippingStr}\n\n💰 Total : *${fcfa(finalTotal)}*\n💳 Règlement : ${payLabels[pay]}${payNumStr}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${captureStr}`;
+    const shippingStr = isFreeDelivery ? `\n🚚 Livraison : *Offerte ✦*` : "";
+    const msg = `Bonjour Dada's Drop 👋\nCommande #${orderNum}\n\n${items}${promoStr}${shippingStr}\n\n💰 Total articles : *${fcfa(finalTotal)}*\n💳 Règlement : ${payLabels[pay]}${payNumStr}\n\nNom : ${form.nom}\nTél : ${form.tel}\nVille : ${form.ville}\nAdresse : ${form.adresse||"—"}\nNote : ${form.note||"—"}\n\n📍 J'envoie ma localisation WhatsApp pour la livraison.${captureStr}`;
     window.open(`https://wa.me/${whatsapp}?text=${encodeURIComponent(msg)}`, "_blank");
     setSaving(true);
     // Décrémenter le stock de chaque article commandé
@@ -1188,13 +1178,14 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
               <div style={{ display:"flex", justifyContent:"space-between",
                 fontSize:13, color:dark?C.dMute:C.mute, marginBottom:5 }}>
                 <span>Livraison</span>
-                <span style={{ color:isFreeDelivery?C.success:undefined, fontWeight:isFreeDelivery?700:400 }}>
-                  {isFreeDelivery ? "Offerte ✦" : shippingCost>0 ? fcfa(shippingCost) : "—"}
+                <span style={{ color:isFreeDelivery?C.success:dark?C.dMute:C.mute,
+                  fontWeight:isFreeDelivery?700:400 }}>
+                  {isFreeDelivery ? "Offerte ✦" : "À définir avec le livreur"}
                 </span>
               </div>
-              {freeDeliveryActive && !isFreeDelivery && deliveryFee>0 && (
+              {freeDeliveryActive && !isFreeDelivery && (
                 <div style={{ fontSize:11, color:C.gold, marginBottom:5 }}>
-                  Plus que {fcfa(freeFrom - subTotal)} pour la livraison offerte
+                  Livraison offerte dès {fcfa(freeFrom)}
                 </div>
               )}
               <div style={{ display:"flex", justifyContent:"space-between",
@@ -2096,6 +2087,61 @@ function Page404({ dark, setPage }) {
 /* ════════════════════════════════════════════
    🛍 SHOP APP
 ════════════════════════════════════════════ */
+/* ════════════════════════════════════════════
+   📱 BOUTON WHATSAPP DÉPLAÇABLE
+════════════════════════════════════════════ */
+function DraggableWA({ whatsapp, waMsg }) {
+  const [pos, setPos] = useState({ bottom:80, right:18 });
+  const [dragging, setDragging] = useState(false);
+  const [moved, setMoved] = useState(false);
+  const startRef = useState(null);
+  const ref = { current: null };
+
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    startRef[1]({ x:t.clientX, y:t.clientY, pos:{ ...pos } });
+    setDragging(true);
+    setMoved(false);
+  };
+
+  const onTouchMove = (e) => {
+    if (!startRef[0]) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startRef[0].x;
+    const dy = t.clientY - startRef[0].y;
+    if (Math.abs(dx)>5 || Math.abs(dy)>5) setMoved(true);
+    const newRight = Math.max(8, Math.min(window.innerWidth-58, startRef[0].pos.right - dx));
+    const newBottom = Math.max(8, Math.min(window.innerHeight-58, startRef[0].pos.bottom + dy));
+    setPos({ right:newRight, bottom:newBottom });
+    e.preventDefault();
+  };
+
+  const onTouchEnd = () => { setDragging(false); };
+
+  const handleClick = (e) => {
+    if (moved) { e.preventDefault(); }
+  };
+
+  return (
+    <a href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(waMsg)}`}
+      target="_blank" rel="noreferrer"
+      onClick={handleClick}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{ position:"fixed", bottom:pos.bottom, right:pos.right,
+        width:50, height:50, borderRadius:999, background:"#25D366",
+        display:"grid", placeItems:"center", zIndex:49,
+        boxShadow:`0 4px 16px rgba(37,211,102,${dragging?.6:.4})`,
+        textDecoration:"none", cursor:dragging?"grabbing":"grab",
+        transform:dragging?"scale(1.1)":"scale(1)",
+        transition:dragging?"none":"transform .2s",
+        userSelect:"none", touchAction:"none" }}>
+      <MessageCircle size={22} color="#fff"/>
+    </a>
+  );
+}
+
 function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, dark, setDark, initialPage="home" }) {
   const [lang, setLang]         = useState("fr");
   const [page, setPageRaw]      = useState(initialPage);
@@ -2145,13 +2191,15 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
     window.scrollTo({ top:0, behavior:"instant" });
   }, [page]);
 
-  // Sync catégories + config toutes les 10s (léger, texte seulement)
+  // Sync catégories + config toutes les 10s
   useEffect(() => {
     const fetchCatsCfg = () => {
-      sb.get("announcements", "?id=eq.categories&select=data")
+      // Cache-bust pour forcer Supabase à retourner la version fraîche
+      const bust = `&limit=1&_cb=${Date.now()}`;
+      sb.get("announcements", `?id=eq.categories&select=data${bust}`)
         .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); })
         .catch(e => console.warn("cats sync:", e.message));
-      sb.get("announcements", "?id=eq.config&select=data")
+      sb.get("announcements", `?id=eq.config&select=data${bust}`)
         .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); })
         .catch(e => console.warn("cfg sync:", e.message));
     };
@@ -2215,8 +2263,11 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   const t    = T[lang];
   const bord = dark ? C.dBorder : C.border;
   const text = dark ? C.dText : C.ink;
-  const bg   = dark ? C.dBg : C.cream;
-  const hdrBg = dark ? "rgba(15,12,8,.92)" : "rgba(250,246,238,.92)";
+  const bg   = dark ? C.dBg : (cfg?.colorCream || C.cream);
+  const hdrBg = dark ? "rgba(15,12,8,.92)"
+    : `rgba(${parseInt((cfg?.colorCream||"#FAF6EE").slice(1,3),16)},${parseInt((cfg?.colorCream||"#FAF6EE").slice(3,5),16)},${parseInt((cfg?.colorCream||"#FAF6EE").slice(5,7),16)},.92)`;
+  // Couleur dorée custom (depuis admin → Paramètres → Apparence)
+  const gold = cfg?.colorGold || C.gold;
 
   // Produits visibles : épinglés en premier, masqués filtrés
   const visibleProducts = useMemo(() => {
@@ -2317,7 +2368,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         *{box-sizing:border-box}
         input,textarea,select{font-family:inherit}
         @supports(-webkit-touch-callout:none){input,textarea,select{font-size:16px!important}}
-        input:focus,textarea:focus,select:focus{outline:none;border-color:${C.gold}!important}
+        input:focus,textarea:focus,select:focus{outline:none;border-color:${cfg?.colorGold||C.gold}!important}
         .dd-card:hover{box-shadow:0 12px 28px rgba(0,0,0,.12);transform:translateY(-2px)!important}
         @keyframes ddFade{from{opacity:0}to{opacity:1}}
         @keyframes ddHero{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
@@ -2724,15 +2775,8 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         </div>
       </footer>
 
-      {/* WHATSAPP FLOTTANT */}
-      <a href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(waMsg)}`}
-        target="_blank" rel="noreferrer"
-        style={{ position:"fixed", bottom:80, right:18, width:50, height:50,
-          borderRadius:999, background:"#25D366",
-          display:"grid", placeItems:"center", zIndex:49,
-          boxShadow:"0 4px 16px rgba(37,211,102,.4)", textDecoration:"none" }}>
-        <MessageCircle size={22} color="#fff"/>
-      </a>
+      {/* WHATSAPP FLOTTANT DÉPLAÇABLE */}
+      <DraggableWA whatsapp={whatsapp} waMsg={waMsg}/>
 
       {/* TOAST "ajouté au panier" */}
       {toast && (
@@ -2915,7 +2959,7 @@ function ArticlePage({ products, cats, cfg, promos, dark, setDark }) {
 /* ════════════════════════════════════════════
    🔒 ADMIN GUARD — AdminApp défini plus bas dans ce fichier
 ════════════════════════════════════════════ */
-function AdminGuard({ products, setProducts, cats, setCats, cfg, setCfg, promos, setPromos, dark }) {
+function AdminGuard({ products, setProducts, cats, setCats, cfg, setCfg, promos, setPromos, dark, setDark }) {
   const navigate = useNavigate();
   return (
     <AdminApp
@@ -2923,7 +2967,7 @@ function AdminGuard({ products, setProducts, cats, setCats, cfg, setCfg, promos,
       cats={cats} setCats={setCats}
       cfg={cfg} setCfg={setCfg}
       promos={promos} setPromos={setPromos}
-      dark={dark}
+      dark={dark} setDark={setDark}
       onGoHome={() => navigate("/")}
     />
   );
@@ -3025,14 +3069,14 @@ export default function App() {
             cats={cats} setCats={setCats}
             cfg={cfg} setCfg={setCfg}
             promos={promos} setPromos={setPromos}
-            dark={dark}/>
+            dark={dark} setDark={setDark}/>
         }/>
         <Route path="/admin/*" element={
           <AdminGuard products={products} setProducts={setProducts}
             cats={cats} setCats={setCats}
             cfg={cfg} setCfg={setCfg}
             promos={promos} setPromos={setPromos}
-            dark={dark}/>
+            dark={dark} setDark={setDark}/>
         }/>
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
@@ -4692,41 +4736,34 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
       {/* LIVRAISON */}
       {tab==="livraison" && (
         <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🚚 Livraison</h3>
-
-          {/* Prix de livraison */}
-          <label style={{ display:"block", marginBottom:14 }}>
-            <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>
-              Prix de la livraison (FCFA)
-            </span>
-            <input style={inp} type="number" min="0"
-              value={cfg.deliveryFee ?? ""} onChange={setC("deliveryFee")}
-              placeholder="Ex : 1000"/>
-            <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:3, display:"block" }}>
-              Ce montant s'ajoute au total et apparaît dans le message WhatsApp.
-            </span>
-          </label>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🚚 Livraison gratuite</h3>
 
           {/* Toggle livraison gratuite */}
           <label style={{ display:"flex", alignItems:"center", gap:8,
-            cursor:"pointer", marginBottom:12, fontSize:13.5, color:text }}>
+            cursor:"pointer", marginBottom:14, fontSize:13.5, color:text }}>
             <input type="checkbox" checked={cfg.freeDelivery !== false}
               onChange={e => setCfg(c=>({...c, freeDelivery: e.target.checked}))}/>
             Activer la livraison gratuite à partir d'un montant
           </label>
 
-          {/* Seuil gratuit (si activé) */}
-          {cfg.freeDelivery !== false ? (
-            <label style={{ display:"block" }}>
+          {/* Seuil + affichage */}
+          {cfg.freeDelivery !== false ? (<>
+            <label style={{ display:"block", marginBottom:12 }}>
               <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>
                 Livraison gratuite à partir de (FCFA)
               </span>
               <input style={inp} type="number" value={cfg.freeFrom||""} onChange={setC("freeFrom")}
                 placeholder="Ex : 20000"/>
             </label>
-          ) : (
-            <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginTop:4 }}>
-              La livraison gratuite est désactivée. Le prix de livraison s'applique à toutes les commandes.
+            <label style={{ display:"flex", alignItems:"center", gap:8,
+              cursor:"pointer", fontSize:13, color:text }}>
+              <input type="checkbox" checked={cfg.showFreeFrom !== false}
+                onChange={e => setCfg(c=>({...c, showFreeFrom: e.target.checked}))}/>
+              Afficher "Livraison offerte dès X FCFA" dans le panier
+            </label>
+          </>) : (
+            <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>
+              La bannière de livraison gratuite ne s'affichera pas.
             </p>
           )}
         </div>
@@ -4894,10 +4931,44 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
             <textarea style={{ ...inp, resize:"vertical" }} rows={2}
               value={cfg.waMessage||""} onChange={setC("waMessage")}/>
           </label>
+
+          {/* Couleurs */}
+          <div style={{ borderTop:`1px solid ${bord}`, paddingTop:14, marginTop:4 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:text, marginBottom:10 }}>
+              🎨 Couleurs du site
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {[
+                { k:"colorGold",  label:"Couleur dorée", default:"#C9A84C" },
+                { k:"colorCream", label:"Fond crème",    default:"#FAF6EE" },
+              ].map(col => (
+                <label key={col.k} style={{ display:"block" }}>
+                  <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                    display:"block", marginBottom:5 }}>{col.label}</span>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <input type="color"
+                      value={cfg[col.k]||col.default}
+                      onChange={e=>setCfg(c=>({...c,[col.k]:e.target.value}))}
+                      style={{ width:42, height:36, borderRadius:8,
+                        border:`1px solid ${bord}`, cursor:"pointer", padding:2 }}/>
+                    <button onClick={()=>setCfg(c=>({...c,[col.k]:col.default}))}
+                      style={{ fontSize:11, color:dark?CA.dMute:CA.mute, background:"none",
+                        border:"none", cursor:"pointer", padding:0, textDecoration:"underline" }}>
+                      Reset
+                    </button>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:8 }}>
+              ⚠️ Les couleurs s'appliquent après avoir enregistré et rechargé le site.
+            </p>
+          </div>
+
           {/* Prévisualisation */}
           <div style={{ background:CA.ink, borderRadius:12, padding:"20px",
-            textAlign:"center", marginTop:8 }}>
-            <div style={{ fontSize:9, color:CA.gold, letterSpacing:4, marginBottom:8 }}>✦ DADA'S DROP ✦</div>
+            textAlign:"center", marginTop:14 }}>
+            <div style={{ fontSize:9, color:cfg.colorGold||CA.gold, letterSpacing:4, marginBottom:8 }}>✦ DADA'S DROP ✦</div>
             <div style={{ fontFamily:"Georgia,serif", fontSize:18, color:"#fff", marginBottom:6 }}>
               {cfg.heroTitle||"L'élégance, livrée chez vous."}
             </div>
@@ -5175,10 +5246,223 @@ function AdminReviewsTab({ auth, dark }) {
 }
 
 /* ──────────────────────────────────────────
+   ONGLET CLIENTES
+────────────────────────────────────────── */
+function AdminClientsTab({ orders, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const [search, setSearch] = useState("");
+
+  // Agréger les commandes par téléphone
+  const clientMap = {};
+  orders.forEach(o => {
+    const phone = o.customer_phone || o.phone || "—";
+    const name  = o.customer_name  || o.name  || "Cliente";
+    if (!clientMap[phone]) clientMap[phone] = { phone, name, orders:[], total:0 };
+    clientMap[phone].orders.push(o);
+    clientMap[phone].total += o.total || 0;
+    // Garder le nom le plus récent
+    if (o.customer_name || o.name) clientMap[phone].name = o.customer_name || o.name;
+  });
+
+  const clients = Object.values(clientMap)
+    .sort((a,b) => b.total - a.total);
+
+  const filtered = clients.filter(c => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return c.name.toLowerCase().includes(q) || c.phone.includes(q);
+  });
+
+  return (
+    <div>
+      <div style={{ position:"relative", marginBottom:14 }}>
+        <Search size={14} color={dark?CA.dMute:CA.mute}
+          style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Rechercher par nom ou téléphone…"
+          style={{ width:"100%", padding:"10px 12px 10px 32px",
+            borderRadius:10, border:`1.5px solid ${bord}`,
+            background:dark?CA.dCard:"#fff",
+            fontSize:"16px", color:text, fontFamily:"inherit" }}/>
+      </div>
+      <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, marginBottom:12 }}>
+        {filtered.length} cliente{filtered.length>1?"s":""} · triées par montant total
+      </p>
+      <div style={{ display:"grid", gap:8 }}>
+        {filtered.map((c,i) => (
+          <div key={c.phone} style={{ background:cardBg, border:`1px solid ${bord}`,
+            borderRadius:13, padding:"14px 16px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between",
+              alignItems:"flex-start", marginBottom:8 }}>
+              <div>
+                <div style={{ fontWeight:700, fontSize:14, color:text }}>{c.name}</div>
+                <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>📞 {c.phone}</div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                  color:CA.gold, fontSize:14 }}>{c.total.toLocaleString("fr-FR")} FCFA</div>
+                <div style={{ fontSize:11, color:dark?CA.dMute:CA.mute }}>
+                  {c.orders.length} commande{c.orders.length>1?"s":""}
+                </div>
+              </div>
+            </div>
+            {/* Dernières commandes */}
+            {c.orders.slice(0,3).map((o,j) => (
+              <div key={j} style={{ display:"flex", justifyContent:"space-between",
+                fontSize:12, color:dark?CA.dMute:CA.mute,
+                padding:"5px 0", borderTop:`1px solid ${bord}` }}>
+                <span>#{o.id} · {o.date}</span>
+                <ABadge color={STATUS_ADMIN_COLORS[o.status]}>
+                  {STATUS_ADMIN_LABELS[o.status]}
+                </ABadge>
+              </div>
+            ))}
+            {c.orders.length > 3 && (
+              <div style={{ fontSize:11, color:CA.gold, marginTop:4 }}>
+                +{c.orders.length-3} autre{c.orders.length-3>1?"s":""}…
+              </div>
+            )}
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <div style={{ textAlign:"center", padding:"40px", color:dark?CA.dMute:"#bbb" }}>
+            <Users size={36} strokeWidth={1.2}/>
+            <p style={{ marginTop:10, fontSize:14 }}>Aucune cliente trouvée.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   ONGLET FIDÉLITÉ
+────────────────────────────────────────── */
+function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
+    border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
+    fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  // Config fidélité depuis cfg
+  const loyalty = cfg.loyalty || { active:false, pointsPer1000:1, pointValue:100, minRedeem:50 };
+  const setL = (k,v) => setCfg(c=>({...c, loyalty:{ ...(c.loyalty||loyalty), [k]:v }}));
+
+  // Calculer points par cliente depuis les commandes livrées
+  const clientPoints = {};
+  orders.filter(o=>o.status===3).forEach(o=>{
+    const phone = o.customer_phone || o.phone || "—";
+    const pts = Math.floor((o.total||0) / 1000) * (loyalty.pointsPer1000||1);
+    clientPoints[phone] = (clientPoints[phone]||0) + pts;
+  });
+  const topClients = Object.entries(clientPoints)
+    .sort((a,b)=>b[1]-a[1]).slice(0,10);
+
+  return (
+    <div>
+      {/* Config */}
+      <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
+        borderRadius:14, padding:"18px", marginBottom:16 }}>
+        <div style={{ display:"flex", justifyContent:"space-between",
+          alignItems:"center", marginBottom:14 }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:0 }}>
+            ⭐ Programme de fidélité
+          </h3>
+          <label style={{ display:"flex", alignItems:"center", gap:6,
+            cursor:"pointer", fontSize:13, color:text }}>
+            <input type="checkbox" checked={!!loyalty.active}
+              onChange={e=>setL("active",e.target.checked)}/>
+            {loyalty.active ? "Actif" : "Inactif"}
+          </label>
+        </div>
+        {loyalty.active && (
+          <div style={{ display:"grid", gap:10 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>
+                Points gagnés par 1 000 FCFA dépensés
+              </span>
+              <input style={inp} type="number" min="1"
+                value={loyalty.pointsPer1000||1}
+                onChange={e=>setL("pointsPer1000",parseInt(e.target.value)||1)}/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>
+                Valeur d'1 point (en FCFA de réduction)
+              </span>
+              <input style={inp} type="number" min="1"
+                value={loyalty.pointValue||100}
+                onChange={e=>setL("pointValue",parseInt(e.target.value)||100)}/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>
+                Points minimum pour utiliser ses points
+              </span>
+              <input style={inp} type="number" min="1"
+                value={loyalty.minRedeem||50}
+                onChange={e=>setL("minRedeem",parseInt(e.target.value)||50)}/>
+            </label>
+            <div style={{ background:dark?`${CA.gold}0A`:`${CA.gold}08`,
+              border:`1px solid ${CA.gold}33`, borderRadius:10,
+              padding:"10px 13px", fontSize:12.5, color:text }}>
+              💡 Exemple : une cliente dépense 25 000 FCFA → gagne{" "}
+              <strong style={{color:CA.gold}}>{Math.floor(25000/1000)*(loyalty.pointsPer1000||1)} points</strong>{" "}
+              → valeur : <strong style={{color:CA.gold}}>
+                {(Math.floor(25000/1000)*(loyalty.pointsPer1000||1)*(loyalty.pointValue||100)).toLocaleString("fr-FR")} FCFA
+              </strong>
+            </div>
+          </div>
+        )}
+        <button onClick={async () => {
+            try {
+              await sb.upsert("announcements", { id:"config",
+                data:{ ...cfg, loyalty } });
+            } catch(e){console.warn(e.message);}
+          }}
+          style={{ marginTop:14, background:CA.ink, color:CA.gold,
+            border:`1px solid ${CA.gold}44`, borderRadius:10,
+            padding:"9px 16px", cursor:"pointer", fontSize:13,
+            fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          <Save size={13}/> Enregistrer
+        </button>
+      </div>
+
+      {/* Top clientes par points */}
+      {loyalty.active && topClients.length > 0 && (
+        <div style={{ background:cardBg, border:`1px solid ${bord}`,
+          borderRadius:14, padding:"16px" }}>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 12px" }}>
+            🏆 Top clientes — Points cumulés
+          </h3>
+          {topClients.map(([phone, pts],i) => (
+            <div key={phone} style={{ display:"flex", justifyContent:"space-between",
+              alignItems:"center", padding:"9px 0",
+              borderBottom:i<topClients.length-1?`1px solid ${bord}`:"none" }}>
+              <div>
+                <span style={{ fontSize:13, color:text, fontWeight:600 }}>
+                  #{i+1} · {phone}
+                </span>
+              </div>
+              <ABadge color={CA.gold}>{pts} pts</ABadge>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
    ADMIN APP PRINCIPALE
 ────────────────────────────────────────── */
 function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
-  promos, setPromos, dark, onGoHome }) {
+  promos, setPromos, dark, setDark, onGoHome }) {
 
   const [auth, setAuth]   = useState(null);
   const [email, setEmail] = useState("");
@@ -5468,7 +5752,9 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
     { key:"orders", icon:<ShoppingCart size={14}/>, label:auth.role==="delivery"?"Livraisons":"Commandes" },
     ...(can("add_product") ? [{ key:"products", icon:<ShoppingBag size={14}/>, label:"Produits" }] : []),
     ...(auth.role!=="delivery" ? [{ key:"reviews", icon:<Star size={14}/>, label:"Avis" }] : []),
+    ...(auth.role!=="delivery" ? [{ key:"clients", icon:<Heart size={14}/>, label:"Clientes" }] : []),
     ...(auth.role==="admin"?[
+      { key:"loyalty",  icon:<Tag size={14}/>,      label:"Fidélité" },
       { key:"cats",     icon:<Tag size={14}/>,      label:"Catégories" },
       { key:"team",     icon:<Users size={14}/>,    label:"Équipe" },
       { key:"settings", icon:<Settings size={14}/>, label:"Paramètres" },
@@ -5578,6 +5864,15 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
               {ROLES[auth.role]?.badge} {ROLES[auth.role]?.label}
             </div>
           </div>
+          {/* Dark mode */}
+          {setDark && (
+            <button onClick={() => setDark(v=>!v)} title={dark?"Mode clair":"Mode sombre"}
+              style={{ border:`1px solid ${CA.gold}33`, background:"none",
+                borderRadius:8, padding:"7px", cursor:"pointer",
+                color:CA.gold, display:"grid", placeItems:"center" }}>
+              {dark ? <Sun size={14}/> : <Moon size={14}/>}
+            </button>
+          )}
           {/* Déconnexion */}
           <button onClick={logout} title="Déconnexion"
             style={{ border:`1px solid ${CA.gold}44`, background:"none",
@@ -5739,6 +6034,12 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
 
         {tab==="reviews" && auth.role!=="delivery" && (
           <AdminReviewsTab auth={auth} dark={dark}/>
+        )}
+        {tab==="clients" && auth.role!=="delivery" && (
+          <AdminClientsTab orders={orders} dark={dark}/>
+        )}
+        {tab==="loyalty" && auth.role==="admin" && (
+          <AdminLoyaltyTab cfg={cfg} setCfg={setCfg} orders={orders} dark={dark}/>
         )}
         {tab==="orders" && (
           <AdminOrdersTab orders={myOrders} setOrders={setOrders}
