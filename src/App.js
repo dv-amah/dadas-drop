@@ -494,6 +494,10 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted, isFav, onT
             fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:999 }}>
             -{p.discount}%
           </span>}
+          {p.isPreorder && <span style={{ background:"#1DC0D4", color:"#fff",
+            fontSize:9, fontWeight:700, padding:"2px 7px", borderRadius:999 }}>
+            🕒 PRÉCO
+          </span>}
         </div>
         {out && <span style={{ position:"absolute", top:8, right:8,
           background:"rgba(26,26,26,.85)", color:"#fff",
@@ -588,6 +592,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   const [variant, setVariant]   = useState(null);
   const [variantErr, setVariantErr] = useState(false);
   const [reviews, setReviews]   = useState([]);
+  const [copied, setCopied]     = useState(false);
 
   useEffect(() => {
     setVariant(null); setQty(1); setVariantErr(false); setReviews([]);
@@ -625,11 +630,19 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   const shareArticle = () => {
     const slug = toSlug(p.name);
     const url  = `https://dadas-drop.vercel.app/article/${slug}`;
-    const msg  = t.shareMsg
-      .replace("{name}", p.name)
-      .replace("{price}", fcfa(displayPrice))
-      .replace("dadas-drop.vercel.app", url);
+    const priceStr = p.discount > 0
+      ? `~${fcfa(p.price)}~ *${fcfa(displayPrice)}* (-${p.discount}%)`
+      : `*${fcfa(displayPrice)}*`;
+    const msg = `✦ *${p.name}* ✦\n${p.brand||""}\n\n💰 ${priceStr}\n${p.imgs?.[0]?`\n📸 ${p.imgs[0]}\n`:""}\n👉 Commander : ${url}\n\nvia Dada's Drop`;
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  const copyLink = () => {
+    const slug = toSlug(p.name);
+    const url  = `https://dadas-drop.vercel.app/article/${slug}`;
+    navigator.clipboard?.writeText(url)
+      .then(() => { setCopied(true); setTimeout(()=>setCopied(false), 2000); })
+      .catch(() => {});
   };
 
   return (
@@ -672,6 +685,17 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
                 </span>
               </>}
             </div>
+            {/* Économie réalisée (historique prix) */}
+            {p.discount > 0 && (
+              <div style={{ display:"inline-flex", alignItems:"center", gap:6,
+                background:`${C.success}12`, border:`1px solid ${C.success}33`,
+                borderRadius:8, padding:"5px 10px", marginBottom:10 }}>
+                <TrendingUp size={13} color={C.success}/>
+                <span style={{ fontSize:12, color:C.success, fontWeight:600 }}>
+                  Prix habituel {fcfa(p.price)} · Vous économisez {fcfa(p.price - displayPrice)}
+                </span>
+              </div>
+            )}
             {/* Description */}
             <p style={{ color: dark?C.dMute:C.mute, fontSize:13.5,
               lineHeight:1.6, margin:"0 0 12px" }}>{p.desc}</p>
@@ -704,19 +728,50 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
                   </button>
                 </div>
                 <button onClick={handleAdd}
-                  style={{ flex:1, ...primaryBtn, justifyContent:"center" }}>
-                  <ShoppingBag size={15}/> {t.addCart}
+                  style={{ flex:1, ...primaryBtn, justifyContent:"center",
+                    ...(p.isPreorder ? { background:"#1DC0D4", borderColor:"#1DC0D4" } : {}) }}>
+                  {p.isPreorder
+                    ? <><Package size={15}/> Réserver (précommande)</>
+                    : <><ShoppingBag size={15}/> {t.addCart}</>}
                 </button>
               </div>
-              {/* Partager */}
-              <button onClick={shareArticle}
-                style={{ width:"100%", padding:"10px",
-                  border:`1px solid ${bord}`, borderRadius:10,
-                  background:"none", color:"#25D366", cursor:"pointer",
-                  fontSize:13.5, fontWeight:600,
-                  display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
-                <MessageCircle size={16}/> Partager sur WhatsApp
-              </button>
+              {p.isPreorder && (
+                <div style={{ fontSize:12, color:"#1DC0D4", marginTop:8,
+                  display:"flex", alignItems:"center", gap:6, fontWeight:600 }}>
+                  🕒 Article en précommande — disponible prochainement
+                </div>
+              )}
+              {/* Partager + Copier le lien */}
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={shareArticle}
+                  style={{ flex:1, padding:"10px",
+                    border:`1px solid ${bord}`, borderRadius:10,
+                    background:"none", color:"#25D366", cursor:"pointer",
+                    fontSize:13.5, fontWeight:600,
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                  <MessageCircle size={16}/> Partager
+                </button>
+                <button onClick={copyLink}
+                  style={{ flex:1, padding:"10px",
+                    border:`1px solid ${copied?C.success:bord}`, borderRadius:10,
+                    background:copied?`${C.success}11`:"none",
+                    color:copied?C.success:(dark?C.dText:C.ink), cursor:"pointer",
+                    fontSize:13.5, fontWeight:600,
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:7,
+                    transition:"all .2s" }}>
+                  {copied ? <><Check size={16}/> Copié !</> : <><Copy size={15}/> Copier le lien</>}
+                </button>
+              </div>
+
+              {/* Politique de retour rassurante */}
+              <div style={{ display:"flex", alignItems:"center", gap:8,
+                marginTop:10, padding:"10px 12px",
+                background:dark?C.dBorder:C.creamD, borderRadius:10 }}>
+                <ShieldCheck size={16} color={C.gold} style={{ flexShrink:0 }}/>
+                <span style={{ fontSize:12, color:dark?C.dMute:C.mute, lineHeight:1.5 }}>
+                  Article vérifié avant envoi · Échange possible à la livraison si défaut
+                </span>
+              </div>
             </>)}
 
             {/* Rupture de stock */}
@@ -1149,6 +1204,38 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
                   </button>
                 </div>
               </div>
+
+              {/* Récap des articles commandés */}
+              <div style={{ background: dark?"#1A1510":"#fff",
+                border:`1px solid ${bord}`, borderRadius:10,
+                padding:"12px 14px", marginBottom:13, textAlign:"left" }}>
+                <div style={{ fontSize:11, fontWeight:700, color:dark?C.dMute:C.mute,
+                  marginBottom:8, textTransform:"uppercase", letterSpacing:.5 }}>
+                  Récapitulatif
+                </div>
+                {lines.map((l,i) => {
+                  const lp = l.discount>0 ? Math.round(l.price*(1-l.discount/100)) : l.price;
+                  return (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                      gap:8, fontSize:12.5, color:text, marginBottom:5 }}>
+                      <span style={{ flex:1 }}>
+                        {l.name}{l.variant?` (${l.variant.label})`:""} × {l.qty}
+                      </span>
+                      <span style={{ fontWeight:600, whiteSpace:"nowrap" }}>{fcfa(lp*l.qty)}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ borderTop:`1px solid ${bord}`, marginTop:8, paddingTop:8,
+                  display:"flex", justifyContent:"space-between",
+                  fontSize:14, fontWeight:700, color:C.gold }}>
+                  <span>Total</span>
+                  <span>{fcfa(finalTotal)}</span>
+                </div>
+                <div style={{ fontSize:11, color:dark?C.dMute:C.mute, marginTop:6 }}>
+                  🚚 {isFreeDelivery ? "Livraison offerte ✦" : "Livraison à définir avec le livreur"}
+                </div>
+              </div>
+
               <button onClick={onClose} style={{ ...primaryBtn, width:"100%", justifyContent:"center" }}>
                 {t.close}
               </button>
@@ -1644,6 +1731,30 @@ Merci de confirmer l'annulation.`
           {/* Résultats par téléphone */}
           {results.length > 0 && (
             <div style={{ marginTop:16 }}>
+              {/* Points fidélité cumulés */}
+              {cfg?.loyalty?.active && (() => {
+                const pps = cfg.loyalty.pointsPer1000 || 1;
+                const delivered = results.filter(o => o.status===3);
+                const pts = delivered.reduce((sum,o) => sum + Math.floor((o.total||0)/1000)*pps, 0);
+                const ptVal = cfg.loyalty.pointValue || 100;
+                if (pts <= 0) return null;
+                return (
+                  <div style={{ background:`linear-gradient(135deg,${C.gold}22,${C.gold}08)`,
+                    border:`1px solid ${C.gold}55`, borderRadius:13,
+                    padding:"14px 16px", marginBottom:14 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                      <span style={{ fontSize:20 }}>⭐</span>
+                      <span style={{ fontFamily:"Georgia,serif", fontSize:16,
+                        fontWeight:700, color:C.gold }}>
+                        {pts} point{pts>1?"s":""} fidélité
+                      </span>
+                    </div>
+                    <p style={{ fontSize:12, color:dark?C.dMute:C.mute, margin:0 }}>
+                      Soit {fcfa(pts*ptVal)} de réduction · Mentionnez votre numéro à la commande pour en profiter
+                    </p>
+                  </div>
+                );
+              })()}
               <p style={{ fontSize:12.5, color: dark?C.dMute:C.mute, marginBottom:10 }}>
                 {results.length} commande{results.length>1?"s":""} trouvée{results.length>1?"s":""}
               </p>
@@ -1885,6 +1996,14 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats
             {item.label}
           </button>
         ))}
+        {/* Nouveautés */}
+        <button onClick={() => { setPage("new"); onClose(); }}
+          style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
+            textAlign:"left", padding:"9px 0", border:"none",
+            background:"none", cursor:"pointer",
+            fontFamily:"Georgia,serif", fontSize:17, color:text }}>
+          <span style={{ fontSize:16 }}>🆕</span> Nouveautés
+        </button>
         {/* Favoris */}
         <button onClick={() => { setPage("favs"); onClose(); }}
           style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
@@ -2187,9 +2306,21 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   const [menuOpen, setMenuOpen]   = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [mounted, setMounted]     = useState(false);
+  const [deliveredCount, setDeliveredCount] = useState(0);
+  const [homeReviews, setHomeReviews] = useState([]);
   const [favs, setFavs]           = useState(() => {
     try { const s = localStorage.getItem("dd_favs"); return s?JSON.parse(s):[]; } catch { return []; }
   });
+
+  // Charger le nombre de commandes livrées + derniers avis (page accueil)
+  useEffect(() => {
+    sb.get("orders", "?status=eq.3&select=id")
+      .then(rows => setDeliveredCount(rows?.length || 0))
+      .catch(()=>{});
+    sb.get("reviews", "?order=id.desc&limit=12")
+      .then(rows => setHomeReviews((rows||[]).filter(r => r.hidden !== true && r.stars >= 4)))
+      .catch(()=>{});
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem("dd_favs", JSON.stringify(favs)); } catch {}
@@ -2226,7 +2357,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   // Sync produits toutes les 60s (plus lourd)
   useEffect(() => {
     const slowSync = setInterval(() => {
-      sb.get("products", "?order=id.asc")
+      sb.get("products", "?trashed_at=is.null&order=id.asc")
         .then(rows => {
           if(rows?.length>0) {
             const normalized = rows.map(p => ({
@@ -2241,17 +2372,40 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
               variants: p.variants || [],
               rating:   p.rating   || 0,
               ratingCount: p.rating_count || 0,
+              isPreorder: p.is_preorder ?? false,
             }));
             setProducts(normalized);
           }
         })
         .catch(e => console.warn("products sync:", e.message));
-    }, 60000);
+    }, 10000);
     return () => clearInterval(slowSync);
   }, []);
+  // Refresh immédiat quand l'utilisateur revient sur l'onglet/app
   useEffect(() => {
-    try { localStorage.setItem("dd_cart", JSON.stringify(cart)); } catch {}
-  }, [cart]);
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const bust = `&_cb=${Date.now()}`;
+      sb.get("announcements", `?id=eq.categories&select=data${bust}`)
+        .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); }).catch(()=>{});
+      sb.get("announcements", `?id=eq.config&select=data${bust}`)
+        .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); }).catch(()=>{});
+      sb.get("products", "?trashed_at=is.null&order=id.asc")
+        .then(rows => {
+          if(rows?.length>0) {
+            setProducts(rows.map(p => ({
+              ...p,
+              isNew:p.is_new??p.isNew??false, isBest:p.is_best??p.isBest??false,
+              isPinned:p.is_pinned??p.isPinned??false, isHidden:p.is_hidden??p.isHidden??false,
+              desc:p.description??p.desc??"", imgs:p.imgs||[], accent:p.accent||[],
+              variants:p.variants||[], rating:p.rating||0, ratingCount:p.rating_count||0, isPreorder:p.is_preorder??false,
+            })));
+          }
+        }).catch(()=>{});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
   useEffect(() => {
     const isOpen = menuOpen||cartOpen||checkout||trackOpen||!!selected;
     if (isOpen) {
@@ -2286,9 +2440,11 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
 
   // Produits visibles : épinglés en premier, masqués filtrés
   const visibleProducts = useMemo(() => {
-    const v = products.filter(p => !p.isHidden);
+    let v = products.filter(p => !p.isHidden);
+    // Masquage auto des articles épuisés (option admin)
+    if (cfg?.hideOutOfStock) v = v.filter(p => p.stock > 0);
     return [...v.filter(p=>p.isPinned), ...v.filter(p=>!p.isPinned)];
-  }, [products]);
+  }, [products, cfg]);
 
   const list = useMemo(() => {
     let r = visibleProducts.filter(p => {
@@ -2597,7 +2753,39 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
           </div>
         </section>
 
-        {/* SÉLECTION */}
+        {/* COMPTEUR CONFIANCE */}
+        {deliveredCount > 0 && (
+          <section style={{ maxWidth:1200, margin:"0 auto", padding:"20px 16px 0" }}>
+            <div style={{ display:"flex", justifyContent:"center", gap:24,
+              flexWrap:"wrap", background:dark?C.dCard:"#fff",
+              border:`1px solid ${dark?C.dBorder:C.border}`,
+              borderRadius:14, padding:"16px 20px" }}>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
+                  color:gold }}>{deliveredCount}+</div>
+                <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
+                  Commandes livrées
+                </div>
+              </div>
+              <div style={{ width:1, background:dark?C.dBorder:C.border }}/>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
+                  color:gold }}>100%</div>
+                <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
+                  Paiement à la livraison
+                </div>
+              </div>
+              <div style={{ width:1, background:dark?C.dBorder:C.border }}/>
+              <div style={{ textAlign:"center" }}>
+                <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
+                  color:gold }}>★ 4.8</div>
+                <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
+                  Satisfaction clientes
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         <section style={{ maxWidth:1200, margin:"0 auto", padding:"32px 16px 0" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
             <div style={{ width:3, height:18, background:GRAD, borderRadius:99 }}/>
@@ -2645,6 +2833,55 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
             ))}
           </div>
         </section>
+
+        {/* CAROUSEL AVIS CLIENTS */}
+        {homeReviews.length > 0 && (
+          <section style={{ maxWidth:1200, margin:"0 auto", padding:"0 16px 40px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:18 }}>
+              <div style={{ width:3, height:18, background:GRAD, borderRadius:99 }}/>
+              <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text,
+                margin:0, fontWeight:400 }}>
+                {lang==="fr" ? "Ce que disent nos clientes" : "What our customers say"}
+              </h2>
+            </div>
+            <div style={{ display:"flex", gap:12, overflowX:"auto",
+              paddingBottom:8, WebkitOverflowScrolling:"touch",
+              scrollSnapType:"x mandatory" }}>
+              {homeReviews.map((r,i) => (
+                <div key={r.id||i} style={{ flexShrink:0, width:260,
+                  scrollSnapAlign:"start",
+                  background:dark?C.dCard:"#fff",
+                  border:`1px solid ${bord}`, borderRadius:14, padding:"16px" }}>
+                  <div style={{ display:"flex", gap:2, marginBottom:8 }}>
+                    {[1,2,3,4,5].map(s => (
+                      <Star key={s} size={14}
+                        fill={s<=r.stars?gold:"none"}
+                        color={s<=r.stars?gold:bord}/>
+                    ))}
+                  </div>
+                  {r.text && (
+                    <p style={{ fontSize:13.5, color:text, lineHeight:1.6,
+                      margin:"0 0 10px", display:"-webkit-box",
+                      WebkitLineClamp:4, WebkitBoxOrient:"vertical",
+                      overflow:"hidden" }}>
+                      "{r.text}"
+                    </p>
+                  )}
+                  <div style={{ fontSize:11.5, color:gold, fontWeight:600 }}>
+                    {r.product || "Article vérifié"}
+                  </div>
+                  {r.reply && (
+                    <div style={{ marginTop:10, padding:"8px 10px",
+                      background:dark?C.dBorder:C.creamD, borderRadius:9,
+                      fontSize:12, color:dark?C.dMute:C.mute }}>
+                      <strong style={{ color:gold }}>Dada's Drop :</strong> {r.reply}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </>)}
 
       {page==="catalogue" && (
@@ -2734,6 +2971,39 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
                 <ProductCard key={p.id} p={p} t={t} cats={cats}
                   idx={i} mounted={mounted} dark={dark}
                   isFav={true} onToggleFav={toggleFav}
+                  onOpen={setSelected} onAdd={addToCart}/>
+              ))}
+            </div>
+          </>)}
+        </section>
+      )}
+      {page==="new" && (
+        <section style={{ maxWidth:1200, margin:"0 auto", padding:"20px 16px 40px" }}>
+          <h1 style={{ fontFamily:"Georgia,serif", fontSize:22, color:text,
+            margin:"0 0 6px", fontWeight:400 }}>🆕 Nouveautés</h1>
+          <p style={{ fontSize:13, color:dark?C.dMute:C.mute, marginBottom:18 }}>
+            Nos derniers arrivages, fraîchement ajoutés
+          </p>
+          {visibleProducts.filter(p=>p.isNew).length===0 ? (
+            <div style={{ textAlign:"center", padding:"60px 16px" }}>
+              <span style={{ fontSize:44 }}>🆕</span>
+              <p style={{ marginTop:12, color:dark?C.dMute:"#bbb", fontSize:14 }}>
+                Aucune nouveauté pour le moment.<br/>Revenez bientôt !
+              </p>
+              <button onClick={()=>setPage("catalogue")}
+                style={{ ...primaryBtn, marginTop:16, gap:7 }}>
+                Voir le catalogue <ArrowRight size={14}/>
+              </button>
+            </div>
+          ) : (<>
+            <div style={{ height:2, background:GRAD, borderRadius:99,
+              marginBottom:20, maxWidth:60 }}/>
+            <div className="dd-grid"
+              style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14 }}>
+              {visibleProducts.filter(p=>p.isNew).map((p,i) => (
+                <ProductCard key={p.id} p={p} t={t} cats={cats}
+                  idx={i} mounted={mounted} dark={dark}
+                  isFav={favs.includes(p.id)} onToggleFav={toggleFav}
                   onOpen={setSelected} onAdd={addToCart}/>
               ))}
             </div>
@@ -2999,11 +3269,35 @@ export default function App() {
   const [dark, setDark]         = useState(false);
   const [loading, setLoading]   = useState(true);
 
+  // SEO / Open Graph — balises meta pour l'aperçu WhatsApp/Google
+  useEffect(() => {
+    const brand = cfg?.brand || "Dada's Drop";
+    const title = `${brand} — Sacs & accessoires premium livrés à Ouagadougou`;
+    const desc = cfg?.heroSub || "Sacs à main, pochettes et accessoires sélectionnés avec soin, livrés à Ouagadougou. Paiement à la livraison, commande facile via WhatsApp.";
+    const img = products?.[0]?.imgs?.[0] || "";
+    document.title = title;
+    const setMeta = (attr, key, content) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      if (!el) { el = document.createElement("meta"); el.setAttribute(attr, key); document.head.appendChild(el); }
+      el.setAttribute("content", content);
+    };
+    setMeta("name", "description", desc);
+    setMeta("property", "og:title", title);
+    setMeta("property", "og:description", desc);
+    setMeta("property", "og:type", "website");
+    if (img) setMeta("property", "og:image", img);
+    setMeta("property", "og:site_name", brand);
+    setMeta("name", "twitter:card", "summary_large_image");
+    setMeta("name", "twitter:title", title);
+    setMeta("name", "twitter:description", desc);
+    if (img) setMeta("name", "twitter:image", img);
+  }, [cfg, products]);
+
   // Chargement initial depuis Supabase
   useEffect(() => {
     Promise.allSettled([
       // Produits
-      sb.get("products", "?order=id.asc")
+      sb.get("products", "?trashed_at=is.null&order=id.asc")
         .then(rows => {
           if(rows?.length>0) {
             // Normaliser snake_case Supabase → camelCase interne
@@ -3019,6 +3313,7 @@ export default function App() {
               variants: p.variants || [],
               rating:   p.rating   || 0,
               ratingCount: p.rating_count || 0,
+              isPreorder: p.is_preorder ?? false,
             }));
             setProducts(normalized);
           }
@@ -3039,6 +3334,7 @@ export default function App() {
               maxUses:  p.max_uses || p.maxUses || 999,
               uses:     p.uses     || 0,
               active:   p.active   ?? true,
+              expiresAt: p.expires_at || p.expiresAt || null,
             })));
           }
         }),
@@ -3455,6 +3751,26 @@ function AdminOrdersTab({ orders, setOrders, trash, setTrash, users, auth, dark 
                     fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
                   🖨️ Imprimer
                 </button>
+                {/* Notifier le client par WhatsApp */}
+                {(o.phone||o.customer_phone) && (
+                  <button onClick={() => {
+                      const phone = (o.phone||o.customer_phone||"").replace(/\s/g,"");
+                      const statusMsg = {
+                        1: `est en cours de préparation 📦`,
+                        2: `a été expédiée et arrive bientôt 🚚`,
+                        3: `a été livrée ✅ Merci pour votre confiance !`,
+                      }[o.status] || "est en cours de traitement";
+                      const msg = `Bonjour ${o.name} 👋\n\nVotre commande Dada's Drop #${o.id} ${statusMsg}\n\nPour toute question, répondez à ce message. Merci ! ✦`;
+                      const wa = phone.startsWith("0") ? "226"+phone.slice(1) : phone;
+                      window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, "_blank");
+                    }}
+                    style={{ background:"none", color:"#25D366",
+                      border:`1px solid #25D36644`, borderRadius:8,
+                      padding:"6px 10px", cursor:"pointer",
+                      fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
+                    <MessageCircle size={12}/> Notifier
+                  </button>
+                )}
                 {/* Livreur peut changer statut de SES commandes, admin/manager peuvent tout faire */}
               {(auth.role!=="delivery" || o.assignedTo===auth.id) && (<>
                   {/* Bouton Annuler — seulement admin/manager */}
@@ -3560,6 +3876,38 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const [productTrash, setProductTrash] = useState([]);
   const [showTrash, setShowTrash] = useState(false);
   const [trashSelectedIds, setTrashSelectedIds] = useState([]);
+  const [draggingPid, setDraggingPid] = useState(null);
+  const dragPid = useState({ current:null })[0];
+  const longPressP = useState({ current:null })[0];
+
+  // Charger la corbeille depuis Supabase (produits avec trashed_at) + purge >60j
+  useEffect(() => {
+    sb.get("products", `?trashed_at=not.is.null&select=*&_cb=${Date.now()}`)
+      .then(async rows => {
+        if (!rows?.length) return;
+        const now = Date.now();
+        const SIXTY = 60*24*60*60*1000;
+        const stillValid = [];
+        for (const p of rows) {
+          const age = now - new Date(p.trashed_at).getTime();
+          if (age > SIXTY) {
+            // Plus de 60 jours → suppression définitive
+            try { await sb.del("products", p.id); } catch {}
+          } else {
+            stillValid.push({
+              ...p,
+              isNew:p.is_new??false, isBest:p.is_best??false,
+              isPinned:p.is_pinned??false, isHidden:p.is_hidden??false,
+              desc:p.description??p.desc??"", imgs:p.imgs||[],
+              accent:p.accent||[], variants:p.variants||[],
+              rating:p.rating||0, ratingCount:p.rating_count||0, isPreorder:p.is_preorder??false,
+            });
+          }
+        }
+        setProductTrash(stillValid);
+      })
+      .catch(e => console.warn("trash load:", e.message));
+  }, []);
 
   const setF = k => e => setForm(f => ({...f, [k]: e.target.type==="checkbox"?e.target.checked:e.target.value}));
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
@@ -3613,6 +3961,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
       variants:     localP.variants||[],
       rating:       localP.rating||0,
       rating_count: localP.ratingCount||0,
+      is_preorder:  !!localP.isPreorder,
     };
     if (editP) {
       setProducts(ps=>ps.map(x=>x.id===editP.id?localP:x));
@@ -3624,29 +3973,37 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     setSaving(false); setEditP(null); setShowForm(false);
   };
 
-  const moveToTrash = (id) => {
+  const moveToTrash = async (id) => {
     if (!window.confirm("Mettre cet article à la corbeille ?")) return;
     const p = products.find(x=>x.id===id);
     if (!p) return;
+    const now = new Date().toISOString();
     setProducts(ps=>ps.filter(x=>x.id!==id));
-    setProductTrash(ts=>[...ts, p]);
+    setProductTrash(ts=>[...ts, {...p, trashed_at:now}]);
     setSelectedIds(ids=>ids.filter(x=>x!==id));
+    try { await sb.patch("products", id, { trashed_at: now }); } catch(e){console.warn(e.message);}
   };
 
-  const deleteSelected = () => {
+  const deleteSelected = async () => {
     if (!selectedIds.length) return;
     if (!window.confirm(`Mettre ${selectedIds.length} article${selectedIds.length>1?"s":""} à la corbeille ?`)) return;
+    const now = new Date().toISOString();
     const toTrash = products.filter(p=>selectedIds.includes(p.id));
+    const ids = [...selectedIds];
     setProducts(ps=>ps.filter(p=>!selectedIds.includes(p.id)));
-    setProductTrash(ts=>[...ts,...toTrash]);
+    setProductTrash(ts=>[...ts,...toTrash.map(p=>({...p,trashed_at:now}))]);
     setSelectedIds([]);
+    for (const id of ids) {
+      try { await sb.patch("products", id, { trashed_at: now }); } catch(e){console.warn(e.message);}
+    }
   };
 
-  const restoreProduct = (id) => {
+  const restoreProduct = async (id) => {
     const p = productTrash.find(x=>x.id===id);
     if (!p) return;
     setProductTrash(ts=>ts.filter(x=>x.id!==id));
-    setProducts(ps=>[p,...ps]);
+    setProducts(ps=>[{...p, trashed_at:null},...ps]);
+    try { await sb.patch("products", id, { trashed_at: null }); } catch(e){console.warn(e.message);}
   };
 
   const deleteForeverProduct = async (id) => {
@@ -3663,12 +4020,16 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     setTrashSelectedIds(ids=>ids.includes(id)?ids.filter(x=>x!==id):[...ids,id]);
   };
 
-  const restoreSelected = () => {
+  const restoreSelected = async () => {
     if (!trashSelectedIds.length) return;
     const toRestore = productTrash.filter(p=>trashSelectedIds.includes(p.id));
+    const ids = [...trashSelectedIds];
     setProductTrash(ts=>ts.filter(p=>!trashSelectedIds.includes(p.id)));
-    setProducts(ps=>[...toRestore, ...ps]);
+    setProducts(ps=>[...toRestore.map(p=>({...p,trashed_at:null})), ...ps]);
     setTrashSelectedIds([]);
+    for (const id of ids) {
+      try { await sb.patch("products", id, { trashed_at: null }); } catch(e){console.warn(e.message);}
+    }
   };
 
   const deleteSelectedForever = async () => {
@@ -3691,14 +4052,42 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     try { await sb.patch("products",id,{[sbProp]:!p[prop]}); } catch(e){console.warn(e.message);}
   };
 
-  const move = (idx, dir) => {
+  // Réordonner les produits (drag & drop appui long)
+  const reorderProducts = (fromId, toId) => {
+    if (fromId === toId) return;
     setProducts(ps => {
-      const arr=[...ps];
-      const swap=idx+dir;
-      if (swap<0||swap>=arr.length) return arr;
-      [arr[idx],arr[swap]]=[arr[swap],arr[idx]];
+      const arr = [...ps];
+      const fromIdx = arr.findIndex(p=>p.id===fromId);
+      const toIdx = arr.findIndex(p=>p.id===toId);
+      if (fromIdx<0||toIdx<0) return arr;
+      const [moved] = arr.splice(fromIdx,1);
+      arr.splice(toIdx,0,moved);
+      // Persister l'ordre via sort_order (silencieux)
+      arr.forEach((p,i) => { sb.patch("products", p.id, { sort_order:i }).catch(()=>{}); });
       return arr;
     });
+  };
+  const pTouchStart = (e, id) => {
+    longPressP.current = setTimeout(() => { dragPid.current = id; setDraggingPid(id); }, 300);
+  };
+  const pTouchMove = (e) => {
+    if (longPressP.current && !dragPid.current) { clearTimeout(longPressP.current); longPressP.current=null; }
+    if (!dragPid.current) return;
+    const t = e.touches[0];
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const card = el?.closest("[data-pid]");
+    if (card) {
+      const overId = parseInt(card.getAttribute("data-pid"));
+      if (overId && overId !== dragPid.current) {
+        reorderProducts(dragPid.current, overId);
+        dragPid.current = overId;
+      }
+    }
+    e.preventDefault();
+  };
+  const pTouchEnd = () => {
+    if (longPressP.current) { clearTimeout(longPressP.current); longPressP.current=null; }
+    dragPid.current = null; setDraggingPid(null);
   };
 
   const variantType = form.variants[0]?.type || newVariant.type;
@@ -4043,6 +4432,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
               { k:"isBest",   label:"⭐ Best-seller" },
               { k:"isPinned", label:"📌 Épingler" },
               { k:"isHidden", label:"🙈 Masquer" },
+              { k:"isPreorder", label:"🕒 Précommande" },
             ].map(({ k, label }) => (
               <label key={k} style={{ display:"flex", alignItems:"center",
                 gap:6, cursor:"pointer", fontSize:13, color:text }}>
@@ -4077,12 +4467,24 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
         {products.map((p,idx) => {
           const isSelected = selectedIds.includes(p.id);
           return (
-          <div key={p.id} style={{ background: isSelected?`${CA.gold}10`:cardBg,
+          <div key={p.id}
+            data-pid={p.id}
+            draggable
+            onDragStart={e => { dragPid.current=p.id; e.dataTransfer.effectAllowed="move"; }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); if(dragPid.current) reorderProducts(dragPid.current,p.id); dragPid.current=null; }}
+            onTouchStart={e => pTouchStart(e,p.id)}
+            onTouchMove={pTouchMove}
+            onTouchEnd={pTouchEnd}
+            style={{ background: isSelected?`${CA.gold}10`:cardBg,
             border:`1px solid ${isSelected?CA.gold:p.isPinned?CA.gold+"88":bord}`,
             borderRadius:12, padding:"12px 13px",
             display:"flex", gap:10, alignItems:"center",
             boxSizing:"border-box", width:"100%", overflow:"hidden",
-            opacity:p.isHidden?.5:1 }}>
+            opacity:p.isHidden?.5:1,
+            transform:draggingPid===p.id?"scale(1.02)":"scale(1)",
+            boxShadow:draggingPid===p.id?"0 6px 18px rgba(0,0,0,.18)":undefined,
+            transition:"transform .15s" }}>
             {/* Checkbox sélection */}
             <button onClick={() => toggleSelect(p.id)}
               style={{ width:22, height:22, borderRadius:6, flexShrink:0,
@@ -4092,18 +4494,12 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
                 color:"#fff", fontSize:12 }}>
               {isSelected ? "✓" : ""}
             </button>
-            {/* Ordre */}
-            <div style={{ display:"flex", flexDirection:"column", gap:0, flexShrink:0 }}>
-              <button onClick={() => move(idx,-1)} disabled={idx===0}
-                style={{ border:"none", background:"none", cursor:"pointer", padding:"2px",
-                  color:idx===0?bord:dark?CA.dMute:CA.mute }}>
-                <ChevronUp size={13}/>
-              </button>
-              <button onClick={() => move(idx,1)} disabled={idx===products.length-1}
-                style={{ border:"none", background:"none", cursor:"pointer", padding:"2px",
-                  color:idx===products.length-1?bord:dark?CA.dMute:CA.mute }}>
-                <ChevronDown size={13}/>
-              </button>
+            {/* Poignée de déplacement */}
+            <div style={{ flexShrink:0, color:dark?CA.dMute:CA.mute,
+              cursor:"grab", display:"grid", placeItems:"center",
+              fontSize:16, lineHeight:1, userSelect:"none" }}
+              title="Maintiens puis glisse pour réordonner">
+              ⠿
             </div>
             {/* Vignette */}
             <div style={{ width:50, height:50, borderRadius:8, overflow:"hidden",
@@ -4144,6 +4540,9 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
                 )}
                 {p.isNew && <ABadge color={CA.gold}>Nouveau</ABadge>}
                 {p.isHidden && <ABadge color={CA.mute}>Masqué</ABadge>}
+                <ABadge color={dark?"#888":"#999"}>
+                  👁 {p.views||0} vue{(p.views||0)>1?"s":""}
+                </ABadge>
               </div>
             </div>
             {/* Actions — 2x2 sur mobile */}
@@ -4198,6 +4597,29 @@ function AdminCatsTab({ cats, setCats, dark }) {
   const [translating, setTranslating] = useState(false);
   const [catTrash, setCatTrash] = useState([]);
   const [showTrash, setShowTrash] = useState(false);
+
+  // Charger la corbeille catégories depuis Supabase + purge >60j
+  useEffect(() => {
+    sb.get("announcements", `?id=eq.categories_trash&select=data&_cb=${Date.now()}`)
+      .then(rows => {
+        const data = rows?.[0]?.data;
+        if (!Array.isArray(data)) return;
+        const now = Date.now();
+        const SIXTY = 60*24*60*60*1000;
+        const valid = data.filter(c => {
+          if (!c.trashedAt) return true;
+          return (now - new Date(c.trashedAt).getTime()) < SIXTY;
+        });
+        setCatTrash(valid);
+        // Si purge effectuée, resauvegarder
+        if (valid.length !== data.length) {
+          fetch(`${SB_URL}/rest/v1/announcements?id=eq.categories_trash`, {
+            method:"PATCH", headers:sbHeaders, body:JSON.stringify({ data:valid })
+          }).catch(()=>{});
+        }
+      })
+      .catch(e => console.warn("catTrash load:", e.message));
+  }, []);
 
   // Traduction en direct avec debounce 800ms
   useEffect(() => {
@@ -4264,28 +4686,51 @@ function AdminCatsTab({ cats, setCats, dark }) {
     await saveCats(updated);
   };
 
+  // Sauvegarder la corbeille catégories dans Supabase
+  const saveCatTrash = async (data) => {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/announcements?id=eq.categories_trash`, {
+        method:"PATCH", headers:{ ...sbHeaders, Prefer:"return=representation" },
+        body: JSON.stringify({ data })
+      });
+      if (!r.ok) throw new Error(r.status);
+      const rows = await r.json();
+      if (!rows?.length) await sb.post("announcements", { id:"categories_trash", data });
+    } catch(e) {
+      try { await sb.upsert("announcements", { id:"categories_trash", data }); }
+      catch(e2){ console.warn("saveCatTrash:", e2.message); }
+    }
+  };
+
   const del = async (id) => {
     if (!window.confirm("Mettre cette catégorie à la corbeille ?")) return;
     const cat = cats.find(c=>c.id===id);
     if (!cat) return;
     const updated = cats.filter(c=>c.id!==id);
+    const newTrash = [...catTrash, { ...cat, trashedAt: new Date().toISOString() }];
     setCats(updated);
-    setCatTrash(t=>[...t, cat]);
+    setCatTrash(newTrash);
     await saveCats(updated);
+    await saveCatTrash(newTrash);
   };
 
   const restoreCat = async (id) => {
     const cat = catTrash.find(c=>c.id===id);
     if (!cat) return;
-    setCatTrash(t=>t.filter(c=>c.id!==id));
-    const updated = [...cats, cat];
+    const newTrash = catTrash.filter(c=>c.id!==id);
+    const { trashedAt, ...clean } = cat;
+    const updated = [...cats, clean];
+    setCatTrash(newTrash);
     setCats(updated);
     await saveCats(updated);
+    await saveCatTrash(newTrash);
   };
 
-  const deleteForeverCat = (id) => {
+  const deleteForeverCat = async (id) => {
     if (!window.confirm("Supprimer définitivement cette catégorie ?")) return;
-    setCatTrash(t=>t.filter(c=>c.id!==id));
+    const newTrash = catTrash.filter(c=>c.id!==id);
+    setCatTrash(newTrash);
+    await saveCatTrash(newTrash);
   };
 
   const move = async (idx, dir) => {
@@ -4302,131 +4747,154 @@ function AdminCatsTab({ cats, setCats, dark }) {
 
   return (
     <div>
-      {/* Header avec bouton corbeille */}
-      {catTrash.length > 0 && (
-        <div style={{ marginBottom:12 }}>
-          <button onClick={() => setShowTrash(v=>!v)}
-            style={{ background:showTrash?`${CA.danger}15`:"none",
-              color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
-              border:`1px solid ${showTrash?CA.danger:bord}`,
-              borderRadius:9, padding:"8px 12px", cursor:"pointer",
-              fontSize:12.5, fontWeight:700, display:"flex",
-              alignItems:"center", gap:6 }}>
-            🗑 {showTrash ? "← Retour" : `Corbeille (${catTrash.length})`}
-          </button>
+      {/* Header fixe avec bouton corbeille — toujours visible */}
+      <div style={{ display:"flex", justifyContent:"space-between",
+        alignItems:"center", marginBottom:14, gap:8 }}>
+        <span style={{ fontFamily:"Georgia,serif", fontSize:16, color:text }}>
+          {showTrash
+            ? `🗑 Corbeille — ${catTrash.length} catégorie${catTrash.length>1?"s":""}`
+            : `${cats.length} catégorie${cats.length>1?"s":""}`}
+        </span>
+        <button onClick={() => setShowTrash(v=>!v)}
+          style={{ background:showTrash?`${CA.danger}15`:"none",
+            color:showTrash?CA.danger:dark?CA.dMute:CA.mute,
+            border:`1px solid ${showTrash?CA.danger:dark?CA.dBorder:CA.border}`,
+            borderRadius:9, padding:"8px 12px", cursor:"pointer",
+            fontSize:12.5, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+          {showTrash
+            ? "← Retour aux catégories"
+            : `🗑 Corbeille${catTrash.length>0?` (${catTrash.length})`:""}`}
+        </button>
+      </div>
+
+      {/* VUE CORBEILLE */}
+      {showTrash && (
+        <div>
+          {catTrash.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"50px 16px",
+              color:dark?CA.dMute:"#bbb" }}>
+              <span style={{ fontSize:42 }}>🗑</span>
+              <p style={{ marginTop:10, fontSize:14 }}>La corbeille est vide.</p>
+            </div>
+          ) : (
+            <div style={{ display:"grid", gap:8 }}>
+              {catTrash.map(c => (
+                <div key={c.id} style={{ background:cardBg,
+                  border:`1px solid ${CA.danger}33`,
+                  borderRadius:11, padding:"12px 14px",
+                  display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:600, fontSize:14, color:text }}>{c.label}</div>
+                    {c.labelEn && (
+                      <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{c.labelEn}</div>
+                    )}
+                  </div>
+                  <button onClick={() => restoreCat(c.id)}
+                    style={{ fontSize:12, color:CA.success, background:"none",
+                      border:`1px solid ${CA.success}44`, borderRadius:7,
+                      padding:"6px 11px", cursor:"pointer", fontWeight:700,
+                      whiteSpace:"nowrap" }}>
+                    ↩ Restaurer
+                  </button>
+                  <button onClick={() => deleteForeverCat(c.id)}
+                    style={{ width:30, height:30, borderRadius:7,
+                      border:`1px solid ${dark?CA.dBorder:CA.border}`,
+                      background:"none", cursor:"pointer", display:"grid",
+                      placeItems:"center", color:CA.danger, flexShrink:0 }}>
+                    <Trash size={12}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Vue corbeille catégories */}
-      {showTrash && (
-        <div style={{ marginBottom:16 }}>
-          {catTrash.map(c => (
-            <div key={c.id} style={{ background:cardBg, border:`1px solid ${CA.danger}33`,
-              borderRadius:11, padding:"11px 13px", marginBottom:8,
+      {/* VUE NORMALE */}
+      {!showTrash && (<>
+        {/* Formulaire ajout */}
+        <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
+          borderRadius:14, padding:"16px", marginBottom:16 }}>
+          <h4 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 12px" }}>
+            ➕ Nouvelle catégorie
+          </h4>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Nom français *</span>
+              <input style={inp} value={form.label}
+                onChange={e=>setForm(f=>({...f,label:e.target.value}))}
+                placeholder="Ex : Ceintures"/>
+            </label>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Nom anglais</span>
+              <div style={{ position:"relative" }}>
+                <input style={{ ...inp, opacity:translating?.7:1,
+                  paddingRight:translating?"36px":undefined }}
+                  value={form.labelEn}
+                  onChange={e=>setForm(f=>({...f,labelEn:e.target.value}))}
+                  placeholder={translating?"Traduction en cours…":"Traduit automatiquement"}/>
+                {translating && (
+                  <span style={{ position:"absolute", right:10, top:"50%",
+                    transform:"translateY(-50%)", fontSize:14 }}>⏳</span>
+                )}
+              </div>
+            </label>
+          </div>
+          <label style={{ display:"flex", alignItems:"center", gap:6,
+            cursor:"pointer", fontSize:13, color:text, marginBottom:12 }}>
+            <input type="checkbox" checked={form.soon}
+              onChange={e=>setForm(f=>({...f,soon:e.target.checked}))}/>
+            Marquer comme "bientôt disponible"
+          </label>
+          <button onClick={add}
+            style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
+              borderRadius:10, padding:"9px 16px", cursor:"pointer",
+              fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+            <PlusCircle size={14}/> Ajouter la catégorie
+          </button>
+        </div>
+
+        {/* Liste catégories */}
+        <div style={{ display:"grid", gap:8 }}>
+          {cats.map((c,idx) => (
+            <div key={c.id} style={{ background:cardBg, border:`1px solid ${bord}`,
+              borderRadius:11, padding:"12px 14px",
               display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+                <button onClick={() => move(idx,-1)} disabled={idx===0}
+                  style={{ border:"none",background:"none",cursor:"pointer",padding:1,
+                    color:idx===0?bord:dark?CA.dMute:CA.mute }}>
+                  <ChevronUp size={12}/>
+                </button>
+                <button onClick={() => move(idx,1)} disabled={idx===cats.length-1}
+                  style={{ border:"none",background:"none",cursor:"pointer",padding:1,
+                    color:idx===cats.length-1?bord:dark?CA.dMute:CA.mute }}>
+                  <ChevronDown size={12}/>
+                </button>
+              </div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:14, color:text }}>{c.label}</div>
                 {c.labelEn && <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{c.labelEn}</div>}
               </div>
-              <button onClick={() => restoreCat(c.id)}
-                style={{ fontSize:12, color:CA.success, background:"none",
-                  border:`1px solid ${CA.success}44`, borderRadius:7,
-                  padding:"5px 10px", cursor:"pointer", fontWeight:700 }}>
-                ↩ Restaurer
+              <button onClick={() => toggleSoon(c.id)}
+                style={{ padding:"5px 10px", borderRadius:8, fontSize:12, fontWeight:600,
+                  border:`1px solid ${c.soon?CA.warning:bord}`,
+                  background:c.soon?`${CA.warning}18`:"none",
+                  color:c.soon?CA.warning:dark?CA.dMute:CA.mute, cursor:"pointer" }}>
+                {c.soon?"⏳ Bientôt":"✅ Actif"}
               </button>
-              <button onClick={() => deleteForeverCat(c.id)}
-                style={{ width:28, height:28, borderRadius:7, border:`1px solid ${bord}`,
-                  background:"none", cursor:"pointer", display:"grid",
-                  placeItems:"center", color:CA.danger }}>
+              <button onClick={() => del(c.id)}
+                style={{ width:30,height:30,borderRadius:8,border:`1px solid ${bord}`,
+                  background:"none",cursor:"pointer",display:"grid",
+                  placeItems:"center",color:CA.danger }}>
                 <Trash size={12}/>
               </button>
             </div>
           ))}
         </div>
-      )}
-
-      {/* Ajouter une catégorie */}
-      {!showTrash && <div style={{ background:cardBg, border:`1px solid ${CA.gold}44`,
-        borderRadius:14, padding:"16px", marginBottom:16 }}>
-        <h4 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 12px" }}>
-          ➕ Nouvelle catégorie
-        </h4>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-          <label style={{ display:"block" }}>
-            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
-              display:"block", marginBottom:3 }}>Nom français *</span>
-            <input style={inp} value={form.label}
-              onChange={e=>setForm(f=>({...f,label:e.target.value}))}
-              placeholder="Ex : Ceintures"/>
-          </label>
-          <label style={{ display:"block" }}>
-            <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
-              display:"block", marginBottom:3 }}>Nom anglais</span>
-            <div style={{ position:"relative" }}>
-              <input style={{ ...inp, opacity:translating?.7:1,
-                paddingRight:translating?"36px":undefined }}
-                value={form.labelEn}
-                onChange={e=>setForm(f=>({...f,labelEn:e.target.value}))}
-                placeholder={translating?"Traduction en cours…":"Traduit automatiquement"}/>
-              {translating && (
-                <span style={{ position:"absolute", right:10, top:"50%",
-                  transform:"translateY(-50%)", fontSize:14 }}>⏳</span>
-              )}
-            </div>
-          </label>
-        </div>
-        <label style={{ display:"flex", alignItems:"center", gap:6,
-          cursor:"pointer", fontSize:13, color:text, marginBottom:12 }}>
-          <input type="checkbox" checked={form.soon}
-            onChange={e=>setForm(f=>({...f,soon:e.target.checked}))}/>
-          Marquer comme "bientôt disponible"
-        </label>
-        <button onClick={add}
-          style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
-            borderRadius:10, padding:"9px 16px", cursor:"pointer",
-            fontSize:13, fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
-          <PlusCircle size={14}/> Ajouter la catégorie
-        </button>
-      </div>}
-
-      {/* Liste catégories */}
-      {!showTrash && <div style={{ display:"grid", gap:8 }}>
-        {cats.map((c,idx) => (
-          <div key={c.id} style={{ background:cardBg, border:`1px solid ${bord}`,
-            borderRadius:11, padding:"12px 14px",
-            display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
-              <button onClick={() => move(idx,-1)} disabled={idx===0}
-                style={{ border:"none",background:"none",cursor:"pointer",padding:1,
-                  color:idx===0?bord:dark?CA.dMute:CA.mute }}>
-                <ChevronUp size={12}/>
-              </button>
-              <button onClick={() => move(idx,1)} disabled={idx===cats.length-1}
-                style={{ border:"none",background:"none",cursor:"pointer",padding:1,
-                  color:idx===cats.length-1?bord:dark?CA.dMute:CA.mute }}>
-                <ChevronDown size={12}/>
-              </button>
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:600, fontSize:14, color:text }}>{c.label}</div>
-              {c.labelEn && <div style={{ fontSize:12, color:dark?CA.dMute:CA.mute }}>{c.labelEn}</div>}
-            </div>
-            <button onClick={() => toggleSoon(c.id)}
-              style={{ padding:"5px 10px", borderRadius:8, fontSize:12, fontWeight:600,
-                border:`1px solid ${c.soon?CA.warning:bord}`,
-                background:c.soon?`${CA.warning}18`:"none",
-                color:c.soon?CA.warning:dark?CA.dMute:CA.mute, cursor:"pointer" }}>
-              {c.soon?"⏳ Bientôt":"✅ Actif"}
-            </button>
-            <button onClick={() => del(c.id)}
-              style={{ width:30,height:30,borderRadius:8,border:`1px solid ${bord}`,
-                background:"none",cursor:"pointer",display:"grid",
-                placeItems:"center",color:CA.danger }}>
-              <Trash size={12}/>
-            </button>
-          </div>
-        ))}
-      </div>}
+      </>)}
     </div>
   );
 }
@@ -4440,9 +4908,43 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
   const cardBg = dark ? CA.dCard : CA.card;
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name:"", email:"", role:"delivery", pwd:"" });
+  const [draggingId, setDraggingId] = useState(null);
+  const dragId = useState({ current:null })[0];
+  const longPress = useState({ current:null })[0];
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
     border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
     fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  // Drag tactile sur appui long (300ms)
+  const handleTouchStart = (e, id) => {
+    if (!(auth.id===1 || auth.role==="admin")) return;
+    longPress.current = setTimeout(() => {
+      dragId.current = id;
+      setDraggingId(id);
+    }, 300);
+  };
+  const handleTouchMove = (e) => {
+    if (longPress.current && !dragId.current) {
+      clearTimeout(longPress.current); longPress.current = null;
+    }
+    if (!dragId.current) return;
+    const t = e.touches[0];
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const card = el?.closest("[data-uid]");
+    if (card) {
+      const overId = parseInt(card.getAttribute("data-uid"));
+      if (overId && overId !== dragId.current) {
+        moveUser(dragId.current, overId);
+        dragId.current = overId;
+      }
+    }
+    e.preventDefault();
+  };
+  const handleTouchEnd = () => {
+    if (longPress.current) { clearTimeout(longPress.current); longPress.current = null; }
+    dragId.current = null;
+    setDraggingId(null);
+  };
 
   const add = async () => {
     if (!form.name||!form.email||!form.pwd) return;
@@ -4451,13 +4953,34 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
     setForm({ name:"", email:"", role:"delivery", pwd:"" }); setShowForm(false);
     try { await sb.post("team_users",u); } catch(e){console.warn(e.message);}
   };
+  // ─── Règles de permission ───
+  // David (id:1) = Fondateur, intouchable par TOUS, et a pouvoir sur tous.
+  // Sinon : on ne peut agir que sur quelqu'un qu'on a soi-même promu (promoted_by===auth.id),
+  // ou si la cible n'est pas admin. On ne peut jamais toucher celui qui nous a promu.
+  const canManage = (target) => {
+    if (target.id === 1) return false;          // David intouchable
+    if (auth.id === 1) return true;             // David peut tout
+    if (target.id === auth.id) return false;    // pas soi-même
+    if (target.promoted_by === auth.id) return true;  // j'ai promu cette personne
+    if (target.role === "admin") return false;  // sinon pas les autres admins
+    return true;
+  };
+
   const toggle = async id => {
+    if (id === 1) {
+      window.alert("⛔ Le Fondateur ne peut pas être désactivé.");
+      return;
+    }
     if (id === auth.id) {
       window.alert("⛔ Vous ne pouvez pas désactiver votre propre compte.");
       return;
     }
     const u = users.find(x=>x.id===id);
     if (!u) return;
+    if (!canManage(u)) {
+      window.alert("⛔ Vous n'avez pas les droits sur ce membre.");
+      return;
+    }
     if (u.active) {
       if (!window.confirm(`Désactiver ${u.name} ? Il ne pourra plus se connecter.`)) return;
     } else {
@@ -4466,28 +4989,57 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
     setUsers(us=>us.map(x=>x.id===id?{...x,active:!x.active}:x));
     try { await sb.patch("team_users",id,{active:!u.active}); } catch(e){console.warn(e.message);}
   };
+
   const changeRole = async (id, role) => {
-    // Personne ne peut toucher à David (id:1)
     if (id === 1) {
-      window.alert("⛔ Impossible de modifier le rôle de l'administrateur principal.");
+      window.alert("⛔ Le rôle du Fondateur ne peut pas être modifié.");
       return;
     }
-    // Les non-David ne peuvent pas changer les autres admins
-    if (auth.id !== 1 && users.find(u=>u.id===id)?.role === "admin") {
-      window.alert("⛔ Seul David peut modifier le rôle d'un administrateur.");
+    const u = users.find(x=>x.id===id);
+    if (!u) return;
+    if (!canManage(u)) {
+      window.alert("⛔ Vous ne pouvez modifier que les membres que vous avez vous-même promus.");
       return;
     }
     if (role==="admin" && !window.confirm(`⚠️ Donner les droits Admin à ce membre ?
-Il aura accès à tout le tableau de bord.`)) return;
-    setUsers(us=>us.map(u=>u.id===id?{...u,role}:u));
-    try { await sb.patch("team_users",id,{role}); } catch(e){console.warn(e.message);}
-
+Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'est vous qui le promouvez.`)) return;
+    // On enregistre qui a promu ce membre (pour la hiérarchie)
+    const patch = { role };
+    if (role === "admin") patch.promoted_by = auth.id;
+    setUsers(us=>us.map(u=>u.id===id?{...u,...patch}:u));
+    try { await sb.patch("team_users",id,patch); } catch(e){console.warn(e.message);}
   };
 
   const del = async id => {
+    if (id === 1) {
+      window.alert("⛔ Le Fondateur ne peut pas être supprimé.");
+      return;
+    }
+    const u = users.find(x=>x.id===id);
+    if (!u) return;
+    if (!canManage(u)) {
+      window.alert("⛔ Vous n'avez pas les droits sur ce membre.");
+      return;
+    }
     if (!window.confirm("Supprimer ce membre ?")) return;
     setUsers(us=>us.filter(u=>u.id!==id));
     try { await sb.del("team_users",id); } catch(e){console.warn(e.message);}
+  };
+
+  // Réordonner l'équipe par drag & drop (appui long)
+  const moveUser = async (fromId, toId) => {
+    if (fromId === toId) return;
+    const arr = [...users];
+    const fromIdx = arr.findIndex(u=>u.id===fromId);
+    const toIdx = arr.findIndex(u=>u.id===toId);
+    if (fromIdx<0 || toIdx<0) return;
+    const [moved] = arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, moved);
+    setUsers(arr);
+    // Persister l'ordre via un champ sort_order
+    try {
+      await Promise.all(arr.map((u,i) => sb.patch("team_users", u.id, { sort_order: i })));
+    } catch(e){ console.warn("ordre équipe:", e.message); }
   };
 
   return (
@@ -4557,32 +5109,57 @@ Il aura accès à tout le tableau de bord.`)) return;
         </div>
       )}
       <div style={{ display:"grid", gap:8, width:"100%", boxSizing:"border-box" }}>
-        {users.map(u => (
-          <div key={u.id} style={{ background:cardBg, border:`1px solid ${bord}`,
-            borderRadius:12, padding:"13px 14px",
-            display:"flex", alignItems:"center", gap:8, opacity:u.active?1:.55,
-            boxSizing:"border-box", width:"100%", overflow:"hidden" }}>
+        {users.map(u => {
+          const isFounder = u.id === 1;
+          const manageable = canManage(u);
+          return (
+          <div key={u.id}
+            data-uid={u.id}
+            draggable={auth.id===1 || auth.role==="admin"}
+            onDragStart={e => { dragId.current = u.id; e.dataTransfer.effectAllowed="move"; }}
+            onDragOver={e => { e.preventDefault(); }}
+            onDrop={e => { e.preventDefault(); if(dragId.current) moveUser(dragId.current, u.id); dragId.current=null; }}
+            onTouchStart={e => handleTouchStart(e, u.id)}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            style={{ background:cardBg,
+              border:`1px solid ${isFounder?CA.gold:bord}`,
+              borderRadius:12, padding:"13px 14px",
+              display:"flex", alignItems:"center", gap:8, opacity:u.active?1:.55,
+              boxSizing:"border-box", width:"100%", overflow:"hidden",
+              boxShadow:isFounder?`0 0 0 1px ${CA.gold}33`:undefined,
+              cursor:(auth.id===1||auth.role==="admin")?"grab":"default",
+              transform:draggingId===u.id?"scale(1.02)":"scale(1)",
+              transition:"transform .15s" }}>
             <div style={{ width:40,height:40,borderRadius:999,
-              background:`${CA.gold}22`, display:"grid", placeItems:"center",
+              background:isFounder?`${CA.gold}33`:`${CA.gold}22`, display:"grid", placeItems:"center",
               fontSize:18, flexShrink:0 }}>
-              {ROLES[u.role]?.badge||"👤"}
+              {isFounder ? "👑" : ROLES[u.role]?.badge||"👤"}
             </div>
             <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontWeight:600, fontSize:14, color:text }}>{u.name}</div>
+              <div style={{ fontWeight:600, fontSize:14, color:text,
+                display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                {u.name}
+                {isFounder && (
+                  <span style={{ fontSize:9.5, fontWeight:800, letterSpacing:.5,
+                    color:CA.gold, background:`${CA.gold}1A`,
+                    border:`1px solid ${CA.gold}55`, borderRadius:5,
+                    padding:"1px 6px", textTransform:"uppercase" }}>
+                    ✦ Fondateur
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute,
                 whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                 {u.email}
               </div>
-              <ABadge color={u.role==="admin"?CA.gold:u.role==="manager"?"#1DC0D4":CA.success}>
-                {ROLES[u.role]?.label||u.role}
+              <ABadge color={isFounder?CA.gold:u.role==="admin"?CA.gold:u.role==="manager"?"#1DC0D4":CA.success}>
+                {isFounder ? "Fondateur" : ROLES[u.role]?.label||u.role}
               </ABadge>
             </div>
             <div style={{ display:"flex", gap:5, flexShrink:0 }}>
-              {/* Changer le rôle :
-                  - David (id:1) peut changer tout le monde sauf lui-même
-                  - Les autres admins peuvent changer seulement les non-admin
-                  - Personne ne peut destituer David */}
-              {auth.id === 1 && u.id !== 1 ? (
+              {/* Changer le rôle — seulement si on a les droits sur ce membre */}
+              {!isFounder && manageable && (
                 <select value={u.role}
                   onChange={e => changeRole(u.id, e.target.value)}
                   style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
@@ -4594,22 +5171,9 @@ Il aura accès à tout le tableau de bord.`)) return;
                   <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
                   <option value="admin">👑 Admin</option>
                 </select>
-              ) : auth.id !== 1 && auth.role === "admin" && u.role !== "admin" && u.id !== 1 ? (
-                <select value={u.role}
-                  onChange={e => changeRole(u.id, e.target.value)}
-                  style={{ padding:"4px 4px", borderRadius:8, fontSize:11,
-                    border:`1px solid ${bord}`,
-                    background:dark?CA.dCard:"#fff",
-                    color:text, cursor:"pointer", fontFamily:"inherit",
-                    maxWidth:130, flexShrink:1 }}>
-                  <option value="delivery">🚚 Livreur</option>
-                  <option value="manager">🤵🏽‍♂️ Gestionnaire</option>
-                  <option value="admin">👑 Admin</option>
-                </select>
-              ) : null}
-              {/* Activer / désactiver */}
-              {/* Pas de bouton désactiver sur soi-même */}
-              {u.id !== auth.id && (
+              )}
+              {/* Activer / désactiver — jamais sur David ni soi-même */}
+              {!isFounder && u.id !== auth.id && manageable && (
                 <button onClick={() => toggle(u.id)}
                   title={u.active?"Désactiver ce membre":"Réactiver ce membre"}
                   style={{ width:32,height:32,borderRadius:8,
@@ -4620,8 +5184,8 @@ Il aura accès à tout le tableau de bord.`)) return;
                   {u.active?<CheckCircle size={13}/>:<X size={13}/>}
                 </button>
               )}
-              {/* Supprimer */}
-              {u.role!=="admin" && (
+              {/* Supprimer — jamais sur David, seulement non-admin manageable */}
+              {!isFounder && u.role!=="admin" && manageable && (
                 <button onClick={() => del(u.id)}
                   style={{ width:32,height:32,borderRadius:8,border:`1px solid ${bord}`,
                     background:"none",cursor:"pointer",display:"grid",
@@ -4631,8 +5195,14 @@ Il aura accès à tout le tableau de bord.`)) return;
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
+      {(auth.id===1 || auth.role==="admin") && users.length > 1 && (
+        <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:10, textAlign:"center" }}>
+          ✦ Maintiens un membre appuyé puis glisse pour réordonner la liste
+        </p>
+      )}
     </div>
   );
 }
@@ -4760,13 +5330,47 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
     setSaved(true); setTimeout(()=>setSaved(false),2500);
   };
 
-  const addPromo = () => {
+  const addPromo = async () => {
     if (!newPromo.code||!newPromo.discount) return;
-    const p = { code:newPromo.code.toUpperCase(), discount:parseInt(newPromo.discount)||0,
+    const code = newPromo.code.toUpperCase().trim();
+    if (promos.some(p => p.code === code)) {
+      window.alert(`⚠️ Le code "${code}" existe déjà.`);
+      return;
+    }
+    const p = { code, discount:parseInt(newPromo.discount)||0,
       maxUses:parseInt(newPromo.maxUses)||999, uses:0, active:true,
       expiresAt: newPromo.expiresAt || null };
     setPromos(ps=>[...ps,p]);
     setNewPromo({ code:"", discount:"", maxUses:"", expiresAt:"" });
+    // Persister dans Supabase (colonnes : code, discount, max_uses, uses, active, expires_at)
+    try {
+      await sb.post("promos", {
+        code: p.code, discount: p.discount, max_uses: p.maxUses,
+        uses: 0, active: true, expires_at: p.expiresAt,
+      });
+    } catch(e){ console.warn("addPromo:", e.message); }
+  };
+
+  const togglePromo = async (code) => {
+    const p = promos.find(x=>x.code===code);
+    if (!p) return;
+    setPromos(ps=>ps.map(x=>x.code===code?{...x,active:!x.active}:x));
+    try {
+      await fetch(`${SB_URL}/rest/v1/promos?code=eq.${encodeURIComponent(code)}`, {
+        method:"PATCH", headers:sbHeaders,
+        body: JSON.stringify({ active: !p.active })
+      });
+    } catch(e){ console.warn("togglePromo:", e.message); }
+  };
+
+  const deletePromo = async (code) => {
+    if (!window.confirm(`Supprimer le code promo "${code}" ?`)) return;
+    setPromos(ps=>ps.filter(x=>x.code!==code));
+    try {
+      await fetch(`${SB_URL}/rest/v1/promos?code=eq.${encodeURIComponent(code)}`, {
+        method:"DELETE", headers:sbHeaders
+      });
+    } catch(e){ console.warn("deletePromo:", e.message); }
   };
 
   const changePwd = () => {
@@ -4863,6 +5467,20 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
               La bannière de livraison gratuite ne s'affichera pas.
             </p>
           )}
+
+          {/* Masquage auto stock épuisé */}
+          <div style={{ borderTop:`1px solid ${bord}`, marginTop:16, paddingTop:16 }}>
+            <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 10px" }}>📦 Articles épuisés</h3>
+            <label style={{ display:"flex", alignItems:"center", gap:8,
+              cursor:"pointer", fontSize:13.5, color:text }}>
+              <input type="checkbox" checked={!!cfg.hideOutOfStock}
+                onChange={e => setCfg(c=>({...c, hideOutOfStock: e.target.checked}))}/>
+              Masquer automatiquement les articles en rupture de stock
+            </label>
+            <p style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute, marginTop:6 }}>
+              Si activé, les articles à 0 en stock disparaissent du catalogue jusqu'au réapprovisionnement.
+            </p>
+          </div>
         </div>
       )}
 
@@ -4986,13 +5604,13 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
                       {p.uses}/{p.maxUses} utilisations
                     </span>
                     {countdown}
-                    <button onClick={() => setPromos(ps=>ps.map(x=>x.code===p.code?{...x,active:!x.active}:x))}
+                    <button onClick={() => togglePromo(p.code)}
                       style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
                         background:"none",cursor:"pointer",display:"grid",placeItems:"center",
                         color:p.active?CA.success:CA.mute }}>
                       {p.active?<CheckCircle size={12}/>:<X size={12}/>}
                     </button>
-                    <button onClick={() => setPromos(ps=>ps.filter(x=>x.code!==p.code))}
+                    <button onClick={() => deletePromo(p.code)}
                       style={{ width:28,height:28,borderRadius:7,border:`1px solid ${bord}`,
                         background:"none",cursor:"pointer",display:"grid",
                         placeItems:"center",color:CA.danger }}>
@@ -5136,10 +5754,11 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
 
       {/* Bouton Save global */}
       <button onClick={save}
-        style={{ marginTop:16, background:CA.ink, color:CA.gold,
-          border:`1px solid ${CA.gold}44`, borderRadius:11,
+        style={{ marginTop:16, background:saved?CA.success:CA.ink,
+          color:saved?"#fff":CA.gold,
+          border:`1px solid ${saved?CA.success:CA.gold}44`, borderRadius:11,
           padding:"12px 20px", cursor:"pointer", fontSize:14, fontWeight:700,
-          display:"flex", alignItems:"center", gap:8 }}>
+          display:"flex", alignItems:"center", gap:8, transition:"background .3s" }}>
         {saved?<><CheckCircle size={16}/> Enregistré !</>:<><Save size={16}/> Enregistrer</>}
       </button>
     </div>
@@ -5161,14 +5780,13 @@ function AdminReviewsTab({ auth, dark }) {
 
   useEffect(() => {
     const load = () => {
-      setLoading(true);
-      sb.get("reviews", `?order=date.desc&limit=100&_cb=${Date.now()}`)
-        .then(rows => setReviews(rows||[]))
+      sb.get("reviews", `?order=id.desc&limit=200&_cb=${Date.now()}`)
+        .then(rows => { setReviews(rows||[]); })
         .catch(e => console.warn("reviews:", e.message))
         .finally(() => setLoading(false));
     };
     load();
-    const interval = setInterval(load, 15000);
+    const interval = setInterval(load, 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -5636,10 +6254,10 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   useEffect(() => {
     if (!auth) return;
 
-    // Polling toutes les 10 secondes pour vérifier si le rôle a changé
+    // Polling toutes les 3 secondes pour vérifier si le rôle a changé
     const checkRole = setInterval(async () => {
       try {
-        const rows = await sb.get("team_users", `?id=eq.${auth.id}&select=role,active`);
+        const rows = await sb.get("team_users", `?id=eq.${auth.id}&select=role,active&_cb=${Date.now()}`);
         if (!rows?.length) return;
         const current = rows[0];
 
@@ -5657,22 +6275,21 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
         // Rôle modifié → mettre à jour auth en direct (hausse OU baisse)
         const roleLevel = { delivery:1, manager:2, admin:3 };
         if (roleLevel[current.role] !== roleLevel[auth.role]) {
+          const isUp = roleLevel[current.role] > roleLevel[auth.role];
           setAuth(a => ({...a, role: current.role}));
-          // Si rôle baissé → aussi mettre à jour le tab actif si nécessaire
-          if (roleLevel[current.role] < roleLevel[auth.role]) {
-            setTab("orders");
-            setNotifs(ns => [{
-              id:Date.now(),
-              msg:`⚠️ Votre rôle a changé → ${current.role}. Vos droits ont été mis à jour.`,
-              time:new Date().toISOString(), read:false
-            }, ...ns]);
-          }
+          if (!isUp) setTab("orders");
+          const roleLabel = ROLES[current.role]?.label || current.role;
+          setNotifs(ns => [{
+            id:Date.now(),
+            msg: isUp
+              ? `🎉 Félicitations ! Vous êtes maintenant ${roleLabel}. De nouveaux droits vous ont été accordés.`
+              : `⚠️ Votre rôle a changé → ${roleLabel}. Vos droits ont été mis à jour.`,
+            time:new Date().toISOString(), read:false
+          }, ...ns]);
           return;
         }
-
-
       } catch(e) { console.warn("Realtime check:", e.message); }
-    }, 10000); // toutes les 10 secondes
+    }, 3000); // toutes les 3 secondes
 
     return () => clearInterval(checkRole);
   }, [auth]);
