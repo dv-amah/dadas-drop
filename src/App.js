@@ -198,6 +198,15 @@ const T = {
     chooseVariant:"Choisir une option",
     promoCode:"Code promo", promoApply:"Appliquer", promoInvalid:"Code invalide ou expiré.",
     promoApplied:"Code appliqué !",
+    ordersDelivered:"Commandes livrées", easyDelivery:"Livraison facile",
+    satisfaction:"Satisfaction clientes", customerReviews:"Ce que disent nos clientes",
+    verifiedReview:"Article vérifié", returnPolicy:"{t.returnPolicy}",
+    usualPrice:"Prix habituel", youSave:"Vous économisez",
+    preorderBtn:"Réserver (précommande)", preorderNote:"Article en précommande — disponible prochainement",
+    newArrivals:"Nouveautés", newArrivalsSub:"{t.newArrivalsSub}",
+    noNew:"Aucune nouveauté pour le moment.", seeCatalogue:"Voir le catalogue",
+    loyaltyPts:"points fidélité", loyaltyValue:"de réduction",
+    myFavorites:"Mes favoris", collections:"Collections", soonLabel:"bientôt",
     shareMsg:"👜 {name} — {price} chez Dada's Drop !\n🛍 Voir l'article : dadas-drop.vercel.app\n📲 Commander sur WhatsApp !",
   },
   en: {
@@ -229,6 +238,15 @@ const T = {
     chooseVariant:"Choose an option",
     promoCode:"Promo code", promoApply:"Apply", promoInvalid:"Invalid or expired code.",
     promoApplied:"Code applied!",
+    ordersDelivered:"Orders delivered", easyDelivery:"Easy delivery",
+    satisfaction:"Customer satisfaction", customerReviews:"What our customers say",
+    verifiedReview:"Verified item", returnPolicy:"Item checked before shipping · Exchange possible on delivery if defective",
+    usualPrice:"Usual price", youSave:"You save",
+    preorderBtn:"Pre-order", preorderNote:"Pre-order item — available soon",
+    newArrivals:"New arrivals", newArrivalsSub:"Our latest arrivals, freshly added",
+    noNew:"No new arrivals yet.", seeCatalogue:"See catalogue",
+    loyaltyPts:"loyalty points", loyaltyValue:"discount",
+    myFavorites:"My favorites", collections:"Collections", soonLabel:"soon",
     shareMsg:"👜 {name} — {price} at Dada's Drop!\n🛍 See item: dadas-drop.vercel.app\n📲 Order on WhatsApp!",
   },
 };
@@ -637,14 +655,6 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
-  const copyLink = () => {
-    const slug = toSlug(p.name);
-    const url  = `https://dadas-drop.vercel.app/article/${slug}`;
-    navigator.clipboard?.writeText(url)
-      .then(() => { setCopied(true); setTimeout(()=>setCopied(false), 2000); })
-      .catch(() => {});
-  };
-
   return (
     <Overlay onClose={onClose}>
       <div style={{ maxWidth:480, width:"100%" }}
@@ -692,7 +702,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
                 borderRadius:8, padding:"5px 10px", marginBottom:10 }}>
                 <TrendingUp size={13} color={C.success}/>
                 <span style={{ fontSize:12, color:C.success, fontWeight:600 }}>
-                  Prix habituel {fcfa(p.price)} · Vous économisez {fcfa(p.price - displayPrice)}
+                  {t.usualPrice} {fcfa(p.price)} · {t.youSave} {fcfa(p.price - displayPrice)}
                 </span>
               </div>
             )}
@@ -731,37 +741,25 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
                   style={{ flex:1, ...primaryBtn, justifyContent:"center",
                     ...(p.isPreorder ? { background:"#1DC0D4", borderColor:"#1DC0D4" } : {}) }}>
                   {p.isPreorder
-                    ? <><Package size={15}/> Réserver (précommande)</>
+                    ? <><Package size={15}/> {t.preorderBtn}</>
                     : <><ShoppingBag size={15}/> {t.addCart}</>}
                 </button>
               </div>
               {p.isPreorder && (
                 <div style={{ fontSize:12, color:"#1DC0D4", marginTop:8,
                   display:"flex", alignItems:"center", gap:6, fontWeight:600 }}>
-                  🕒 Article en précommande — disponible prochainement
+                  🕒 {t.preorderNote}
                 </div>
               )}
-              {/* Partager + Copier le lien */}
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={shareArticle}
-                  style={{ flex:1, padding:"10px",
-                    border:`1px solid ${bord}`, borderRadius:10,
-                    background:"none", color:"#25D366", cursor:"pointer",
-                    fontSize:13.5, fontWeight:600,
-                    display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
-                  <MessageCircle size={16}/> Partager
-                </button>
-                <button onClick={copyLink}
-                  style={{ flex:1, padding:"10px",
-                    border:`1px solid ${copied?C.success:bord}`, borderRadius:10,
-                    background:copied?`${C.success}11`:"none",
-                    color:copied?C.success:(dark?C.dText:C.ink), cursor:"pointer",
-                    fontSize:13.5, fontWeight:600,
-                    display:"flex", alignItems:"center", justifyContent:"center", gap:7,
-                    transition:"all .2s" }}>
-                  {copied ? <><Check size={16}/> Copié !</> : <><Copy size={15}/> Copier le lien</>}
-                </button>
-              </div>
+              {/* Partager */}
+              <button onClick={shareArticle}
+                style={{ width:"100%", padding:"10px",
+                  border:`1px solid ${bord}`, borderRadius:10,
+                  background:"none", color:"#25D366", cursor:"pointer",
+                  fontSize:13.5, fontWeight:600,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                <MessageCircle size={16}/> Partager sur WhatsApp
+              </button>
 
               {/* Politique de retour rassurante */}
               <div style={{ display:"flex", alignItems:"center", gap:8,
@@ -769,7 +767,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
                 background:dark?C.dBorder:C.creamD, borderRadius:10 }}>
                 <ShieldCheck size={16} color={C.gold} style={{ flexShrink:0 }}/>
                 <span style={{ fontSize:12, color:dark?C.dMute:C.mute, lineHeight:1.5 }}>
-                  Article vérifié avant envoi · Échange possible à la livraison si défaut
+                  {t.returnPolicy}
                 </span>
               </div>
             </>)}
@@ -1085,9 +1083,21 @@ function Checkout({ open, lines, total, onClose, onClearCart, t, dark, promos, c
   const [promoErr, setPromoErr] = useState(false);
   const [sent, setSent]         = useState(false);
   const [saving, setSaving]     = useState(false);
-  const [orderNum]              = useState(() => "DD-" + String(Math.floor(Math.random()*9000)+1000));
+  const [orderNum, setOrderNum] = useState(() => "DD-" + String(Math.floor(Math.random()*9000)+1000));
   const [copied, setCopied]     = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]:e.target.value }));
+
+  // Réinitialiser à chaque ouverture du checkout (nouvelle commande)
+  useEffect(() => {
+    if (open) {
+      setSent(false);
+      setSaving(false);
+      setOrderNum("DD-" + String(Math.floor(Math.random()*9000)+1000));
+      setPromoApplied(null);
+      setPromoCode("");
+      setPromoErr(false);
+    }
+  }, [open]);
 
   // Sous-total après promo
   const subTotal = promoApplied
@@ -2002,7 +2012,7 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats
             textAlign:"left", padding:"9px 0", border:"none",
             background:"none", cursor:"pointer",
             fontFamily:"Georgia,serif", fontSize:17, color:text }}>
-          <span style={{ fontSize:16 }}>🆕</span> Nouveautés
+          <span style={{ fontSize:16 }}>🆕</span> {t.newArrivals}
         </button>
         {/* Favoris */}
         <button onClick={() => { setPage("favs"); onClose(); }}
@@ -2010,7 +2020,7 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats
             textAlign:"left", padding:"9px 0", border:"none",
             background:"none", cursor:"pointer",
             fontFamily:"Georgia,serif", fontSize:17, color:text }}>
-          <Heart size={16} color={C.gold} fill={C.gold}/> Mes favoris
+          <Heart size={16} color={C.gold} fill={C.gold}/> {t.myFavorites}
           {favs && favs.length>0 && (
             <span style={{ background:C.gold, color:C.ink, fontSize:10,
               fontWeight:800, padding:"2px 7px", borderRadius:999 }}>
@@ -2022,7 +2032,7 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats
         <div style={{ height:1, background:dark?C.dBorder:C.border, margin:"8px 0 12px" }}/>
         <div style={{ marginTop:16, marginBottom:8 }}>
           <span style={{ fontSize:10, fontWeight:700, color: dark?C.dMute:C.mute,
-            letterSpacing:2, textTransform:"uppercase" }}>Collections</span>
+            letterSpacing:2, textTransform:"uppercase" }}>{t.collections}</span>
         </div>
         {cats.map(c => {
           const label = lang==="fr" ? c.label : c.labelEn;
@@ -2033,7 +2043,7 @@ function SideMenu({ open, onClose, t, lang, setLang, dark, setPage, setCat, cats
                 fontFamily:"Georgia,serif", fontSize:16, color:text }}>
               {label}
               {c.soon && <span style={{ fontSize:10, color: dark?C.dMute:C.mute,
-                marginLeft:6 }}>· bientôt</span>}
+                marginLeft:6 }}>· {t.soonLabel}</span>}
             </button>
           );
         })}
@@ -2764,15 +2774,15 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
                 <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
                   color:gold }}>{deliveredCount}+</div>
                 <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
-                  Commandes livrées
+                  {t.ordersDelivered}
                 </div>
               </div>
               <div style={{ width:1, background:dark?C.dBorder:C.border }}/>
               <div style={{ textAlign:"center" }}>
                 <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
-                  color:gold }}>100%</div>
+                  color:gold }}>✓</div>
                 <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
-                  Paiement à la livraison
+                  {t.easyDelivery}
                 </div>
               </div>
               <div style={{ width:1, background:dark?C.dBorder:C.border }}/>
@@ -2780,7 +2790,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
                 <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
                   color:gold }}>★ 4.8</div>
                 <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
-                  Satisfaction clientes
+                  {t.satisfaction}
                 </div>
               </div>
             </div>
@@ -2841,7 +2851,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
               <div style={{ width:3, height:18, background:GRAD, borderRadius:99 }}/>
               <h2 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text,
                 margin:0, fontWeight:400 }}>
-                {lang==="fr" ? "Ce que disent nos clientes" : "What our customers say"}
+                {t.customerReviews}
               </h2>
             </div>
             <div style={{ display:"flex", gap:12, overflowX:"auto",
@@ -2958,7 +2968,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
               </p>
               <button onClick={()=>setPage("catalogue")}
                 style={{ ...primaryBtn, marginTop:16, gap:7 }}>
-                Voir le catalogue <ArrowRight size={14}/>
+                {t.seeCatalogue} <ArrowRight size={14}/>
               </button>
             </div>
           ) : (<>
@@ -2980,19 +2990,19 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
       {page==="new" && (
         <section style={{ maxWidth:1200, margin:"0 auto", padding:"20px 16px 40px" }}>
           <h1 style={{ fontFamily:"Georgia,serif", fontSize:22, color:text,
-            margin:"0 0 6px", fontWeight:400 }}>🆕 Nouveautés</h1>
+            margin:"0 0 6px", fontWeight:400 }}>🆕 {t.newArrivals}</h1>
           <p style={{ fontSize:13, color:dark?C.dMute:C.mute, marginBottom:18 }}>
-            Nos derniers arrivages, fraîchement ajoutés
+            {t.newArrivalsSub}
           </p>
           {visibleProducts.filter(p=>p.isNew).length===0 ? (
             <div style={{ textAlign:"center", padding:"60px 16px" }}>
               <span style={{ fontSize:44 }}>🆕</span>
               <p style={{ marginTop:12, color:dark?C.dMute:"#bbb", fontSize:14 }}>
-                Aucune nouveauté pour le moment.<br/>Revenez bientôt !
+                {t.noNew}
               </p>
               <button onClick={()=>setPage("catalogue")}
                 style={{ ...primaryBtn, marginTop:16, gap:7 }}>
-                Voir le catalogue <ArrowRight size={14}/>
+                {t.seeCatalogue} <ArrowRight size={14}/>
               </button>
             </div>
           ) : (<>
@@ -4053,6 +4063,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   };
 
   // Réordonner les produits (drag & drop appui long)
+  // Réordonnancement visuel uniquement (pas de Supabase pendant le drag)
   const reorderProducts = (fromId, toId) => {
     if (fromId === toId) return;
     setProducts(ps => {
@@ -4062,17 +4073,23 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
       if (fromIdx<0||toIdx<0) return arr;
       const [moved] = arr.splice(fromIdx,1);
       arr.splice(toIdx,0,moved);
-      // Persister l'ordre via sort_order (silencieux)
-      arr.forEach((p,i) => { sb.patch("products", p.id, { sort_order:i }).catch(()=>{}); });
       return arr;
     });
   };
   const pTouchStart = (e, id) => {
-    longPressP.current = setTimeout(() => { dragPid.current = id; setDraggingPid(id); }, 300);
+    longPressP.current = setTimeout(() => {
+      dragPid.current = id;
+      setDraggingPid(id);
+      // léger retour haptique si dispo
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 350);
   };
   const pTouchMove = (e) => {
-    if (longPressP.current && !dragPid.current) { clearTimeout(longPressP.current); longPressP.current=null; }
-    if (!dragPid.current) return;
+    // Si on n'a pas encore activé le drag, annuler le timer (c'est un scroll)
+    if (!dragPid.current) {
+      if (longPressP.current) { clearTimeout(longPressP.current); longPressP.current=null; }
+      return;
+    }
     const t = e.touches[0];
     const el = document.elementFromPoint(t.clientX, t.clientY);
     const card = el?.closest("[data-pid]");
@@ -4080,14 +4097,21 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
       const overId = parseInt(card.getAttribute("data-pid"));
       if (overId && overId !== dragPid.current) {
         reorderProducts(dragPid.current, overId);
-        dragPid.current = overId;
       }
     }
     e.preventDefault();
   };
   const pTouchEnd = () => {
     if (longPressP.current) { clearTimeout(longPressP.current); longPressP.current=null; }
-    dragPid.current = null; setDraggingPid(null);
+    if (dragPid.current) {
+      // Persister le nouvel ordre une seule fois, à la fin
+      setProducts(ps => {
+        ps.forEach((p,i) => { sb.patch("products", p.id, { sort_order:i }).catch(()=>{}); });
+        return ps;
+      });
+    }
+    dragPid.current = null;
+    setDraggingPid(null);
   };
 
   const variantType = form.variants[0]?.type || newVariant.type;
@@ -4282,7 +4306,8 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
                 )}
               </span>
               <input style={inp} type="number" min="0" max="90"
-                value={form.discount||0} onChange={setF("discount")} placeholder="0"/>
+                value={form.discount===0||form.discount==="0"||!form.discount?"":form.discount}
+                onChange={setF("discount")} placeholder="0 = pas de promo"/>
             </label>
             <label style={{ display:"block" }}>
               <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
@@ -4597,6 +4622,9 @@ function AdminCatsTab({ cats, setCats, dark }) {
   const [translating, setTranslating] = useState(false);
   const [catTrash, setCatTrash] = useState([]);
   const [showTrash, setShowTrash] = useState(false);
+  const [draggingCat, setDraggingCat] = useState(null);
+  const dragCat = useState({ current:null })[0];
+  const longPressC = useState({ current:null })[0];
 
   // Charger la corbeille catégories depuis Supabase + purge >60j
   useEffect(() => {
@@ -4621,19 +4649,58 @@ function AdminCatsTab({ cats, setCats, dark }) {
       .catch(e => console.warn("catTrash load:", e.message));
   }, []);
 
-  // Traduction en direct avec debounce 800ms
+  // Dictionnaire de secours pour les mots de mode courants (si le service en ligne échoue)
+  const FASHION_DICT = {
+    "sacs":"Bags", "sac":"Bag", "sacs à main":"Handbags", "sac à main":"Handbag",
+    "pochettes":"Clutches", "pochette":"Clutch", "bandoulières":"Shoulder bags",
+    "bandoulière":"Shoulder bag", "ceintures":"Belts", "ceinture":"Belt",
+    "chaussures":"Shoes", "chaussure":"Shoe", "talons":"Heels", "baskets":"Sneakers",
+    "bijoux":"Jewellery", "bijou":"Jewellery", "colliers":"Necklaces", "collier":"Necklace",
+    "bracelets":"Bracelets", "bracelet":"Bracelet", "bagues":"Rings", "bague":"Ring",
+    "boucles d'oreilles":"Earrings", "montres":"Watches", "montre":"Watch",
+    "lunettes":"Glasses", "lunettes de soleil":"Sunglasses",
+    "parfums":"Perfumes", "parfum":"Perfume", "gloss":"Gloss", "rouge à lèvres":"Lipstick",
+    "maquillage":"Makeup", "cosmétiques":"Cosmetics", "vêtements":"Clothing",
+    "vêtement":"Clothing", "robes":"Dresses", "robe":"Dress", "hauts":"Tops",
+    "pantalons":"Trousers", "jupes":"Skirts", "vestes":"Jackets", "manteaux":"Coats",
+    "écharpes":"Scarves", "écharpe":"Scarf", "foulards":"Scarves", "chapeaux":"Hats",
+    "chapeau":"Hat", "casquettes":"Caps", "gants":"Gloves", "portefeuilles":"Wallets",
+    "portefeuille":"Wallet", "porte-monnaie":"Coin purses", "valises":"Suitcases",
+    "accessoires":"Accessories", "accessoire":"Accessory", "nouveautés":"New arrivals",
+    "promotions":"Sale", "soldes":"Sale", "homme":"Men", "femme":"Women",
+    "enfant":"Kids", "enfants":"Kids", "unisexe":"Unisex",
+  };
+
+  // Traduction en direct avec debounce 800ms + dictionnaire de secours
   useEffect(() => {
     if (!form.label.trim()) { setForm(f=>({...f,labelEn:""})); return; }
     setTranslating(true);
     const timer = setTimeout(async () => {
+      const key = form.label.trim().toLowerCase();
+      // 1. Vérifier le dictionnaire de secours d'abord (instantané et fiable)
+      if (FASHION_DICT[key]) {
+        setForm(f => ({...f, labelEn: FASHION_DICT[key]}));
+        setTranslating(false);
+        return;
+      }
+      // 2. Sinon, traduction en ligne
       try {
         const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(form.label.trim())}&langpair=fr|en`);
         const data = await res.json();
         const translated = data?.responseData?.translatedText;
         if (translated && translated.toLowerCase() !== form.label.toLowerCase()) {
-          setForm(f => ({...f, labelEn: translated}));
+          // Nettoyer : capitaliser la première lettre
+          const clean = translated.charAt(0).toUpperCase() + translated.slice(1);
+          setForm(f => ({...f, labelEn: clean}));
+        } else {
+          // 3. Dernier recours : garder le mot français capitalisé
+          setForm(f => ({...f, labelEn: form.label.trim().charAt(0).toUpperCase() + form.label.trim().slice(1)}));
         }
-      } catch(e) { console.warn("Traduction:", e.message); }
+      } catch(e) {
+        console.warn("Traduction:", e.message);
+        // Si échec total, utiliser le mot français capitalisé
+        setForm(f => ({...f, labelEn: form.label.trim().charAt(0).toUpperCase() + form.label.trim().slice(1)}));
+      }
       setTranslating(false);
     }, 800);
     return () => clearTimeout(timer);
@@ -4733,12 +4800,47 @@ function AdminCatsTab({ cats, setCats, dark }) {
     await saveCatTrash(newTrash);
   };
 
-  const move = async (idx, dir) => {
-    const arr=[...cats]; const swap=idx+dir;
-    if (swap<0||swap>=arr.length) return;
-    [arr[idx],arr[swap]]=[arr[swap],arr[idx]];
-    setCats(arr);
-    await saveCats(arr);
+  // Réordonnancement visuel des catégories (sans Supabase pendant le drag)
+  const reorderCats = (fromId, toId) => {
+    if (fromId === toId) return;
+    setCats(cs => {
+      const arr = [...cs];
+      const fromIdx = arr.findIndex(c=>c.id===fromId);
+      const toIdx = arr.findIndex(c=>c.id===toId);
+      if (fromIdx<0||toIdx<0) return arr;
+      const [moved] = arr.splice(fromIdx,1);
+      arr.splice(toIdx,0,moved);
+      return arr;
+    });
+  };
+  const cTouchStart = (e, id) => {
+    longPressC.current = setTimeout(() => {
+      dragCat.current = id;
+      setDraggingCat(id);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 350);
+  };
+  const cTouchMove = (e) => {
+    if (!dragCat.current) {
+      if (longPressC.current) { clearTimeout(longPressC.current); longPressC.current=null; }
+      return;
+    }
+    const t = e.touches[0];
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const card = el?.closest("[data-cid]");
+    if (card) {
+      const overId = card.getAttribute("data-cid");
+      if (overId && overId !== dragCat.current) reorderCats(dragCat.current, overId);
+    }
+    e.preventDefault();
+  };
+  const cTouchEnd = () => {
+    if (longPressC.current) { clearTimeout(longPressC.current); longPressC.current=null; }
+    if (dragCat.current) {
+      setCats(cs => { saveCats(cs); return cs; });
+    }
+    dragCat.current = null;
+    setDraggingCat(null);
   };
 
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
@@ -4859,20 +4961,25 @@ function AdminCatsTab({ cats, setCats, dark }) {
         {/* Liste catégories */}
         <div style={{ display:"grid", gap:8 }}>
           {cats.map((c,idx) => (
-            <div key={c.id} style={{ background:cardBg, border:`1px solid ${bord}`,
+            <div key={c.id}
+              data-cid={c.id}
+              draggable
+              onDragStart={e => { dragCat.current=c.id; e.dataTransfer.effectAllowed="move"; }}
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); if(dragCat.current){reorderCats(dragCat.current,c.id); setCats(cs=>{saveCats(cs);return cs;});} dragCat.current=null; }}
+              onTouchStart={e => cTouchStart(e,c.id)}
+              onTouchMove={cTouchMove}
+              onTouchEnd={cTouchEnd}
+              style={{ background:cardBg, border:`1px solid ${bord}`,
               borderRadius:11, padding:"12px 14px",
-              display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
-                <button onClick={() => move(idx,-1)} disabled={idx===0}
-                  style={{ border:"none",background:"none",cursor:"pointer",padding:1,
-                    color:idx===0?bord:dark?CA.dMute:CA.mute }}>
-                  <ChevronUp size={12}/>
-                </button>
-                <button onClick={() => move(idx,1)} disabled={idx===cats.length-1}
-                  style={{ border:"none",background:"none",cursor:"pointer",padding:1,
-                    color:idx===cats.length-1?bord:dark?CA.dMute:CA.mute }}>
-                  <ChevronDown size={12}/>
-                </button>
+              display:"flex", alignItems:"center", gap:10,
+              transform:draggingCat===c.id?"scale(1.02)":"scale(1)",
+              boxShadow:draggingCat===c.id?"0 6px 18px rgba(0,0,0,.18)":undefined,
+              transition:"transform .15s" }}>
+              <div style={{ flexShrink:0, color:dark?CA.dMute:CA.mute,
+                cursor:"grab", fontSize:16, lineHeight:1, userSelect:"none" }}
+                title="Maintiens puis glisse pour réordonner">
+                ⠿
               </div>
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:14, color:text }}>{c.label}</div>
@@ -4894,6 +5001,9 @@ function AdminCatsTab({ cats, setCats, dark }) {
             </div>
           ))}
         </div>
+        <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:10, textAlign:"center" }}>
+          ✦ Maintiens une catégorie appuyée puis glisse pour réordonner
+        </p>
       </>)}
     </div>
   );
@@ -4918,32 +5028,54 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
   // Drag tactile sur appui long (300ms)
   const handleTouchStart = (e, id) => {
     if (!(auth.id===1 || auth.role==="admin")) return;
+    if (id === 1) return; // David (Fondateur) non déplaçable
     longPress.current = setTimeout(() => {
       dragId.current = id;
       setDraggingId(id);
-    }, 300);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 350);
   };
   const handleTouchMove = (e) => {
-    if (longPress.current && !dragId.current) {
-      clearTimeout(longPress.current); longPress.current = null;
+    if (!dragId.current) {
+      if (longPress.current) { clearTimeout(longPress.current); longPress.current = null; }
+      return;
     }
-    if (!dragId.current) return;
     const t = e.touches[0];
     const el = document.elementFromPoint(t.clientX, t.clientY);
     const card = el?.closest("[data-uid]");
     if (card) {
       const overId = parseInt(card.getAttribute("data-uid"));
-      if (overId && overId !== dragId.current) {
-        moveUser(dragId.current, overId);
-        dragId.current = overId;
+      // Ne jamais déplacer au-dessus/à la place de David (id:1)
+      if (overId && overId !== 1 && overId !== dragId.current) {
+        moveUserVisual(dragId.current, overId);
       }
     }
     e.preventDefault();
   };
   const handleTouchEnd = () => {
     if (longPress.current) { clearTimeout(longPress.current); longPress.current = null; }
+    if (dragId.current) {
+      setUsers(us => {
+        us.forEach((u,i) => { sb.patch("team_users", u.id, { sort_order:i }).catch(()=>{}); });
+        return us;
+      });
+    }
     dragId.current = null;
     setDraggingId(null);
+  };
+
+  // Réordonnancement visuel équipe (sans Supabase pendant le drag)
+  const moveUserVisual = (fromId, toId) => {
+    if (fromId === toId || fromId === 1) return;
+    setUsers(us => {
+      const arr = [...us];
+      const fromIdx = arr.findIndex(u=>u.id===fromId);
+      const toIdx = arr.findIndex(u=>u.id===toId);
+      if (fromIdx<0||toIdx<0||toIdx===0) return arr; // position 0 = David, protégée
+      const [moved] = arr.splice(fromIdx,1);
+      arr.splice(toIdx,0,moved);
+      return arr;
+    });
   };
 
   const add = async () => {
@@ -5028,15 +5160,14 @@ Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'es
 
   // Réordonner l'équipe par drag & drop (appui long)
   const moveUser = async (fromId, toId) => {
-    if (fromId === toId) return;
+    if (fromId === toId || fromId === 1 || toId === 1) return;
     const arr = [...users];
     const fromIdx = arr.findIndex(u=>u.id===fromId);
     const toIdx = arr.findIndex(u=>u.id===toId);
-    if (fromIdx<0 || toIdx<0) return;
+    if (fromIdx<0 || toIdx<0 || toIdx===0) return;
     const [moved] = arr.splice(fromIdx, 1);
     arr.splice(toIdx, 0, moved);
     setUsers(arr);
-    // Persister l'ordre via un champ sort_order
     try {
       await Promise.all(arr.map((u,i) => sb.patch("team_users", u.id, { sort_order: i })));
     } catch(e){ console.warn("ordre équipe:", e.message); }
@@ -5115,7 +5246,7 @@ Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'es
           return (
           <div key={u.id}
             data-uid={u.id}
-            draggable={auth.id===1 || auth.role==="admin"}
+            draggable={(auth.id===1 || auth.role==="admin") && u.id!==1}
             onDragStart={e => { dragId.current = u.id; e.dataTransfer.effectAllowed="move"; }}
             onDragOver={e => { e.preventDefault(); }}
             onDrop={e => { e.preventDefault(); if(dragId.current) moveUser(dragId.current, u.id); dragId.current=null; }}
@@ -5137,24 +5268,15 @@ Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'es
               {isFounder ? "👑" : ROLES[u.role]?.badge||"👤"}
             </div>
             <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontWeight:600, fontSize:14, color:text,
-                display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+              <div style={{ fontWeight:600, fontSize:14, color:text }}>
                 {u.name}
-                {isFounder && (
-                  <span style={{ fontSize:9.5, fontWeight:800, letterSpacing:.5,
-                    color:CA.gold, background:`${CA.gold}1A`,
-                    border:`1px solid ${CA.gold}55`, borderRadius:5,
-                    padding:"1px 6px", textTransform:"uppercase" }}>
-                    ✦ Fondateur
-                  </span>
-                )}
               </div>
               <div style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute,
                 whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                 {u.email}
               </div>
               <ABadge color={isFounder?CA.gold:u.role==="admin"?CA.gold:u.role==="manager"?"#1DC0D4":CA.success}>
-                {isFounder ? "Fondateur" : ROLES[u.role]?.label||u.role}
+                {isFounder ? "✦ Fondateur" : ROLES[u.role]?.label||u.role}
               </ABadge>
             </div>
             <div style={{ display:"flex", gap:5, flexShrink:0 }}>
@@ -5553,11 +5675,25 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
                   onChange={e=>setNewPromo(p=>({...p,maxUses:e.target.value}))}
                   placeholder="100"/>
               </label>
-              <label style={{ display:"block" }}>
+              <label style={{ display:"block", minWidth:0 }}>
                 <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Expire le (optionnel)</span>
-                <input style={inp} type="date"
-                  value={newPromo.expiresAt||""}
-                  onChange={e=>setNewPromo(p=>({...p,expiresAt:e.target.value}))}/>
+                <div style={{ display:"flex", gap:5, alignItems:"center", minWidth:0 }}>
+                  <input style={{ ...inp, boxSizing:"border-box", maxWidth:"100%",
+                    minWidth:0, flex:1, WebkitAppearance:"none", appearance:"none" }}
+                    type="date"
+                    value={newPromo.expiresAt||""}
+                    onChange={e=>setNewPromo(p=>({...p,expiresAt:e.target.value}))}/>
+                  {newPromo.expiresAt && (
+                    <button onClick={()=>setNewPromo(p=>({...p,expiresAt:""}))}
+                      title="Retirer la date"
+                      style={{ flexShrink:0, width:30, height:34, borderRadius:8,
+                        border:`1px solid ${bord}`, background:"none",
+                        cursor:"pointer", color:CA.danger, display:"grid",
+                        placeItems:"center" }}>
+                      <X size={13}/>
+                    </button>
+                  )}
+                </div>
               </label>
             </div>
             <button onClick={addPromo}
@@ -6545,42 +6681,56 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                 <div style={{ padding:"10px 14px",
                   borderBottom:`1px solid ${bord}`,
                   display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontWeight:700, fontSize:13, color:text }}>Notifications</span>
-                  <button onClick={() => {
-                      setNotifs(n=>n.map(x=>({...x,read:true})));
-                      setTimeout(() => { setNotifs([]); setNotifOpen(false); }, 1500);
-                    }}
-                    style={{ border:"none", background:"none", cursor:"pointer",
-                      color:CA.mute, fontSize:11 }}>Tout lire</button>
+                  <span style={{ fontWeight:700, fontSize:13, color:text }}>
+                    Notifications {unread>0 && `(${unread})`}
+                  </span>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {unread > 0 && (
+                      <button onClick={() => setNotifs(n=>n.map(x=>({...x,read:true})))}
+                        style={{ border:"none", background:"none", cursor:"pointer",
+                          color:CA.gold, fontSize:11, fontWeight:600 }}>Tout lire</button>
+                    )}
+                    {notifs.some(n=>n.read) && (
+                      <button onClick={() => setNotifs(n=>n.filter(x=>!x.read))}
+                        style={{ border:"none", background:"none", cursor:"pointer",
+                          color:CA.danger, fontSize:11, fontWeight:600 }}>Effacer lues</button>
+                    )}
+                  </div>
                 </div>
-                {notifs.slice(0,5).map(n => (
-                  <div key={n.id}
-                    onClick={() => {
-                      setNotifs(ns => ns.map(x => x.id===n.id ? {...x,read:true} : x));
-                      setTimeout(() => setNotifs(ns => ns.filter(x => x.id!==n.id)), 1500);
-                    }}
-                    style={{ padding:"10px 14px",
-                      borderBottom:`1px solid ${bord}`,
-                      background:n.read?"transparent":`${CA.gold}0A`,
-                      cursor:"pointer" }}
-                    onMouseEnter={e=>e.currentTarget.style.background=dark?CA.dBorder:CA.creamD}
-                    onMouseLeave={e=>e.currentTarget.style.background=n.read?"transparent":`${CA.gold}0A`}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
-                      <div style={{ fontSize:12.5, color:text, fontWeight:n.read?400:600, flex:1 }}>
-                        {n.msg}
-                      </div>
-                      {!n.read && <div style={{ width:7, height:7, borderRadius:999,
-                        background:CA.gold, flexShrink:0, marginTop:4 }}/>}
+                <div style={{ maxHeight:"60vh", overflowY:"auto" }}>
+                  {notifs.length === 0 ? (
+                    <div style={{ padding:"24px 16px", textAlign:"center",
+                      color:CA.mute, fontSize:12.5 }}>
+                      <Bell size={28} strokeWidth={1.3} style={{ opacity:.4 }}/>
+                      <p style={{ marginTop:8 }}>Aucune notification</p>
                     </div>
-                    <div style={{ fontSize:10.5, color:CA.mute, marginTop:2 }}>{timeAgo(n.time)}</div>
-                  </div>
-                ))}
-                {notifs.every(n=>n.read) && (
-                  <div style={{ padding:"16px", textAlign:"center",
-                    color:CA.mute, fontSize:12.5 }}>
-                    ✅ Tout est lu
-                  </div>
-                )}
+                  ) : notifs.map(n => (
+                    <div key={n.id}
+                      style={{ padding:"10px 14px",
+                        borderBottom:`1px solid ${bord}`,
+                        background:n.read?"transparent":`${CA.gold}0A`,
+                        display:"flex", alignItems:"flex-start", gap:8 }}>
+                      <div style={{ flex:1, cursor:"pointer" }}
+                        onClick={() => setNotifs(ns => ns.map(x => x.id===n.id ? {...x,read:true} : x))}>
+                        <div style={{ display:"flex", alignItems:"flex-start", gap:6 }}>
+                          {!n.read && <div style={{ width:7, height:7, borderRadius:999,
+                            background:CA.gold, flexShrink:0, marginTop:5 }}/>}
+                          <div style={{ fontSize:12.5, color:text, fontWeight:n.read?400:600, flex:1 }}>
+                            {n.msg}
+                          </div>
+                        </div>
+                        <div style={{ fontSize:10.5, color:CA.mute, marginTop:2,
+                          marginLeft:n.read?0:13 }}>{timeAgo(n.time)}</div>
+                      </div>
+                      <button onClick={() => setNotifs(ns => ns.filter(x => x.id!==n.id))}
+                        title="Supprimer"
+                        style={{ flexShrink:0, border:"none", background:"none",
+                          cursor:"pointer", color:CA.mute, padding:2 }}>
+                        <X size={13}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </>)}
           </div>
@@ -6591,7 +6741,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
               {auth.name.split(" ")[0]}
             </div>
             <div style={{ fontSize:9.5, color:CA.gold, whiteSpace:"nowrap" }}>
-              {ROLES[auth.role]?.badge} {ROLES[auth.role]?.label}
+              {auth.id===1 ? "👑 ✦ Fondateur" : `${ROLES[auth.role]?.badge} ${ROLES[auth.role]?.label}`}
             </div>
           </div>
           {/* Dark mode */}
