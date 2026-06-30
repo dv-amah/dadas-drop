@@ -70,11 +70,56 @@ const DEFAULT_CFG = {
   bannerActive: false,
   bannerText:  "",
   bannerColor: "#C9A84C",
+  // Couleurs du site (personnalisables)
+  colorGold:   "#C9A84C",
+  colorCream:  "#FAF6EE",
+  colorInk:    "#1A1A1A",
+  colorAccent: "#1DC0D4",
+  // Thème saisonnier actif ("classic" par défaut)
+  theme:       "classic",
+  // Paramètres Fondateur (réservés id:1)
+  maintenance: false,
+  maintenanceMsg: "Boutique en pause, nous revenons très vite ✦",
+  founderPin:  "",   // PIN défini par David
 };
 
 /* ════════════════════════════════════════════
-   📦 CATÉGORIES PAR DÉFAUT (dynamiques depuis admin)
+   🎨 THÈMES SAISONNIERS (activables manuellement par les admins)
 ════════════════════════════════════════════ */
+const THEMES = {
+  classic:    { label:"✨ Classique",        emoji:"",   anim:"none",
+                colorGold:"#C9A84C", colorCream:"#FAF6EE", colorAccent:"#1DC0D4",
+                desc:"Couleurs d'origine du site" },
+  noel:       { label:"🎄 Noël",             emoji:"🎅", anim:"snow",
+                colorGold:"#C0392B", colorCream:"#F4EFE7", colorAccent:"#1E7E34",
+                desc:"Rouge & vert, flocons de neige" },
+  halloween:  { label:"🎃 Halloween",        emoji:"🎃", anim:"bats",
+                colorGold:"#E67E22", colorCream:"#1C1424", colorAccent:"#8E44AD",
+                desc:"Orange & violet, ambiance sombre" },
+  valentin:   { label:"❤️ Saint-Valentin",   emoji:"💕", anim:"hearts",
+                colorGold:"#E84393", colorCream:"#FFF0F5", colorAccent:"#C0392B",
+                desc:"Rosé, petits cœurs" },
+  femmes:     { label:"🌸 Journée des femmes", emoji:"🌸", anim:"petals",
+                colorGold:"#9B59B6", colorCream:"#FBF4FF", colorAccent:"#E84393",
+                desc:"Violet & mimosa (8 mars)" },
+  meres:      { label:"🌹 Fête des Mères",    emoji:"🌹", anim:"petals",
+                colorGold:"#E84393", colorCream:"#FFF5F8", colorAccent:"#C0392B",
+                desc:"Rose tendre, fleurs" },
+  peres:      { label:"👔 Fête des Pères",    emoji:"👔", anim:"none",
+                colorGold:"#2980B9", colorCream:"#F0F4F8", colorAccent:"#1A5276",
+                desc:"Bleu élégant" },
+  nouvelan:   { label:"🎉 Nouvel An",         emoji:"🎉", anim:"confetti",
+                colorGold:"#D4AF37", colorCream:"#14110E", colorAccent:"#C0392B",
+                desc:"Doré & noir, confettis" },
+  paques:     { label:"🐰 Pâques",            emoji:"🐰", anim:"petals",
+                colorGold:"#27AE60", colorCream:"#FBFAF0", colorAccent:"#F39C12",
+                desc:"Pastel printanier" },
+  burkina:    { label:"🇧🇫 Fête du Burkina",  emoji:"🇧🇫", anim:"confetti",
+                colorGold:"#009E49", colorCream:"#FCF8E8", colorAccent:"#EF2B2D",
+                desc:"Rouge, vert & jaune (5 août)" },
+};
+
+
 const DEFAULT_CATS = [
   { id:"sacs",       label:"Sacs à main",   labelEn:"Handbags",      soon:false },
   { id:"bandoul",    label:"Bandoulières",   labelEn:"Shoulder bags", soon:false },
@@ -2331,6 +2376,51 @@ function DraggableWA({ whatsapp, waMsg }) {
   );
 }
 
+/* ════════════════════════════════════════════
+   ❄️ ANIMATION DE THÈME SAISONNIER
+════════════════════════════════════════════ */
+function ThemeAnimation({ theme }) {
+  const cfg = THEMES[theme];
+  if (!cfg || cfg.anim === "none") return null;
+
+  const EMOJI = {
+    snow:     ["❄️","❅","❆"],
+    hearts:   ["❤️","💕","💗"],
+    petals:   ["🌸","🌺","🌷"],
+    confetti: ["🎉","✨","🎊"],
+    bats:     ["🦇","🕸️","🕷️"],
+  }[cfg.anim] || ["✦"];
+
+  // 14 particules avec positions/délais pseudo-aléatoires mais stables
+  const particles = Array.from({ length: 14 }, (_, i) => ({
+    left: (i * 7.3 + 4) % 96,
+    delay: (i * 0.55) % 8,
+    dur: 7 + (i % 5),
+    size: 14 + (i % 4) * 5,
+    emoji: EMOJI[i % EMOJI.length],
+  }));
+
+  return (
+    <div aria-hidden="true" style={{ position:"fixed", inset:0,
+      pointerEvents:"none", overflow:"hidden", zIndex:5 }}>
+      <style>{`
+        @keyframes ddfall {
+          0%   { transform:translateY(-10vh) rotate(0deg);   opacity:0; }
+          10%  { opacity:.9; }
+          90%  { opacity:.9; }
+          100% { transform:translateY(110vh) rotate(360deg); opacity:0; }
+        }
+      `}</style>
+      {particles.map((p,i) => (
+        <span key={i} style={{ position:"absolute", left:`${p.left}%`, top:0,
+          fontSize:p.size, animation:`ddfall ${p.dur}s linear ${p.delay}s infinite` }}>
+          {p.emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, dark, setDark, initialPage="home" }) {
   const [lang, setLang]         = useState("fr");
   const [page, setPageRaw]      = useState(initialPage);
@@ -2486,12 +2576,18 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
 
   const t    = T[lang];
   const bord = dark ? C.dBorder : C.border;
-  const text = dark ? C.dText : C.ink;
-  const bg   = dark ? C.dBg : (cfg?.colorCream || C.cream);
+  // Couleurs effectives : un thème saisonnier actif surcharge les couleurs custom
+  const activeTheme = (cfg?.theme && cfg.theme !== "classic") ? THEMES[cfg.theme] : null;
+  const effGold  = activeTheme?.colorGold  || cfg?.colorGold  || C.gold;
+  const effCream = activeTheme?.colorCream || cfg?.colorCream || C.cream;
+  const effInk   = cfg?.colorInk || C.ink;
+  const text = dark ? C.dText : effInk;
+
+  const bg   = dark ? C.dBg : effCream;
   const hdrBg = dark ? "rgba(15,12,8,.92)"
-    : `rgba(${parseInt((cfg?.colorCream||"#FAF6EE").slice(1,3),16)},${parseInt((cfg?.colorCream||"#FAF6EE").slice(3,5),16)},${parseInt((cfg?.colorCream||"#FAF6EE").slice(5,7),16)},.92)`;
-  // Couleur dorée custom (depuis admin → Paramètres → Apparence)
-  const gold = cfg?.colorGold || C.gold;
+    : `rgba(${parseInt(effCream.slice(1,3),16)},${parseInt(effCream.slice(3,5),16)},${parseInt(effCream.slice(5,7),16)},.92)`;
+  // Couleur dorée effective (thème ou custom)
+  const gold = effGold;
 
   // Produits visibles : épinglés en premier, masqués filtrés
   // Les articles épuisés restent VISIBLES (façon Shein) — le bouton devient "Rupture de stock"
@@ -2586,6 +2682,34 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   const waMsg     = cfg?.waMessage || DEFAULT_CFG.waMessage;
   const whatsapp  = cfg?.whatsapp  || DEFAULT_CFG.whatsapp;
 
+  // ── MODE MAINTENANCE (activé par le Fondateur) ──
+  if (cfg?.maintenance) {
+    return (
+      <div style={{ minHeight:"100vh", background: dark?C.dBg:effCream,
+        display:"flex", flexDirection:"column", alignItems:"center",
+        justifyContent:"center", padding:"24px", textAlign:"center",
+        fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
+        <div style={{ fontSize:54, marginBottom:18 }}>🛍️</div>
+        <h1 style={{ fontFamily:"Georgia,serif", fontSize:26, fontWeight:700,
+          color:effGold, letterSpacing:2, margin:"0 0 6px" }}>
+          {cfg?.brand || "DADA'S DROP"}
+        </h1>
+        <div style={{ width:50, height:2, background:effGold, borderRadius:99, margin:"10px 0 20px" }}/>
+        <p style={{ fontSize:16, color: dark?C.dText:C.ink, maxWidth:340, lineHeight:1.6, margin:0 }}>
+          {cfg?.maintenanceMsg || "Boutique en pause, nous revenons très vite ✦"}
+        </p>
+        {cfg?.whatsapp && (
+          <a href={`https://wa.me/${cfg.whatsapp}`} target="_blank" rel="noreferrer"
+            style={{ marginTop:24, display:"inline-flex", alignItems:"center", gap:7,
+              background:"#25D366", color:"#fff", textDecoration:"none",
+              padding:"11px 20px", borderRadius:11, fontWeight:700, fontSize:14 }}>
+            <MessageCircle size={16}/> Nous contacter
+          </a>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ background:bg, minHeight:"100vh", color:text,
       fontFamily:"'Helvetica Neue',Arial,sans-serif" }}>
@@ -2608,6 +2732,9 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-thumb{background:${C.gold}44;border-radius:99px}
       `}</style>
+
+      {/* ── ANIMATION DE THÈME SAISONNIER ── */}
+      {!dark && <ThemeAnimation theme={cfg?.theme || "classic"} />}
 
       {/* ── BANNIÈRE ── */}
       {cfg?.bannerActive && cfg?.bannerText && (
@@ -2643,7 +2770,9 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
             onClick={() => setPage("home")}>
             <span style={{ fontFamily:"Georgia,serif", fontSize:17, fontWeight:700,
               color:text, letterSpacing:3, lineHeight:1, whiteSpace:"nowrap" }}>
-              DADA'S DROP
+              {activeTheme?.emoji && <span style={{ marginRight:5 }}>{activeTheme.emoji}</span>}
+              {cfg?.brand || "DADA'S DROP"}
+              {activeTheme?.emoji && <span style={{ marginLeft:5 }}>{activeTheme.emoji}</span>}
             </span>
             <span style={{ fontSize:7.5, color:C.gold, letterSpacing:3.5,
               marginTop:1, whiteSpace:"nowrap" }}>
@@ -5060,6 +5189,8 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
   const cardBg = dark ? CA.dCard : CA.card;
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name:"", email:"", role:"delivery", pwd:"" });
+  const [profileUser, setProfileUser] = useState(null); // membre dont on voit la fiche
+  const [profileEdit, setProfileEdit] = useState({ email:"", pwd:"", msg:"" });
   const [draggingId, setDraggingId] = useState(null);
   const dragId = useState({ current:null })[0];
   const longPress = useState({ current:null })[0];
@@ -5126,6 +5257,32 @@ function AdminTeamTab({ users, setUsers, auth, dark }) {
     setUsers(us=>[...us,u]);
     setForm({ name:"", email:"", role:"delivery", pwd:"" }); setShowForm(false);
     try { await sb.post("team_users",u); } catch(e){console.warn(e.message);}
+  };
+
+  // Ouvrir la fiche profil d'un membre
+  const openProfile = (u) => {
+    setProfileUser(u);
+    setProfileEdit({ email:u.email, pwd:"", msg:"" });
+  };
+  // Sauvegarder email + mot de passe (réservé à ceux qui peuvent gérer ce membre)
+  const saveProfile = async () => {
+    if (!profileUser) return;
+    const newEmail = profileEdit.email.trim().toLowerCase();
+    if (!newEmail.includes("@")) { setProfileEdit(p=>({...p,msg:"⚠️ Email invalide."})); return; }
+    // Email déjà utilisé par un autre membre ?
+    if (users.some(u => u.id!==profileUser.id && u.email.toLowerCase()===newEmail)) {
+      setProfileEdit(p=>({...p,msg:"⚠️ Cet email est déjà utilisé."})); return;
+    }
+    const patch = { email:newEmail };
+    if (profileEdit.pwd.trim()) {
+      if (profileEdit.pwd.trim().length < 6) { setProfileEdit(p=>({...p,msg:"⚠️ Mot de passe trop court (min 6)."})); return; }
+      patch.pwd = profileEdit.pwd.trim();
+    }
+    setUsers(us => us.map(u => u.id===profileUser.id ? {...u, ...patch} : u));
+    try { await sb.patch("team_users", profileUser.id, patch); }
+    catch(e){ console.warn("saveProfile:", e.message); }
+    setProfileEdit(p=>({...p, pwd:"", msg:"✅ Enregistré !"}));
+    setTimeout(()=>setProfileEdit(p=>({...p,msg:""})), 2500);
   };
   // ─── Règles de permission ───
   // David (id:1) = Fondateur, intouchable par TOUS, et a pouvoir sur tous.
@@ -5322,6 +5479,17 @@ Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'es
               </ABadge>
             </div>
             <div style={{ display:"flex", gap:5, flexShrink:0 }}>
+              {/* Fiche profil — soi-même (changer son mdp) ou membre qu'on gère */}
+              {(u.id===auth.id || manageable) && (
+                <button onClick={() => openProfile(u)}
+                  title="Voir / modifier la fiche"
+                  style={{ width:32,height:32,borderRadius:8,
+                    border:`1px solid ${bord}`, background:"none",
+                    cursor:"pointer",display:"grid",placeItems:"center",
+                    color:dark?CA.dMute:CA.mute }}>
+                  <Lock size={13}/>
+                </button>
+              )}
               {/* Changer le rôle — seulement si on a les droits sur ce membre */}
               {!isFounder && manageable && (
                 <select value={u.role}
@@ -5367,6 +5535,111 @@ Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'es
           ✦ Maintiens un membre appuyé puis glisse pour réordonner la liste
         </p>
       )}
+
+      {/* ── FICHE PROFIL MEMBRE ── */}
+      {profileUser && (() => {
+        const isSelf = profileUser.id === auth.id;
+        const canEditFull = !isSelf && (auth.id===1 || canManage(profileUser)); // admin gère le membre
+        const isFounderProfile = profileUser.id === 1;
+        return (
+          <div onClick={()=>setProfileUser(null)}
+            style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              padding:16, zIndex:3000 }}>
+            <div onClick={e=>e.stopPropagation()}
+              style={{ background:dark?CA.dCard:"#fff", borderRadius:16,
+                padding:22, width:"100%", maxWidth:380, maxHeight:"85vh", overflowY:"auto",
+                boxShadow:"0 20px 50px rgba(0,0,0,.3)" }}>
+              {/* En-tête */}
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:18 }}>
+                <div style={{ width:48, height:48, borderRadius:12,
+                  background:isFounderProfile?`${CA.gold}33`:`${CA.gold}18`,
+                  display:"grid", placeItems:"center", fontSize:20 }}>
+                  {isFounderProfile ? "👑" : ROLES[profileUser.role]?.badge || "👤"}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:"Georgia,serif", fontSize:17,
+                    fontWeight:700, color:text }}>{profileUser.name}</div>
+                  <ABadge color={isFounderProfile?CA.gold:profileUser.role==="admin"?CA.gold:profileUser.role==="manager"?"#1DC0D4":CA.success}>
+                    {isFounderProfile ? "✦ Fondateur" : ROLES[profileUser.role]?.label||profileUser.role}
+                  </ABadge>
+                </div>
+                <button onClick={()=>setProfileUser(null)}
+                  style={{ border:"none", background:"none", cursor:"pointer", color:CA.mute }}>
+                  <X size={18}/>
+                </button>
+              </div>
+
+              {/* Infos lecture seule */}
+              <div style={{ fontSize:12.5, color:dark?CA.dMute:CA.mute, marginBottom:16,
+                lineHeight:1.7, background:dark?CA.dBorder:CA.creamD,
+                borderRadius:10, padding:"10px 12px" }}>
+                <div>👤 Rôle : <b style={{color:text}}>{isFounderProfile?"Fondateur":ROLES[profileUser.role]?.label}</b></div>
+                {profileUser.promoted_by && (
+                  <div>⬆️ Promu par : <b style={{color:text}}>{users.find(x=>x.id===profileUser.promoted_by)?.name || "—"}</b></div>
+                )}
+                <div>🔌 Statut : <b style={{color:profileUser.active!==false?CA.success:CA.danger}}>
+                  {profileUser.active!==false?"Actif":"Désactivé"}</b></div>
+              </div>
+
+              {/* Édition email — Fondateur/admin sur membre en dessous, OU lecture seule sinon */}
+              <div style={{ marginBottom:14 }}>
+                <label style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                  display:"block", marginBottom:4 }}>Adresse email</label>
+                {canEditFull && !isFounderProfile ? (
+                  <input value={profileEdit.email}
+                    onChange={e=>setProfileEdit(p=>({...p,email:e.target.value}))}
+                    style={inp} type="email"/>
+                ) : (
+                  <div style={{ ...inp, color:dark?CA.dMute:CA.mute, background:dark?CA.dBorder:CA.creamD }}>
+                    {profileUser.email}
+                  </div>
+                )}
+                {isSelf && (
+                  <p style={{ fontSize:10.5, color:dark?CA.dMute:CA.mute, marginTop:4 }}>
+                    Pour changer ton email, demande à un administrateur.
+                  </p>
+                )}
+              </div>
+
+              {/* Édition mot de passe */}
+              {(isSelf || canEditFull) && (
+                <div style={{ marginBottom:14 }}>
+                  <label style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                    display:"block", marginBottom:4 }}>
+                    {isSelf ? "Nouveau mot de passe" : "Mot de passe provisoire"}
+                  </label>
+                  <input value={profileEdit.pwd}
+                    onChange={e=>setProfileEdit(p=>({...p,pwd:e.target.value}))}
+                    style={inp} type="text" placeholder="Laisser vide pour ne pas changer"/>
+                  {!isSelf && canEditFull && (
+                    <p style={{ fontSize:10.5, color:dark?CA.dMute:CA.mute, marginTop:4 }}>
+                      Le membre pourra le changer lui-même ensuite depuis sa fiche.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {profileEdit.msg && (
+                <p style={{ fontSize:12.5, fontWeight:600, textAlign:"center",
+                  color: profileEdit.msg.startsWith("✅")?CA.success:CA.danger,
+                  margin:"0 0 12px" }}>{profileEdit.msg}</p>
+              )}
+
+              {/* Bouton enregistrer (si on peut éditer qqch) */}
+              {(isSelf || (canEditFull && !isFounderProfile)) && (
+                <button onClick={saveProfile}
+                  style={{ width:"100%", padding:"11px", borderRadius:11,
+                    border:"none", background:CA.ink, color:CA.gold,
+                    fontSize:14, fontWeight:700, cursor:"pointer",
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                  <Save size={15}/> Enregistrer
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -5493,6 +5766,16 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
     try { await sb.upsert("announcements", {id:"config", data:cfg}); } catch(e){console.warn(e.message);}
     setSaved(true); setTimeout(()=>setSaved(false),2500);
   };
+
+  // Auto-save quand le thème saisonnier change (effet instantané côté client)
+  const themeFirst = useState({ v:true })[0];
+  useEffect(() => {
+    if (themeFirst.v) { themeFirst.v = false; return; }
+    const id = setTimeout(() => {
+      sb.upsert("announcements", { id:"config", data:cfg }).catch(()=>{});
+    }, 400);
+    return () => clearTimeout(id);
+  }, [cfg.theme]);
 
   const addPromo = async () => {
     if (!newPromo.code||!newPromo.discount) return;
@@ -5820,6 +6103,50 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
       {tab==="apparence" && (
         <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
           <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>🎨 Apparence du site</h3>
+
+          {/* THÈMES SAISONNIERS */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:text, marginBottom:4 }}>
+              🎭 Thème saisonnier
+            </div>
+            <p style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute, marginBottom:10, lineHeight:1.5 }}>
+              Change l'ambiance du site pour une fête. Le thème "Classique" remet les couleurs d'origine.
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+              {Object.entries(THEMES).map(([key, th]) => {
+                const active = (cfg.theme||"classic") === key;
+                return (
+                  <button key={key}
+                    onClick={()=>setCfg(c=>({...c, theme:key}))}
+                    style={{ textAlign:"left", padding:"10px 12px", borderRadius:11,
+                      border:`2px solid ${active?th.colorGold:bord}`,
+                      background:active?`${th.colorGold}14`:(dark?CA.dCard:"#fff"),
+                      cursor:"pointer", transition:"all .15s" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+                      <span style={{ fontSize:15 }}>{th.label.split(" ")[0]}</span>
+                      <span style={{ fontSize:12.5, fontWeight:700, color:text }}>
+                        {th.label.split(" ").slice(1).join(" ")}
+                      </span>
+                      {active && <Check size={13} color={th.colorGold} style={{marginLeft:"auto"}}/>}
+                    </div>
+                    <div style={{ fontSize:10, color:dark?CA.dMute:CA.mute }}>{th.desc}</div>
+                    {/* Aperçu couleurs */}
+                    <div style={{ display:"flex", gap:4, marginTop:6 }}>
+                      <span style={{ width:14, height:14, borderRadius:4, background:th.colorGold }}/>
+                      <span style={{ width:14, height:14, borderRadius:4, background:th.colorCream, border:`1px solid ${bord}` }}/>
+                      <span style={{ width:14, height:14, borderRadius:4, background:th.colorAccent }}/>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:8 }}>
+              ✦ Le thème s'applique côté client en quelques secondes après enregistrement.
+            </p>
+          </div>
+
+          <div style={{ borderTop:`1px solid ${bord}`, paddingTop:14 }}/>
+
           <label style={{ display:"block", marginBottom:12 }}>
             <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Titre hero</span>
             <input style={inp} value={cfg.heroTitle||""} onChange={setC("heroTitle")}/>
@@ -5834,39 +6161,6 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
               value={cfg.waMessage||""} onChange={setC("waMessage")}/>
           </label>
 
-          {/* Couleurs */}
-          <div style={{ borderTop:`1px solid ${bord}`, paddingTop:14, marginTop:4 }}>
-            <div style={{ fontSize:13, fontWeight:700, color:text, marginBottom:10 }}>
-              🎨 Couleurs du site
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              {[
-                { k:"colorGold",  label:"Couleur dorée", default:"#C9A84C" },
-                { k:"colorCream", label:"Fond crème",    default:"#FAF6EE" },
-              ].map(col => (
-                <label key={col.k} style={{ display:"block" }}>
-                  <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
-                    display:"block", marginBottom:5 }}>{col.label}</span>
-                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                    <input type="color"
-                      value={cfg[col.k]||col.default}
-                      onChange={e=>setCfg(c=>({...c,[col.k]:e.target.value}))}
-                      style={{ width:42, height:36, borderRadius:8,
-                        border:`1px solid ${bord}`, cursor:"pointer", padding:2 }}/>
-                    <button onClick={()=>setCfg(c=>({...c,[col.k]:col.default}))}
-                      style={{ fontSize:11, color:dark?CA.dMute:CA.mute, background:"none",
-                        border:"none", cursor:"pointer", padding:0, textDecoration:"underline" }}>
-                      Reset
-                    </button>
-                  </div>
-                </label>
-              ))}
-            </div>
-            <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:8 }}>
-              ⚠️ Les couleurs s'appliquent après avoir enregistré et rechargé le site.
-            </p>
-          </div>
-
           {/* Prévisualisation */}
           <div style={{ background:CA.ink, borderRadius:12, padding:"20px",
             textAlign:"center", marginTop:14 }}>
@@ -5878,6 +6172,10 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
               {cfg.heroSub||"Sacs & accessoires sélectionnés avec soin, livrés à Ouagadougou."}
             </div>
           </div>
+
+          <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:14 }}>
+            🎨 Pour personnaliser les couleurs de base du site en profondeur, rends-toi dans l'onglet <b>Fondateur</b> (réservé à David).
+          </p>
         </div>
       )}
 
@@ -6377,6 +6675,209 @@ function AdminLoyaltyTab({ cfg, setCfg, orders, dark }) {
 }
 
 /* ──────────────────────────────────────────
+   ONGLET FONDATEUR (réservé id:1, protégé par PIN)
+────────────────────────────────────────── */
+function AdminFounderTab({ cfg, setCfg, dark }) {
+  const text   = dark ? CA.dText : CA.ink;
+  const bord   = dark ? CA.dBorder : CA.border;
+  const cardBg = dark ? CA.dCard : CA.card;
+  const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
+    border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
+    fontSize:"16px", color:text, fontFamily:"inherit" };
+
+  // Sauvegarde auto dans Supabase quand cfg change (debounce léger) — effet instantané
+  const firstRun = useState({ v:true })[0];
+  useEffect(() => {
+    if (firstRun.v) { firstRun.v = false; return; }
+    const id = setTimeout(() => {
+      sb.upsert("announcements", { id:"config", data:cfg }).catch(()=>{});
+    }, 500);
+    return () => clearTimeout(id);
+  }, [cfg.maintenance, cfg.maintenanceMsg, cfg.theme, cfg.colorGold,
+      cfg.colorCream, cfg.colorInk, cfg.colorAccent, cfg.founderPin]);
+
+  const hasPin = !!(cfg.founderPin && cfg.founderPin.length >= 4);
+  const [unlocked, setUnlocked] = useState(!hasPin); // si pas de PIN, déverrouillé d'office
+  const [pinInput, setPinInput] = useState("");
+  const [pinErr, setPinErr] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const flashSaved = () => { setSaved(true); setTimeout(()=>setSaved(false), 2000); };
+  const tryUnlock = () => {
+    if (pinInput === cfg.founderPin) { setUnlocked(true); setPinErr(false); }
+    else { setPinErr(true); }
+  };
+
+  // ── Écran verrouillé : demande le PIN ──
+  if (hasPin && !unlocked) {
+    return (
+      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14,
+        padding:"28px 20px", maxWidth:360, margin:"0 auto", textAlign:"center" }}>
+        <div style={{ fontSize:40, marginBottom:12 }}>🔐</div>
+        <h3 style={{ fontFamily:"Georgia,serif", fontSize:18, color:text, margin:"0 0 6px" }}>
+          Espace Fondateur
+        </h3>
+        <p style={{ fontSize:12.5, color:dark?CA.dMute:CA.mute, margin:"0 0 18px" }}>
+          Entre ton code PIN secret pour accéder aux réglages sensibles.
+        </p>
+        <input type="password" inputMode="numeric" value={pinInput}
+          onChange={e=>{ setPinInput(e.target.value); setPinErr(false); }}
+          onKeyDown={e=>e.key==="Enter"&&tryUnlock()}
+          placeholder="••••"
+          style={{ ...inp, textAlign:"center", letterSpacing:8, fontSize:22,
+            marginBottom:10, borderColor:pinErr?CA.danger:bord }}/>
+        {pinErr && <p style={{ fontSize:12, color:CA.danger, margin:"0 0 10px" }}>Code incorrect.</p>}
+        <button onClick={tryUnlock}
+          style={{ width:"100%", padding:"11px", borderRadius:11, border:"none",
+            background:CA.ink, color:CA.gold, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+          Déverrouiller
+        </button>
+      </div>
+    );
+  }
+
+  // ── Contenu déverrouillé ──
+  return (
+    <div style={{ display:"grid", gap:16 }}>
+      <div style={{ background:`linear-gradient(135deg,${CA.gold}18,${CA.gold}05)`,
+        border:`1px solid ${CA.gold}44`, borderRadius:14, padding:"16px 18px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:22 }}>👑</span>
+          <div>
+            <h3 style={{ fontFamily:"Georgia,serif", fontSize:17, color:CA.gold, margin:0 }}>
+              Espace Fondateur
+            </h3>
+            <p style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute, margin:"2px 0 0" }}>
+              Réglages réservés à David — toi seul y as accès.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* MODE MAINTENANCE */}
+      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+        <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 6px" }}>
+          🚧 Mode maintenance
+        </h3>
+        <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, margin:"0 0 12px", lineHeight:1.5 }}>
+          Ferme temporairement la boutique. Les clients verront un message d'attente au lieu du catalogue.
+        </p>
+        <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer",
+          padding:"10px 12px", borderRadius:10, marginBottom:12,
+          background: cfg.maintenance?`${CA.danger}11`:(dark?CA.dBorder:CA.creamD),
+          border:`1px solid ${cfg.maintenance?CA.danger+"44":bord}` }}>
+          <input type="checkbox" checked={!!cfg.maintenance}
+            onChange={e=>{ setCfg(c=>({...c, maintenance:e.target.checked})); flashSaved(); }}/>
+          <span style={{ fontSize:13.5, fontWeight:600, color: cfg.maintenance?CA.danger:text }}>
+            {cfg.maintenance ? "🔴 Boutique FERMÉE" : "🟢 Boutique ouverte"}
+          </span>
+        </label>
+        <label style={{ display:"block" }}>
+          <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:4 }}>
+            Message affiché aux clients
+          </span>
+          <textarea style={{ ...inp, resize:"vertical" }} rows={2}
+            value={cfg.maintenanceMsg||""}
+            onChange={e=>setCfg(c=>({...c, maintenanceMsg:e.target.value}))}/>
+        </label>
+      </div>
+
+      {/* COULEURS PROFONDES */}
+      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+        <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 6px" }}>
+          🎨 Couleurs profondes du site
+        </h3>
+        <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, margin:"0 0 14px", lineHeight:1.5 }}>
+          Personnalise les couleurs de base. Attention : ces réglages touchent tout le site. Utilise "Réinitialiser" pour revenir aux couleurs d'origine.
+        </p>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          {[
+            { k:"colorGold",   label:"Doré (accents)",   def:"#C9A84C" },
+            { k:"colorCream",  label:"Fond crème",        def:"#FAF6EE" },
+            { k:"colorInk",    label:"Texte / foncé",     def:"#1A1A1A" },
+            { k:"colorAccent", label:"Accent secondaire", def:"#1DC0D4" },
+          ].map(col => (
+            <label key={col.k} style={{ display:"block" }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:5 }}>{col.label}</span>
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <input type="color" value={cfg[col.k]||col.def}
+                  onChange={e=>setCfg(c=>({...c,[col.k]:e.target.value, theme:"classic"}))}
+                  style={{ width:40, height:34, borderRadius:8, border:`1px solid ${bord}`,
+                    cursor:"pointer", padding:2, flexShrink:0 }}/>
+                <span style={{ fontSize:11, color:dark?CA.dMute:CA.mute,
+                  fontFamily:"monospace" }}>{cfg[col.k]||col.def}</span>
+              </div>
+            </label>
+          ))}
+        </div>
+        <button onClick={()=>{
+            setCfg(c=>({...c, colorGold:"#C9A84C", colorCream:"#FAF6EE",
+              colorInk:"#1A1A1A", colorAccent:"#1DC0D4", theme:"classic" }));
+            flashSaved();
+          }}
+          style={{ marginTop:14, width:"100%", padding:"10px", borderRadius:10,
+            border:`1px solid ${bord}`, background:"none", color:text,
+            fontSize:13, fontWeight:600, cursor:"pointer",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+          ↺ Réinitialiser les couleurs d'origine
+        </button>
+        <p style={{ fontSize:10.5, color:dark?CA.dMute:CA.mute, marginTop:8, textAlign:"center" }}>
+          ⚠️ Modifier une couleur désactive le thème saisonnier en cours.
+        </p>
+      </div>
+
+      {/* CODE PIN FONDATEUR */}
+      <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
+        <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 6px" }}>
+          🔐 Code PIN Fondateur
+        </h3>
+        <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, margin:"0 0 12px", lineHeight:1.5 }}>
+          {hasPin
+            ? "Un PIN protège déjà cet espace. Tu peux le changer ci-dessous."
+            : "Définis un code PIN (min. 4 chiffres) pour protéger cet espace Fondateur."}
+        </p>
+        <div style={{ display:"flex", gap:8 }}>
+          <input type="text" inputMode="numeric" value={newPin}
+            onChange={e=>setNewPin(e.target.value.replace(/\D/g,""))}
+            placeholder={hasPin?"Nouveau PIN":"Choisir un PIN"}
+            style={{ ...inp, flex:1, letterSpacing:4 }}/>
+          <button onClick={()=>{
+              if (newPin.length < 4) { window.alert("Le PIN doit faire au moins 4 chiffres."); return; }
+              setCfg(c=>({...c, founderPin:newPin}));
+              setNewPin(""); flashSaved();
+            }}
+            style={{ padding:"0 16px", borderRadius:10, border:"none",
+              background:CA.ink, color:CA.gold, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            {hasPin?"Changer":"Définir"}
+          </button>
+        </div>
+        {hasPin && (
+          <button onClick={()=>{
+              if (window.confirm("Retirer le code PIN ? L'espace Fondateur ne sera plus protégé.")) {
+                setCfg(c=>({...c, founderPin:""})); flashSaved();
+              }
+            }}
+            style={{ marginTop:10, fontSize:11.5, color:CA.danger, background:"none",
+              border:"none", cursor:"pointer", textDecoration:"underline", padding:0 }}>
+            Retirer le PIN
+          </button>
+        )}
+      </div>
+
+      {saved && (
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
+          background:CA.success, color:"#fff", padding:"10px 20px", borderRadius:99,
+          fontSize:13, fontWeight:700, zIndex:5000, boxShadow:"0 8px 24px rgba(0,0,0,.2)" }}>
+          ✅ Enregistré !
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────
    ADMIN APP PRINCIPALE
 ────────────────────────────────────────── */
 function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
@@ -6706,6 +7207,8 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
       { key:"team",     icon:<Users size={14}/>,    label:"Équipe" },
       { key:"settings", icon:<Settings size={14}/>, label:"Paramètres" },
     ]:[]),
+    // Onglet Fondateur — réservé exclusivement à David (id:1)
+    ...(auth.id===1 ? [{ key:"founder", icon:<Lock size={14}/>, label:"Fondateur" }] : []),
   ];
 
   return (
@@ -7030,6 +7533,9 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
           <AdminSettingsTab cfg={cfg} setCfg={setCfg}
             promos={promos} setPromos={setPromos} dark={dark}
             auth={auth} setAuth={setAuth} setUsers={setUsers}/>
+        )}
+        {tab==="founder" && auth.id===1 && (
+          <AdminFounderTab cfg={cfg} setCfg={setCfg} dark={dark}/>
         )}
       </div>
     </div>
