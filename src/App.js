@@ -43,8 +43,10 @@ const fcfa = n => (n||0).toLocaleString("fr-FR") + " FCFA";
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return "À l'instant";
-  const diff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
-  if (diff < 60)  return "À l'instant";
+  const d = new Date(timestamp);
+  if (isNaN(d.getTime())) return "À l'instant";
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (isNaN(diff) || diff < 60) return "À l'instant";
   if (diff < 3600) return `Il y a ${Math.floor(diff/60)} min`;
   if (diff < 86400) return `Il y a ${Math.floor(diff/3600)}h`;
   return `Il y a ${Math.floor(diff/86400)}j`;
@@ -200,11 +202,12 @@ const T = {
     promoApplied:"Code appliqué !",
     ordersDelivered:"Commandes livrées", easyDelivery:"Livraison facile",
     satisfaction:"Satisfaction clientes", customerReviews:"Ce que disent nos clientes",
-    verifiedReview:"Article vérifié", returnPolicy:"{t.returnPolicy}",
+    verifiedReview:"Article vérifié", returnPolicy:"Article vérifié avant envoi · Échange possible à la livraison si défaut",
     usualPrice:"Prix habituel", youSave:"Vous économisez",
     preorderBtn:"Réserver (précommande)", preorderNote:"Article en précommande — disponible prochainement",
-    newArrivals:"Nouveautés", newArrivalsSub:"{t.newArrivalsSub}",
+    newArrivals:"Nouveautés", newArrivalsSub:"Nos derniers arrivages, fraîchement ajoutés",
     noNew:"Aucune nouveauté pour le moment.", seeCatalogue:"Voir le catalogue",
+    noReviewYet:"Pas encore d'avis", outOfStock:"Rupture de stock",
     loyaltyPts:"points fidélité", loyaltyValue:"de réduction",
     myFavorites:"Mes favoris", collections:"Collections", soonLabel:"bientôt",
     shareMsg:"👜 {name} — {price} chez Dada's Drop !\n🛍 Voir l'article : dadas-drop.vercel.app\n📲 Commander sur WhatsApp !",
@@ -245,6 +248,7 @@ const T = {
     preorderBtn:"Pre-order", preorderNote:"Pre-order item — available soon",
     newArrivals:"New arrivals", newArrivalsSub:"Our latest arrivals, freshly added",
     noNew:"No new arrivals yet.", seeCatalogue:"See catalogue",
+    noReviewYet:"No reviews yet", outOfStock:"Out of stock",
     loyaltyPts:"loyalty points", loyaltyValue:"discount",
     myFavorites:"My favorites", collections:"Collections", soonLabel:"soon",
     shareMsg:"👜 {name} — {price} at Dada's Drop!\n🛍 See item: dadas-drop.vercel.app\n📲 Order on WhatsApp!",
@@ -563,7 +567,7 @@ function ProductCard({ p, t, cats, onOpen, onAdd, dark, idx, mounted, isFav, onT
         <div style={{ marginBottom:6 }}>
           <StarRating rating={p.rating||0} count={p.ratingCount||0} size={11}/>
           {(!p.rating||p.rating===0) && (
-            <span style={{ fontSize:10, color:"#bbb" }}>Pas encore d'avis</span>
+            <span style={{ fontSize:10, color:"#bbb" }}>{t.noReviewYet}</span>
           )}
         </div>
         {/* Prix */}
@@ -675,7 +679,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
             <div style={{ marginBottom:8 }}>
               <StarRating rating={p.rating||0} count={p.ratingCount||0} size={14}/>
               {(!p.rating||p.rating===0) && (
-                <span style={{ fontSize:11, color:"#bbb" }}>Pas encore d'avis</span>
+                <span style={{ fontSize:11, color:"#bbb" }}>{t.noReviewYet}</span>
               )}
             </div>
             {/* Prix */}
@@ -727,23 +731,38 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
               {/* Quantité + ajouter */}
               <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10 }}>
                 <div style={{ display:"flex", alignItems:"center",
-                  border:`1px solid ${bord}`, borderRadius:9, overflow:"hidden" }}>
-                  <button onClick={() => setQty(q=>Math.max(1,q-1))} style={stepBtn(dark)}>
+                  border:`1px solid ${bord}`, borderRadius:9, overflow:"hidden",
+                  opacity: (p.stock===0 && !p.isPreorder) ? 0.4 : 1 }}>
+                  <button onClick={() => setQty(q=>Math.max(1,q-1))} style={stepBtn(dark)}
+                    disabled={p.stock===0 && !p.isPreorder}>
                     <Minus size={13}/>
                   </button>
                   <span style={{ width:32, textAlign:"center",
                     fontWeight:700, color:text, fontSize:14 }}>{qty}</span>
-                  <button onClick={() => setQty(q=>Math.min(p.stock,q+1))} style={stepBtn(dark)}>
+                  <button onClick={() => setQty(q=>Math.min(p.stock,q+1))} style={stepBtn(dark)}
+                    disabled={p.stock===0 && !p.isPreorder}>
                     <Plus size={13}/>
                   </button>
                 </div>
-                <button onClick={handleAdd}
-                  style={{ flex:1, ...primaryBtn, justifyContent:"center",
-                    ...(p.isPreorder ? { background:"#1DC0D4", borderColor:"#1DC0D4" } : {}) }}>
-                  {p.isPreorder
-                    ? <><Package size={15}/> {t.preorderBtn}</>
-                    : <><ShoppingBag size={15}/> {t.addCart}</>}
-                </button>
+                {(p.stock===0 && !p.isPreorder) ? (
+                  <button disabled
+                    style={{ flex:1, justifyContent:"center", display:"flex",
+                      alignItems:"center", gap:7, padding:"12px",
+                      borderRadius:11, border:"none",
+                      background:"#ddd", color:"#888",
+                      fontSize:14, fontWeight:700, cursor:"not-allowed",
+                      fontFamily:"inherit" }}>
+                    {t.outOfStock}
+                  </button>
+                ) : (
+                  <button onClick={handleAdd}
+                    style={{ flex:1, ...primaryBtn, justifyContent:"center",
+                      ...(p.isPreorder ? { background:"#1DC0D4", borderColor:"#1DC0D4" } : {}) }}>
+                    {p.isPreorder
+                      ? <><Package size={15}/> {t.preorderBtn}</>
+                      : <><ShoppingBag size={15}/> {t.addCart}</>}
+                  </button>
+                )}
               </div>
               {p.isPreorder && (
                 <div style={{ fontSize:12, color:"#1DC0D4", marginTop:8,
@@ -1412,6 +1431,7 @@ function TrackModal({ open, onClose, t, dark, products, cfg }) {
   const [notFound, setNotFound] = useState(false);
   const [itemReviews, setItemReviews] = useState({}); // { "Nom article": {stars, text, sent} }
   const [reviewsSubmitting, setReviewsSubmitting] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
 
   if (!open) return null;
   const text = dark ? C.dText : C.ink;
@@ -1773,16 +1793,41 @@ Merci de confirmer l'annulation.`
                   border:`1px solid ${bord}`, borderRadius:11,
                   padding:"12px", marginBottom:10 }}>
                   <div style={{ display:"flex", justifyContent:"space-between",
-                    marginBottom:8 }}>
-                    <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
-                      color:text }}>#{o.id}</span>
+                    alignItems:"center", marginBottom:8, gap:8 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontFamily:"Georgia,serif", fontWeight:700,
+                        color:text }}>#{o.id}</span>
+                      <button type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(o.id).then(()=>{
+                            setCopiedId(o.id);
+                            setTimeout(()=>setCopiedId(null), 1500);
+                          }).catch(()=>{});
+                        }}
+                        title="Copier le numéro"
+                        style={{ border:"none", background:"none", cursor:"pointer",
+                          color: copiedId===o.id ? C.success : (dark?C.dMute:C.mute),
+                          display:"flex", alignItems:"center", gap:3, fontSize:11,
+                          padding:"2px 4px" }}>
+                        {copiedId===o.id ? <><Check size={12}/> Copié</> : <><Copy size={12}/> Copier</>}
+                      </button>
+                    </div>
                     <span style={{ fontSize:11, color:STATUS_COLORS[o.status],
                       fontWeight:600 }}>{STATUS_LABELS[o.status]}</span>
                   </div>
                   {renderTimeline(o)}
-                  <div style={{ fontSize:13, color:C.gold, fontWeight:700 }}>
+                  <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:8 }}>
                     {fcfa(o.total)} · {o.date}
                   </div>
+                  <button type="button"
+                    onClick={() => { setNum(o.id); setMode("id"); }}
+                    style={{ width:"100%", padding:"7px",
+                      border:`1px solid ${C.gold}55`, borderRadius:8,
+                      background:`${C.gold}11`, color:C.gold, cursor:"pointer",
+                      fontSize:12, fontWeight:600, display:"flex",
+                      alignItems:"center", justifyContent:"center", gap:5 }}>
+                    <Search size={12}/> Suivre cette commande / donner mon avis
+                  </button>
                 </div>
               ))}
             </div>
@@ -2360,7 +2405,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
         .catch(e => console.warn("cfg sync:", e.message));
     };
     fetchCatsCfg(); // immédiat au montage
-    const fastSync = setInterval(fetchCatsCfg, 3000);
+    const fastSync = setInterval(fetchCatsCfg, 2500);
     return () => clearInterval(fastSync);
   }, []);
 
@@ -2449,12 +2494,11 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   const gold = cfg?.colorGold || C.gold;
 
   // Produits visibles : épinglés en premier, masqués filtrés
+  // Les articles épuisés restent VISIBLES (façon Shein) — le bouton devient "Rupture de stock"
   const visibleProducts = useMemo(() => {
-    let v = products.filter(p => !p.isHidden);
-    // Masquage auto des articles épuisés (option admin)
-    if (cfg?.hideOutOfStock) v = v.filter(p => p.stock > 0);
+    const v = products.filter(p => !p.isHidden);
     return [...v.filter(p=>p.isPinned), ...v.filter(p=>!p.isPinned)];
-  }, [products, cfg]);
+  }, [products]);
 
   const list = useMemo(() => {
     let r = visibleProducts.filter(p => {
@@ -3761,26 +3805,6 @@ function AdminOrdersTab({ orders, setOrders, trash, setTrash, users, auth, dark 
                     fontSize:12, display:"flex", alignItems:"center", gap:4 }}>
                   🖨️ Imprimer
                 </button>
-                {/* Notifier le client par WhatsApp */}
-                {(o.phone||o.customer_phone) && (
-                  <button onClick={() => {
-                      const phone = (o.phone||o.customer_phone||"").replace(/\s/g,"");
-                      const statusMsg = {
-                        1: `est en cours de préparation 📦`,
-                        2: `a été expédiée et arrive bientôt 🚚`,
-                        3: `a été livrée ✅ Merci pour votre confiance !`,
-                      }[o.status] || "est en cours de traitement";
-                      const msg = `Bonjour ${o.name} 👋\n\nVotre commande Dada's Drop #${o.id} ${statusMsg}\n\nPour toute question, répondez à ce message. Merci ! ✦`;
-                      const wa = phone.startsWith("0") ? "226"+phone.slice(1) : phone;
-                      window.open(`https://wa.me/${wa}?text=${encodeURIComponent(msg)}`, "_blank");
-                    }}
-                    style={{ background:"none", color:"#25D366",
-                      border:`1px solid #25D36644`, borderRadius:8,
-                      padding:"6px 10px", cursor:"pointer",
-                      fontSize:12, fontWeight:600, display:"flex", alignItems:"center", gap:4 }}>
-                    <MessageCircle size={12}/> Notifier
-                  </button>
-                )}
                 {/* Livreur peut changer statut de SES commandes, admin/manager peuvent tout faire */}
               {(auth.role!=="delivery" || o.assignedTo===auth.id) && (<>
                   {/* Bouton Annuler — seulement admin/manager */}
@@ -3975,10 +3999,25 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     };
     if (editP) {
       setProducts(ps=>ps.map(x=>x.id===editP.id?localP:x));
-      try { await sb.patch("products",editP.id,sbP); } catch(e){console.warn(e.message);}
+      try {
+        await sb.patch("products",editP.id,sbP);
+      } catch(e){
+        console.warn("save patch échec:", e.message);
+        // Réessayer sans les colonnes optionnelles récentes (si SQL pas à jour)
+        const { is_preorder, ...safe } = sbP;
+        try { await sb.patch("products",editP.id,safe); }
+        catch(e2){ window.alert("⚠️ Erreur d'enregistrement. Vérifiez votre connexion."); }
+      }
     } else {
       setProducts(ps=>[...ps,localP]);
-      try { await sb.post("products",sbP); } catch(e){console.warn(e.message);}
+      try {
+        await sb.post("products",sbP);
+      } catch(e){
+        console.warn("save post échec:", e.message);
+        const { is_preorder, ...safe } = sbP;
+        try { await sb.post("products",safe); }
+        catch(e2){ window.alert("⚠️ Erreur d'enregistrement. Vérifiez votre connexion."); }
+      }
     }
     setSaving(false); setEditP(null); setShowForm(false);
   };
@@ -4454,7 +4493,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
           <div style={{ display:"flex", flexWrap:"wrap", gap:12, marginBottom:14 }}>
             {[
               { k:"isNew",    label:"🆕 Nouveauté" },
-              { k:"isBest",   label:"⭐ Best-seller" },
+              { k:"isBest",   label:"✦ Badge TOP" },
               { k:"isPinned", label:"📌 Épingler" },
               { k:"isHidden", label:"🙈 Masquer" },
               { k:"isPreorder", label:"🕒 Précommande" },
@@ -4465,6 +4504,9 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
               </label>
             ))}
           </div>
+          <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:-6, marginBottom:14, lineHeight:1.5 }}>
+            ✦ <b>Badge TOP</b> = badge "coup de cœur" affiché au client (ton choix marketing). À ne pas confondre avec le best-seller automatique du Bilan qui se calcule sur les vraies ventes.
+          </p>
 
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={save} disabled={saving}
@@ -4509,7 +4551,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
             opacity:p.isHidden?.5:1,
             transform:draggingPid===p.id?"scale(1.02)":"scale(1)",
             boxShadow:draggingPid===p.id?"0 6px 18px rgba(0,0,0,.18)":undefined,
-            transition:"transform .15s" }}>
+            transition:"transform .15s", userSelect:"none", WebkitUserSelect:"none", WebkitTouchCallout:"none" }}>
             {/* Checkbox sélection */}
             <button onClick={() => toggleSelect(p.id)}
               style={{ width:22, height:22, borderRadius:6, flexShrink:0,
@@ -4975,7 +5017,7 @@ function AdminCatsTab({ cats, setCats, dark }) {
               display:"flex", alignItems:"center", gap:10,
               transform:draggingCat===c.id?"scale(1.02)":"scale(1)",
               boxShadow:draggingCat===c.id?"0 6px 18px rgba(0,0,0,.18)":undefined,
-              transition:"transform .15s" }}>
+              transition:"transform .15s", userSelect:"none", WebkitUserSelect:"none", WebkitTouchCallout:"none" }}>
               <div style={{ flexShrink:0, color:dark?CA.dMute:CA.mute,
                 cursor:"grab", fontSize:16, lineHeight:1, userSelect:"none" }}
                 title="Maintiens puis glisse pour réordonner">
@@ -5261,7 +5303,7 @@ Il aura accès à tout le tableau de bord. Vous pourrez le rétrograder car c'es
               boxShadow:isFounder?`0 0 0 1px ${CA.gold}33`:undefined,
               cursor:(auth.id===1||auth.role==="admin")?"grab":"default",
               transform:draggingId===u.id?"scale(1.02)":"scale(1)",
-              transition:"transform .15s" }}>
+              transition:"transform .15s", userSelect:"none", WebkitUserSelect:"none", WebkitTouchCallout:"none" }}>
             <div style={{ width:40,height:40,borderRadius:999,
               background:isFounder?`${CA.gold}33`:`${CA.gold}22`, display:"grid", placeItems:"center",
               fontSize:18, flexShrink:0 }}>
@@ -5464,13 +5506,27 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
       expiresAt: newPromo.expiresAt || null };
     setPromos(ps=>[...ps,p]);
     setNewPromo({ code:"", discount:"", maxUses:"", expiresAt:"" });
-    // Persister dans Supabase (colonnes : code, discount, max_uses, uses, active, expires_at)
+    // Persister dans Supabase avec fallback progressif si colonnes manquantes
+    const full = {
+      code: p.code, discount: p.discount, max_uses: p.maxUses,
+      uses: 0, active: true, expires_at: p.expiresAt,
+    };
     try {
-      await sb.post("promos", {
-        code: p.code, discount: p.discount, max_uses: p.maxUses,
-        uses: 0, active: true, expires_at: p.expiresAt,
-      });
-    } catch(e){ console.warn("addPromo:", e.message); }
+      await sb.post("promos", full);
+    } catch(e) {
+      console.warn("addPromo full échec:", e.message);
+      // Réessayer sans expires_at puis sans max_uses
+      try {
+        const { expires_at, ...noExp } = full;
+        await sb.post("promos", noExp);
+      } catch(e2) {
+        try {
+          await sb.post("promos", { code:p.code, discount:p.discount, uses:0, active:true });
+        } catch(e3) {
+          window.alert("⚠️ Le code a été créé localement mais n'a pas pu être enregistré. Vérifiez la table promos dans Supabase.");
+        }
+      }
+    }
   };
 
   const togglePromo = async (code) => {
@@ -5590,17 +5646,11 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
             </p>
           )}
 
-          {/* Masquage auto stock épuisé */}
+          {/* Info articles épuisés (méthode Shein) */}
           <div style={{ borderTop:`1px solid ${bord}`, marginTop:16, paddingTop:16 }}>
-            <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 10px" }}>📦 Articles épuisés</h3>
-            <label style={{ display:"flex", alignItems:"center", gap:8,
-              cursor:"pointer", fontSize:13.5, color:text }}>
-              <input type="checkbox" checked={!!cfg.hideOutOfStock}
-                onChange={e => setCfg(c=>({...c, hideOutOfStock: e.target.checked}))}/>
-              Masquer automatiquement les articles en rupture de stock
-            </label>
-            <p style={{ fontSize:11.5, color:dark?CA.dMute:CA.mute, marginTop:6 }}>
-              Si activé, les articles à 0 en stock disparaissent du catalogue jusqu'au réapprovisionnement.
+            <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 8px" }}>📦 Articles épuisés</h3>
+            <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, lineHeight:1.5 }}>
+              Les articles en rupture restent visibles sur le site, mais le bouton "Ajouter au panier" devient "Rupture de stock" (non cliquable). Le client voit l'article mais ne peut pas le commander tant que tu n'as pas réapprovisionné le stock.
             </p>
           </div>
         </div>
@@ -5675,7 +5725,7 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
                   onChange={e=>setNewPromo(p=>({...p,maxUses:e.target.value}))}
                   placeholder="100"/>
               </label>
-              <label style={{ display:"block", minWidth:0 }}>
+              <div style={{ display:"block", minWidth:0 }}>
                 <span style={{ fontSize:10, fontWeight:600, color:dark?CA.dMute:CA.mute, display:"block", marginBottom:3 }}>Expire le (optionnel)</span>
                 <div style={{ display:"flex", gap:5, alignItems:"center", minWidth:0 }}>
                   <input style={{ ...inp, boxSizing:"border-box", maxWidth:"100%",
@@ -5684,7 +5734,8 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
                     value={newPromo.expiresAt||""}
                     onChange={e=>setNewPromo(p=>({...p,expiresAt:e.target.value}))}/>
                   {newPromo.expiresAt && (
-                    <button onClick={()=>setNewPromo(p=>({...p,expiresAt:""}))}
+                    <button type="button"
+                      onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); setNewPromo(p=>({...p,expiresAt:""})); }}
                       title="Retirer la date"
                       style={{ flexShrink:0, width:30, height:34, borderRadius:8,
                         border:`1px solid ${bord}`, background:"none",
@@ -5694,7 +5745,7 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
                     </button>
                   )}
                 </div>
-              </label>
+              </div>
             </div>
             <button onClick={addPromo}
               style={{ background:CA.ink, color:CA.gold, border:`1px solid ${CA.gold}44`,
@@ -6342,6 +6393,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   const [users, setUsers]   = useState(INIT_USERS);
   const [notifs, setNotifs] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [dismissedStock, setDismissedStock] = useState([]); // produits dont la notif stock a été rejetée
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   const bg     = dark ? CA.dBg    : CA.cream;
@@ -6354,22 +6406,23 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
   useEffect(() => {
     const lowStock = products.filter(p=>p.stock>0&&p.stock<=5);
     const okStock  = products.filter(p=>p.stock>5);
+    // Si un produit repasse au-dessus de 5, on le retire des "rejetés" (il pourra re-notifier plus tard)
+    setDismissedStock(ds => ds.filter(id => !okStock.some(p => p.id === id)));
     setNotifs(ns => {
-      // Retirer les notifs des produits dont le stock est repassé au-dessus de 5
       let updated = ns.filter(n => {
         if (!n.msg.includes("Stock faible")) return true;
         return !okStock.some(p => n.msg.includes(p.name));
       });
-      // Ajouter les nouvelles notifs stock faible
       const existing = updated.map(n=>n.msg);
       const newNotifs = lowStock
         .filter(p=>!existing.some(m=>m.includes(p.name)))
-        .map(p=>({ id:Date.now()+p.id,
+        .filter(p=>!dismissedStock.includes(p.id)) // ne pas recréer si déjà rejeté
+        .map(p=>({ id:Date.now()+p.id, stockProductId:p.id,
           msg:`⚠️ Stock faible : ${p.name} (${p.stock} restant${p.stock>1?"s":""})`,
           time:new Date().toISOString(), read:false }));
       return [...updated, ...newNotifs];
     });
-  }, [products]);
+  }, [products, dismissedStock]);
 
   // Charger membres équipe depuis Supabase
   useEffect(() => {
@@ -6442,6 +6495,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
               name:  o.customer_name  || o.name  || "Client",
               phone: o.customer_phone || o.phone || "",
               date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
+              assignedTo: o.assigned_to ?? o.assignedTo ?? null,
             }));
             // Séparer commandes actives et corbeille
             setOrders(all.filter(o => !o.deleted));
@@ -6465,6 +6519,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             name:  o.customer_name  || o.name  || "Client",
             phone: o.customer_phone || o.phone || "",
             date:  o.created_at ? o.created_at.split("T")[0] : o.date || "",
+            assignedTo: o.assigned_to ?? o.assignedTo ?? null,
           }));
           setOrders(all.filter(o => !o.deleted));
           setTrash(all.filter(o => o.deleted));
@@ -6474,7 +6529,7 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
             setNotifs(ns=>[{
               id:Date.now(),
               msg:`📦 ${newOrders.length} commande${newOrders.length>1?"s":""} en attente de traitement`,
-              time:"Maintenant", read:false
+              time:new Date().toISOString(), read:false
             }, ...ns]);
           }
         } else {
@@ -6484,6 +6539,32 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
       })
       .catch(e=>console.warn("Supabase orders:",e.message))
       .finally(()=>setLoadingOrders(false));
+  }, [auth]);
+
+  // Sync produits admin toutes les 20s (vues, stock, etc.) + au retour sur l'onglet
+  useEffect(() => {
+    if (!auth) return;
+    const normalize = rows => rows.map(p => ({
+      ...p,
+      isNew:    p.is_new    ?? p.isNew    ?? false,
+      isBest:   p.is_best   ?? p.isBest   ?? false,
+      isPinned: p.is_pinned ?? p.isPinned ?? false,
+      isHidden: p.is_hidden ?? p.isHidden ?? false,
+      desc:     p.description ?? p.desc   ?? "",
+      imgs:     p.imgs || [], accent: p.accent || [],
+      variants: p.variants || [], rating: p.rating || 0,
+      ratingCount: p.rating_count || 0,
+      isPreorder: p.is_preorder ?? false,
+    }));
+    const refreshProducts = () => {
+      sb.get("products", `?trashed_at=is.null&order=id.asc&_cb=${Date.now()}`)
+        .then(rows => { if (rows?.length) setProducts(normalize(rows)); })
+        .catch(()=>{});
+    };
+    const iv = setInterval(refreshProducts, 20000);
+    const onVis = () => { if (document.visibilityState === "visible") refreshProducts(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
   }, [auth]);
 
   const login = async () => {
@@ -6691,7 +6772,13 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                           color:CA.gold, fontSize:11, fontWeight:600 }}>Tout lire</button>
                     )}
                     {notifs.some(n=>n.read) && (
-                      <button onClick={() => setNotifs(n=>n.filter(x=>!x.read))}
+                      <button onClick={() => {
+                          setNotifs(n => {
+                            const readStock = n.filter(x=>x.read && x.stockProductId).map(x=>x.stockProductId);
+                            if (readStock.length) setDismissedStock(ds => [...ds, ...readStock]);
+                            return n.filter(x=>!x.read);
+                          });
+                        }}
                         style={{ border:"none", background:"none", cursor:"pointer",
                           color:CA.danger, fontSize:11, fontWeight:600 }}>Effacer lues</button>
                     )}
@@ -6722,7 +6809,10 @@ function AdminApp({ products, setProducts, cats, setCats, cfg, setCfg,
                         <div style={{ fontSize:10.5, color:CA.mute, marginTop:2,
                           marginLeft:n.read?0:13 }}>{timeAgo(n.time)}</div>
                       </div>
-                      <button onClick={() => setNotifs(ns => ns.filter(x => x.id!==n.id))}
+                      <button onClick={() => {
+                          if (n.stockProductId) setDismissedStock(ds => [...ds, n.stockProductId]);
+                          setNotifs(ns => ns.filter(x => x.id!==n.id));
+                        }}
                         title="Supprimer"
                         style={{ flexShrink:0, border:"none", background:"none",
                           cursor:"pointer", color:CA.mute, padding:2 }}>
