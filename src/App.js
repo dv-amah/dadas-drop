@@ -374,8 +374,8 @@ function LogoDD({ size=44 }) {
   );
 }
 
-function Thumb({ p, idx=0 }) {
-  const src = p?.imgs?.[idx];
+function Thumb({ p, idx=0, imgs }) {
+  const src = (imgs || p?.imgs)?.[idx];
   if (src) return (
     <img src={src} alt={p.name}
       style={{ width:"100%", height:"100%", objectFit:"cover" }}
@@ -390,14 +390,20 @@ function Thumb({ p, idx=0 }) {
   );
 }
 
-function Carousel({ p }) {
+function Carousel({ p, imgs }) {
   const [idx, setIdx] = useState(0);
-  const imgs = (p.imgs||[]).filter(u => u && u.trim() !== "");
-  const total = Math.max(imgs.length, 1);
+  const source = (imgs && imgs.length) ? imgs : (p.imgs||[]);
+  const list = source.filter(u => u && u.trim() !== "");
+  const total = Math.max(list.length, 1);
+  const cur = Math.min(idx, total-1);
   return (
     <div style={{ position:"relative", aspectRatio:"4/3", borderRadius:12,
       overflow:"hidden", background:C.creamD }}>
-      <Thumb p={p} idx={idx}/>
+      {list[cur]
+        ? <img src={list[cur]} alt={p.name}
+            style={{ width:"100%", height:"100%", objectFit:"cover" }}
+            onError={e => e.target.style.display="none"} />
+        : <Thumb p={p} idx={0}/>}
       {total > 1 && (<>
         <button onClick={() => setIdx(i => (i-1+total)%total)}
           style={{ position:"absolute", top:"50%", left:8,
@@ -417,8 +423,8 @@ function Carousel({ p }) {
           transform:"translateX(-50%)", display:"flex", gap:4 }}>
           {Array.from({length:total}).map((_,i) => (
             <div key={i} onClick={() => setIdx(i)}
-              style={{ width:i===idx?14:5, height:5, borderRadius:99,
-                background:i===idx?C.gold:"rgba(255,255,255,.5)",
+              style={{ width:i===cur?14:5, height:5, borderRadius:99,
+                background:i===cur?C.gold:"rgba(255,255,255,.5)",
                 cursor:"pointer", transition:"all .2s" }}/>
           ))}
         </div>
@@ -687,6 +693,10 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
   const displayPrice = p.discount > 0
     ? Math.round(p.price * (1-p.discount/100)) : p.price;
   const hasVariants = p.variants && p.variants.length > 0;
+  const variantImgs = (variant?.type === "color" && variant?.imgs)
+    ? variant.imgs.filter(u => u && u.trim() !== "")
+    : [];
+  const activeImgs = variantImgs.length ? variantImgs : p.imgs;
 
   const handleAdd = () => {
     if (hasVariants && !variant) { setVariantErr(true); return; }
@@ -710,7 +720,7 @@ function ProductModal({ p, t, onClose, onAdd, dark, products=[], onOpen, onOpenC
         onClick={e => e.stopPropagation()}>
         <div style={{ ...sheetStyle(dark), maxHeight:"90vh", overflowY:"auto" }}>
           <button onClick={onClose} style={closeBtnStyle(dark)}><X size={16}/></button>
-          <Carousel p={p}/>
+          <Carousel key={variant?.label||"base"} p={p} imgs={activeImgs}/>
           <div style={{ marginTop:14 }}>
             {/* Marque */}
             <div style={{ fontSize:10, fontWeight:700, color:C.gold,
@@ -3319,6 +3329,7 @@ function ArticlePage({ products, cats, cfg, promos, dark, setDark }) {
   // Si article trouvé → ouvrir ShopApp avec la fiche ouverte
   const [selected, setSelected] = useState(product||null);
   const [cart, setCart]         = useState([]);
+  const [artVariant, setArtVariant] = useState(null);
 
   if (!product) {
     return (
@@ -3344,6 +3355,10 @@ function ArticlePage({ products, cats, cfg, promos, dark, setDark }) {
   }
 
   const t = T["fr"];
+  const artVariantImgs = (artVariant?.type === "color" && artVariant?.imgs)
+    ? artVariant.imgs.filter(u => u && u.trim() !== "")
+    : [];
+  const artActiveImgs = artVariantImgs.length ? artVariantImgs : product.imgs;
   const addToCart = (p, qty=1, variant=null) => {
     setCart(c => {
       const key = `${p.id}-${variant?.label||""}`;
@@ -3373,7 +3388,25 @@ function ArticlePage({ products, cats, cfg, promos, dark, setDark }) {
       </header>
       {/* Fiche article */}
       <div style={{ maxWidth:520, margin:"24px auto", padding:"0 16px 60px" }}>
-        <Carousel p={product}/>
+        <Carousel key={artVariant?.label||"base"} p={product} imgs={artActiveImgs}/>
+        {product.variants?.length > 0 && product.variants[0]?.type === "color" && (
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginTop:12 }}>
+            {product.variants.map((v,i) => {
+              const active = artVariant?.label === v.label;
+              return (
+                <button key={i} onClick={() => setArtVariant(active?null:v)} title={v.label}
+                  style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px",
+                    borderRadius:999, cursor:"pointer",
+                    border:`2px solid ${active?C.gold:(dark?C.dBorder:C.border)}`,
+                    background:dark?C.dCard:"#fff", color:dark?C.dText:C.ink }}>
+                  <span style={{ width:16, height:16, borderRadius:999, flexShrink:0,
+                    background:v.hex, border:"1px solid rgba(0,0,0,.15)" }}/>
+                  <span style={{ fontSize:12, fontWeight:600 }}>{v.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div style={{ marginTop:16 }}>
           <div style={{ fontSize:10, fontWeight:700, color:C.gold,
             letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>
@@ -4040,6 +4073,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
   const [showTrash, setShowTrash] = useState(false);
   const [trashSelectedIds, setTrashSelectedIds] = useState([]);
   const [draggingPid, setDraggingPid] = useState(null);
+  const [expandedVar, setExpandedVar] = useState(null);
   const dragPid = useState({ current:null })[0];
   const longPressP = useState({ current:null })[0];
 
@@ -4095,6 +4129,15 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     setNewVariant({ type:newVariant.type, label:"", hex:"#C9A84C", stock:"" });
   };
   const removeVariant = idx => setForm(f => ({...f, variants:f.variants.filter((_,i)=>i!==idx)}));
+  const setVariantImg = (i, j, val) => setForm(f => {
+    const variants = f.variants.map((v, vi) => {
+      if (vi !== i) return v;
+      const imgs = [...(v.imgs || ["","","",""])];
+      imgs[j] = val;
+      return { ...v, imgs };
+    });
+    return { ...f, variants };
+  });
 
   const save = async () => {
     if (!form.name||!form.price) return;
@@ -4598,6 +4641,65 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
               </button>
             </div>
           </div>
+
+          {/* 📸 Photos par couleur (Shein-style) */}
+          {form.variants.some(v => v.type === "color") && (
+            <div style={{ marginBottom:14, padding:"11px 12px", borderRadius:10,
+              background:dark?CA.dCard:CA.creamD, border:`1px solid ${bord}` }}>
+              <span style={{ fontSize:11, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>📸 Photos par couleur (optionnel)</span>
+              <span style={{ fontSize:10.5, color:CA.mute, display:"block",
+                marginBottom:9, lineHeight:1.45 }}>
+                Quand la cliente choisit cette couleur sur la fiche, ses photos remplacent
+                celles du produit. Laisse vide pour garder les photos principales.
+              </span>
+              {form.variants.map((v, i) => {
+                if (v.type !== "color") return null;
+                const filled = (v.imgs || []).filter(u => u && u.trim() !== "").length;
+                const open = expandedVar === i;
+                return (
+                  <div key={i} style={{ marginBottom:7, border:`1px solid ${bord}`,
+                    borderRadius:8, overflow:"hidden", background:dark?CA.dCard:"#fff" }}>
+                    <button onClick={() => setExpandedVar(open ? null : i)}
+                      style={{ width:"100%", display:"flex", alignItems:"center", gap:8,
+                        padding:"9px 11px", background:"none", border:"none",
+                        cursor:"pointer", color:text, fontFamily:"inherit" }}>
+                      <div style={{ width:16, height:16, borderRadius:999, flexShrink:0,
+                        background:v.hex, border:"1px solid rgba(0,0,0,.15)" }}/>
+                      <span style={{ fontSize:12.5, fontWeight:600, flex:1, textAlign:"left" }}>
+                        {v.label}
+                      </span>
+                      <span style={{ fontSize:10.5, fontWeight:600,
+                        color: filled>0?CA.gold:CA.mute }}>🖼 {filled}/4</span>
+                      {open ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                    </button>
+                    {open && (
+                      <div style={{ padding:"0 11px 11px", display:"grid", gap:6 }}>
+                        {[0,1,2,3].map(j => (
+                          <div key={j} style={{ display:"flex", gap:8, alignItems:"center" }}>
+                            <span style={{ fontSize:10, color:CA.mute, width:48, flexShrink:0 }}>
+                              Photo {j+1}
+                            </span>
+                            <input style={{ ...inp, marginBottom:0, fontSize:"15px", padding:"7px 9px" }}
+                              value={v.imgs?.[j] || ""}
+                              onChange={e => setVariantImg(i, j, e.target.value)}
+                              placeholder="https://i.ibb.co/…"/>
+                            {v.imgs?.[j] && (
+                              <div style={{ width:30, height:30, borderRadius:6,
+                                overflow:"hidden", flexShrink:0 }}>
+                                <img src={v.imgs[j]} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                                  onError={e => e.target.style.opacity=".2"}/>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Note manuelle */}
           <div style={{ marginBottom:14 }}>
