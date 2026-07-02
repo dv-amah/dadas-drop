@@ -10,6 +10,7 @@ import {
   ChevronUp, ChevronDown, Save, ArrowLeft, Eye, EyeOff,
   Tag, Star, Trash2 as Trash
 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 
 /* ════════════════════════════════════════════
    🌐 SUPABASE
@@ -28,6 +29,9 @@ const sb = {
   upsert: async (t, b)     => { const r = await fetch(`${SB_URL}/rest/v1/${t}`, { method:"POST",   headers:{...sbHeaders,Prefer:"resolution=merge-duplicates,return=representation"}, body:JSON.stringify(b) }); if(!r.ok) throw new Error(r.status); return r.json(); },
   del:    async (t, id)    => { const r = await fetch(`${SB_URL}/rest/v1/${t}?id=eq.${id}`, { method:"DELETE", headers:sbHeaders }); if(!r.ok) throw new Error(r.status); return true; },
 };
+
+/* Client Realtime — écoute les changements en direct (sync admin → client) */
+const sbRealtime = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
 /* ════════════════════════════════════════════
    🎨 PALETTE
@@ -3509,53 +3513,59 @@ export default function App() {
     if (img) setMeta("name", "twitter:image", img);
   }, [cfg, products]);
 
+  // Chargeurs Supabase (réutilisés au démarrage ET par le Realtime)
+  const loadProducts = useCallback(() => sb.get("products", "?trashed_at=is.null&order=id.asc")
+    .then(rows => {
+      if (rows?.length > 0) {
+        setProducts(rows.map(p => ({
+          ...p,
+          isNew:    p.is_new    ?? p.isNew    ?? false,
+          isBest:   p.is_best   ?? p.isBest   ?? false,
+          isPinned: p.is_pinned ?? p.isPinned ?? false,
+          isHidden: p.is_hidden ?? p.isHidden ?? false,
+          desc:     p.description ?? p.desc   ?? "",
+          imgs:     p.imgs || [],
+          accent:   p.accent || [],
+          variants: p.variants || [],
+          rating:   p.rating   || 0,
+          ratingCount: p.rating_count || 0,
+          isPreorder: p.is_preorder ?? false,
+        })));
+      }
+    }).catch(() => {}), []);
+  const loadConfig = useCallback(() => sb.get("announcements", "?id=eq.config&select=data")
+    .then(rows => { if (rows?.[0]?.data) setCfg(c => ({ ...c, ...rows[0].data })); }).catch(() => {}), []);
+  const loadCats = useCallback(() => sb.get("announcements", "?id=eq.categories&select=data")
+    .then(rows => { if (rows?.[0]?.data) setCats(rows[0].data); }).catch(() => {}), []);
+  const loadPromos = useCallback(() => sb.get("promos", "?select=*")
+    .then(rows => {
+      if (rows?.length > 0) {
+        setPromos(rows.map(p => ({
+          code:     p.code     || p.id     || "",
+          discount: p.discount || 0,
+          maxUses:  p.max_uses || p.maxUses || 999,
+          uses:     p.uses     || 0,
+          active:   p.active   ?? true,
+          expiresAt: p.expires_at || p.expiresAt || null,
+        })));
+      }
+    }).catch(() => {}), []);
+
   // Chargement initial depuis Supabase
   useEffect(() => {
-    Promise.allSettled([
-      // Produits
-      sb.get("products", "?trashed_at=is.null&order=id.asc")
-        .then(rows => {
-          if(rows?.length>0) {
-            // Normaliser snake_case Supabase → camelCase interne
-            const normalized = rows.map(p => ({
-              ...p,
-              isNew:    p.is_new    ?? p.isNew    ?? false,
-              isBest:   p.is_best   ?? p.isBest   ?? false,
-              isPinned: p.is_pinned ?? p.isPinned ?? false,
-              isHidden: p.is_hidden ?? p.isHidden ?? false,
-              desc:     p.description ?? p.desc   ?? "",
-              imgs:     p.imgs || [],
-              accent:   p.accent || [],
-              variants: p.variants || [],
-              rating:   p.rating   || 0,
-              ratingCount: p.rating_count || 0,
-              isPreorder: p.is_preorder ?? false,
-            }));
-            setProducts(normalized);
-          }
-        }),
-      // Config
-      sb.get("announcements", "?id=eq.config&select=data")
-        .then(rows => { if(rows?.[0]?.data) setCfg(c=>({...c,...rows[0].data})); }),
-      // Catégories (si table existe)
-      sb.get("announcements", "?id=eq.categories&select=data")
-        .then(rows => { if(rows?.[0]?.data) setCats(rows[0].data); }),
-      // Promos
-      sb.get("promos", "?select=*")
-        .then(rows => {
-          if (rows?.length > 0) {
-            setPromos(rows.map(p => ({
-              code:     p.code     || p.id     || "",
-              discount: p.discount || 0,
-              maxUses:  p.max_uses || p.maxUses || 999,
-              uses:     p.uses     || 0,
-              active:   p.active   ?? true,
-              expiresAt: p.expires_at || p.expiresAt || null,
-            })));
-          }
-        }),
-    ]).finally(() => setLoading(false));
-  }, []);
+    Promise.allSettled([loadProducts(), loadConfig(), loadCats(), loadPromos()])
+      .finally(() => setLoading(false));
+  }, [loadProducts, loadConfig, loadCats, loadPromos]);
+
+  // 🔴 Realtime — synchro instantanée admin → client (produits, promos, config/catégories)
+  useEffect(() => {
+    const ch = sbRealtime.channel("dd-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" },      () => loadProducts())
+      .on("postgres_changes", { event: "*", schema: "public", table: "promos" },        () => loadPromos())
+      .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => { loadConfig(); loadCats(); })
+      .subscribe();
+    return () => { try { sbRealtime.removeChannel(ch); } catch (e) {} };
+  }, [loadProducts, loadConfig, loadCats, loadPromos]);
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.cream,
@@ -4736,7 +4746,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
             ))}
           </div>
           <p style={{ fontSize:11, color:dark?CA.dMute:CA.mute, marginTop:-6, marginBottom:14, lineHeight:1.5 }}>
-            ✦ <b>Badge TOP</b> = badge "coup de cœur" affiché au client (ton choix marketing). À ne pas confondre avec le best-seller automatique du Bilan qui se calcule sur les vraies ventes.
+            ✦ <b>Badge TOP</b> = badge "coup de cœur" affiché au client (ton choix marketing).
           </p>
 
           <div style={{ display:"flex", gap:8 }}>
@@ -6030,14 +6040,6 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
               La bannière de livraison gratuite ne s'affichera pas.
             </p>
           )}
-
-          {/* Info articles épuisés (méthode Shein) */}
-          <div style={{ borderTop:`1px solid ${bord}`, marginTop:16, paddingTop:16 }}>
-            <h3 style={{ fontFamily:"Georgia,serif", fontSize:15, color:text, margin:"0 0 8px" }}>📦 Articles épuisés</h3>
-            <p style={{ fontSize:12, color:dark?CA.dMute:CA.mute, lineHeight:1.5 }}>
-              Les articles en rupture restent visibles sur le site, mais le bouton "Ajouter au panier" devient "Rupture de stock" (non cliquable). Le client voit l'article mais ne peut pas le commander tant que tu n'as pas réapprovisionné le stock.
-            </p>
-          </div>
         </div>
       )}
 
