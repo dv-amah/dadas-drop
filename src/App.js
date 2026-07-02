@@ -1558,14 +1558,8 @@ function TrackModal({ open, onClose, t, dark, products, cfg }) {
       };
       const posted = await sb.post("reviews", reviewData);
       console.log("Avis posté:", posted);
-      if (prod) {
-        const newCount = (prod.ratingCount||0) + 1;
-        const newRating = ((prod.rating||0)*(prod.ratingCount||0) + rv.stars) / newCount;
-        await sb.patch("products", prod.id, {
-          rating: Math.round(newRating*10)/10,
-          rating_count: newCount,
-        });
-      }
+      // NB : la note affichée est désormais calculée automatiquement
+      // à partir des vrais avis (plus de mélange avec la note manuelle).
       setItemReview(itemName, { sent:true });
     } catch(e) {
       console.error("Erreur soumission avis:", e.message);
@@ -3516,7 +3510,7 @@ export default function App() {
   // Chargeurs Supabase (réutilisés au démarrage ET par le Realtime)
   const loadProducts = useCallback(() => sb.get("products", "?trashed_at=is.null&order=id.asc")
     .then(rows => {
-      if (rows?.length > 0) {
+      if (rows) {
         setProducts(rows.map(p => ({
           ...p,
           isNew:    p.is_new    ?? p.isNew    ?? false,
@@ -3539,7 +3533,10 @@ export default function App() {
     .then(rows => { if (rows?.[0]?.data) setCats(rows[0].data); }).catch(() => {}), []);
   const loadPromos = useCallback(() => sb.get("promos", "?select=*")
     .then(rows => {
-      if (rows?.length > 0) {
+      // Important : on remplace TOUJOURS l'état sur une réponse réussie,
+      // même vide (table réellement vide = 0 promo, pas un échec réseau).
+      // Sinon les codes de démo restaient bloqués affichés indéfiniment.
+      if (rows) {
         setPromos(rows.map(p => ({
           code:     p.code     || p.id     || "",
           discount: p.discount || 0,
@@ -3551,21 +3548,45 @@ export default function App() {
       }
     }).catch(() => {}), []);
 
+  // Avis (pour calculer la vraie note affichée sur les produits)
+  const [reviewsAll, setReviewsAll] = useState([]);
+  const loadReviews = useCallback(() => sb.get("reviews", "?select=product,stars,hidden&limit=500")
+    .then(rows => setReviewsAll(rows || [])).catch(() => {}), []);
+
+  // Note affichée = calculée sur les VRAIS avis (la note manuelle ne sert
+  // que de solution de repli quand un produit n'a encore aucun avis)
+  const productsView = useMemo(() => {
+    if (!reviewsAll.length) return products;
+    return products.map(p => {
+      const pn = (p.name || "").toLowerCase().trim();
+      if (!pn) return p;
+      const matched = reviewsAll.filter(r => {
+        if (r.hidden === true || !(r.stars > 0)) return false;
+        const rn = (r.product || "").toLowerCase().trim();
+        return rn && (rn === pn || rn.includes(pn) || pn.includes(rn));
+      });
+      if (!matched.length) return p;
+      const avg = matched.reduce((s, r) => s + r.stars, 0) / matched.length;
+      return { ...p, rating: Math.round(avg * 10) / 10, ratingCount: matched.length };
+    });
+  }, [products, reviewsAll]);
+
   // Chargement initial depuis Supabase
   useEffect(() => {
-    Promise.allSettled([loadProducts(), loadConfig(), loadCats(), loadPromos()])
+    Promise.allSettled([loadProducts(), loadConfig(), loadCats(), loadPromos(), loadReviews()])
       .finally(() => setLoading(false));
-  }, [loadProducts, loadConfig, loadCats, loadPromos]);
+  }, [loadProducts, loadConfig, loadCats, loadPromos, loadReviews]);
 
-  // 🔴 Realtime — synchro instantanée admin → client (produits, promos, config/catégories)
+  // 🔴 Realtime — synchro instantanée admin → client (produits, promos, config/catégories, avis)
   useEffect(() => {
     const ch = sbRealtime.channel("dd-sync")
       .on("postgres_changes", { event: "*", schema: "public", table: "products" },      () => loadProducts())
       .on("postgres_changes", { event: "*", schema: "public", table: "promos" },        () => loadPromos())
+      .on("postgres_changes", { event: "*", schema: "public", table: "reviews" },       () => loadReviews())
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => { loadConfig(); loadCats(); })
       .subscribe();
     return () => { try { sbRealtime.removeChannel(ch); } catch (e) {} };
-  }, [loadProducts, loadConfig, loadCats, loadPromos]);
+  }, [loadProducts, loadConfig, loadCats, loadPromos, loadReviews]);
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.cream,
@@ -3583,14 +3604,14 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={
-          <ShopApp products={products} setProducts={setProducts}
+          <ShopApp products={productsView} setProducts={setProducts}
             cats={cats} setCats={setCats}
             cfg={cfg} setCfg={setCfg}
             promos={promos}
             dark={dark} setDark={setDark}/>
         }/>
         <Route path="/catalogue" element={
-          <ShopApp products={products} setProducts={setProducts}
+          <ShopApp products={productsView} setProducts={setProducts}
             cats={cats} setCats={setCats}
             cfg={cfg} setCfg={setCfg}
             promos={promos}
@@ -3598,7 +3619,7 @@ export default function App() {
         }/>
         {/* Route article direct — /article/mini-boston-rose */}
         <Route path="/article/:slug" element={
-          <ArticlePage products={products} cats={cats} cfg={cfg}
+          <ArticlePage products={productsView} cats={cats} cfg={cfg}
             promos={promos} dark={dark} setDark={setDark}/>
         }/>
         <Route path="/admin" element={
@@ -4121,7 +4142,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
     border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
     fontSize:"16px", color:text, fontFamily:"inherit" };
 
-  const startNew  = () => { setForm(emptyForm); setEditP(null); setShowForm(true); };
+  const startNew  = () => { setForm(emptyForm); setEditP(null); setShowForm(true); window.scrollTo({ top:0, behavior:"smooth" }); };
   const startEdit = p => {
     const imgs = p.imgs||[];
     setForm({ ...p, price:String(p.price), stock:String(p.stock),
@@ -4129,6 +4150,7 @@ function AdminProductsTab({ products, setProducts, cats, dark }) {
       imgs:[imgs[0]||"",imgs[1]||"",imgs[2]||"",imgs[3]||""],
       variants:p.variants||[] });
     setEditP(p); setShowForm(true);
+    window.scrollTo({ top:0, behavior:"smooth" });
   };
 
   const addVariant = () => {
@@ -5870,12 +5892,36 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
   const [pwd, setPwd] = useState({ old:"", new1:"", new2:"", err:"", ok:false });
   const [newPromo, setNewPromo] = useState({ code:"", discount:"", maxUses:"", expiresAt:"" });
   const setC = k => e => setCfg(c=>({...c,[k]:e.target.type==="checkbox"?e.target.checked:e.target.value}));
+
+  // Contacts & Paiement : brouillon local — n'affecte cfg (et donc le site)
+  // qu'au clic sur Enregistrer, jamais en tapant.
+  const [contactDraft, setContactDraft] = useState({
+    whatsapp:    cfg.whatsapp    || "",
+    orangeMoney: cfg.orangeMoney || "",
+    moovMoney:   cfg.moovMoney   || "",
+    wave:        cfg.wave        || "",
+  });
+  const [contactDirty, setContactDirty] = useState(false);
+  // Le numéro WhatsApp doit rester strictement digits (utilisé dans un lien wa.me)
+  const setContactWa = e => {
+    setContactDraft(d => ({ ...d, whatsapp: e.target.value.replace(/[^\d]/g, "") }));
+    setContactDirty(true);
+  };
+  // Orange/Moov/Wave : chiffres uniquement, espacés par groupes de 2 pour la lisibilité
+  const setContactMoney = k => e => {
+    const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 12);
+    const spaced = digits.replace(/(\d{2})(?=\d)/g, "$1 ");
+    setContactDraft(d => ({ ...d, [k]: spaced }));
+    setContactDirty(true);
+  };
   const inp = { width:"100%", padding:"9px 11px", borderRadius:9,
     border:`1.5px solid ${bord}`, background:dark?CA.dCard:"#fff",
     fontSize:"16px", color:text, fontFamily:"inherit" };
 
   const save = async () => {
-    try { await sb.upsert("announcements", {id:"config", data:cfg}); } catch(e){console.warn(e.message);}
+    const finalCfg = contactDirty ? { ...cfg, ...contactDraft } : cfg;
+    if (contactDirty) { setCfg(finalCfg); setContactDirty(false); }
+    try { await sb.upsert("announcements", {id:"config", data:finalCfg}); } catch(e){console.warn(e.message);}
     setSaved(true); setTimeout(()=>setSaved(false),2500);
   };
 
@@ -5903,20 +5949,20 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
     setNewPromo({ code:"", discount:"", maxUses:"", expiresAt:"" });
     // Persister dans Supabase avec fallback progressif si colonnes manquantes
     const full = {
-      code: p.code, discount: p.discount, max_uses: p.maxUses,
-      uses: 0, active: true, expires_at: p.expiresAt,
+      code: p.code, discount: p.discount, type: "percent", value: p.discount,
+      max_uses: p.maxUses, uses: 0, active: true, expires_at: p.expiresAt,
     };
     try {
       await sb.post("promos", full);
     } catch(e) {
       console.warn("addPromo full échec:", e.message);
-      // Réessayer sans expires_at puis sans max_uses
+      // Réessayer sans expires_at puis payload minimal
       try {
         const { expires_at, ...noExp } = full;
         await sb.post("promos", noExp);
       } catch(e2) {
         try {
-          await sb.post("promos", { code:p.code, discount:p.discount, uses:0, active:true });
+          await sb.post("promos", { code:p.code, discount:p.discount, type:"percent", value:p.discount, uses:0, active:true });
         } catch(e3) {
           window.alert("⚠️ Le code a été créé localement mais n'a pas pu être enregistré. Vérifiez la table promos dans Supabase.");
         }
@@ -5989,18 +6035,29 @@ function AdminSettingsTab({ cfg, setCfg, promos, setPromos, dark, auth, setAuth,
       {/* CONTACTS */}
       {tab==="contacts" && (
         <div style={{ background:cardBg, border:`1px solid ${bord}`, borderRadius:14, padding:"18px" }}>
-          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 14px" }}>📞 Contacts & Paiement</h3>
+          <h3 style={{ fontFamily:"Georgia,serif", fontSize:16, color:text, margin:"0 0 4px" }}>📞 Contacts & Paiement</h3>
+          {contactDirty && (
+            <p style={{ fontSize:11.5, color:CA.warning, margin:"0 0 12px", fontWeight:600 }}>
+              ⚠️ Modifications non enregistrées — clique sur "Enregistrer" en bas pour les appliquer.
+            </p>
+          )}
+          {!contactDirty && <div style={{ marginBottom:14 }}/>}
           <div style={{ display:"grid", gap:10 }}>
-            {[
-              { key:"whatsapp",    label:"Numéro WhatsApp",  ph:"33768745841" },
-              { key:"orangeMoney", label:"Orange Money",      ph:"+226 XX XX XX XX" },
-              { key:"moovMoney",   label:"Moov Money",        ph:"+226 XX XX XX XX" },
-              { key:"wave",        label:"Wave",              ph:"+226 XX XX XX XX" },
-            ].map(f => (
-              <label key={f.key} style={{ display:"block" }}>
+            <label style={{ display:"block" }}>
+              <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
+                display:"block", marginBottom:3 }}>Numéro WhatsApp</span>
+              <input style={inp} value={contactDraft.whatsapp} onChange={setContactWa}
+                inputMode="numeric" placeholder="Ex : indicatif + numéro, sans espace ni + (22670000000)"/>
+              <span style={{ fontSize:10, color:dark?CA.dMute:CA.mute, display:"block", marginTop:3 }}>
+                Chiffres uniquement, sans "+" ni espace (indicatif Burkina : 226).
+              </span>
+            </label>
+            {[["orangeMoney","Orange Money"],["moovMoney","Moov Money"],["wave","Wave"]].map(([k,label]) => (
+              <label key={k} style={{ display:"block" }}>
                 <span style={{ fontSize:11.5, fontWeight:600, color:dark?CA.dMute:CA.mute,
-                  display:"block", marginBottom:3 }}>{f.label}</span>
-                <input style={inp} value={cfg[f.key]||""} onChange={setC(f.key)} placeholder={f.ph}/>
+                  display:"block", marginBottom:3 }}>{label}</span>
+                <input style={inp} value={contactDraft[k]} onChange={setContactMoney(k)}
+                  inputMode="numeric" placeholder="Ex : 70 00 00 00"/>
               </label>
             ))}
           </div>
@@ -6369,7 +6426,7 @@ function AdminReviewsTab({ auth, dark }) {
 
   useEffect(() => {
     const load = () => {
-      sb.get("reviews", `?order=id.desc&limit=200&_cb=${Date.now()}`)
+      sb.get("reviews", "?order=id.desc&limit=200")
         .then(rows => { setReviews(rows||[]); })
         .catch(e => console.warn("reviews:", e.message))
         .finally(() => setLoading(false));
@@ -6384,6 +6441,13 @@ function AdminReviewsTab({ auth, dark }) {
     setReviews(rs => rs.map(x => x.id===r.id ? updated : x));
     try { await sb.patch("reviews", r.id, { hidden: !r.hidden }); }
     catch(e) { console.warn(e.message); }
+  };
+
+  const deleteReview = async (r) => {
+    if (!window.confirm(`Supprimer définitivement cet avis sur "${r.product||"?"}" ? Cette action est irréversible.`)) return;
+    setReviews(rs => rs.filter(x => x.id!==r.id));
+    try { await sb.del("reviews", r.id); }
+    catch(e) { console.warn("deleteReview:", e.message); }
   };
 
   const sendReply = async (r) => {
@@ -6484,15 +6548,25 @@ function AdminReviewsTab({ auth, dark }) {
                 📅 {r.date}
               </div>
             </div>
-            <button onClick={() => toggleHidden(r)}
-              title={r.hidden?"Rendre visible":"Masquer cet avis"}
-              style={{ flexShrink:0, padding:"5px 10px", borderRadius:8, fontSize:11.5,
-                fontWeight:600, cursor:"pointer",
-                border:`1px solid ${r.hidden?CA.success:bord}`,
-                background:r.hidden?`${CA.success}15`:"none",
-                color:r.hidden?CA.success:(dark?CA.dMute:CA.mute) }}>
-              {r.hidden ? <><Eye size={12}/> Afficher</> : <><EyeOff size={12}/> Masquer</>}
-            </button>
+            <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+              <button onClick={() => toggleHidden(r)}
+                title={r.hidden?"Rendre visible":"Masquer cet avis"}
+                style={{ padding:"5px 10px", borderRadius:8, fontSize:11.5,
+                  fontWeight:600, cursor:"pointer",
+                  border:`1px solid ${r.hidden?CA.success:bord}`,
+                  background:r.hidden?`${CA.success}15`:"none",
+                  color:r.hidden?CA.success:(dark?CA.dMute:CA.mute) }}>
+                {r.hidden ? <><Eye size={12}/> Afficher</> : <><EyeOff size={12}/> Masquer</>}
+              </button>
+              <button onClick={() => deleteReview(r)}
+                title="Supprimer définitivement cet avis"
+                style={{ padding:"5px 10px", borderRadius:8, fontSize:11.5,
+                  fontWeight:600, cursor:"pointer",
+                  border:"1px solid #E0503044", background:"none", color:"#E05030",
+                  display:"flex", alignItems:"center", gap:4, justifyContent:"center" }}>
+                <Trash size={12}/> Supprimer
+              </button>
+            </div>
           </div>
 
           {/* Réponse existante */}
