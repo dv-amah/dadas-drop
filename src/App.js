@@ -2461,6 +2461,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
   const [mounted, setMounted]     = useState(false);
   const [deliveredCount, setDeliveredCount] = useState(0);
   const [homeReviews, setHomeReviews] = useState([]);
+  const [avgSatisfaction, setAvgSatisfaction] = useState(null);
   const [favs, setFavs]           = useState(() => {
     try { const s = localStorage.getItem("dd_favs"); return s?JSON.parse(s):[]; } catch { return []; }
   });
@@ -2473,6 +2474,12 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
     sb.get("reviews", "?order=id.desc&limit=12")
       .then(rows => setHomeReviews((rows||[]).filter(r => r.hidden !== true && r.stars >= 4)))
       .catch(()=>{});
+    // Note moyenne réelle (page d'accueil) — sur TOUS les avis visibles, pas juste les 12 derniers
+    sb.get("reviews", "?select=stars,hidden&limit=1000")
+      .then(rows => {
+        const valid = (rows||[]).filter(r => r.hidden !== true && r.stars > 0);
+        if (valid.length) setAvgSatisfaction(valid.reduce((s,r)=>s+r.stars,0)/valid.length);
+      }).catch(()=>{});
   }, []);
 
   useEffect(() => {
@@ -2969,7 +2976,7 @@ function ShopApp({ products, setProducts, cats, setCats, cfg, setCfg, promos, da
               <div style={{ width:1, background:dark?C.dBorder:C.border }}/>
               <div style={{ textAlign:"center" }}>
                 <div style={{ fontFamily:"Georgia,serif", fontSize:24, fontWeight:700,
-                  color:gold }}>★ 4.8</div>
+                  color:gold }}>{avgSatisfaction ? `★ ${avgSatisfaction.toFixed(1)}` : "—"}</div>
                 <div style={{ fontSize:11.5, color:dark?C.dMute:C.mute }}>
                   {t.satisfaction}
                 </div>
